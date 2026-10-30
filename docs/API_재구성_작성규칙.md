@@ -139,7 +139,7 @@
 - 공통(`compose.yaml`) + 개발(`compose.override.yaml`, 자동 병합) + 운영(`compose.prod.yaml`, `-f` 로 명시) 3층 구조.
 - 개발: 소스 바인드 마운트, 상세 로그 / 운영: 이미지에 굽기, 고정 태그, `restart: unless-stopped`
 - 병합 결과는 반드시 `docker compose ... config` 로 확인한다.
-- **[결정 필요]** 강의 표기는 `compose.yaml`, 현재 프로젝트는 `docker-compose.yml`. 재구성 시 파일명 통일 여부를 정한다.
+- **[확정]** 재구성 서비스(`api/`)는 강의 표기대로 `compose.yaml` 을 쓴다. 서비스 정의는 각 서비스 폴더의 `compose.yaml` 에 두고, `api/compose.yaml` 은 `include` 만 한다. 기준판 `proto_type/` 은 기존 `docker-compose.yml` 을 그대로 둔다.
 
 ### 4-5. 값의 세 문법 구분 (M7-D)
 - `.env` + `${VAR}` = 파일 안 문자 **치환**
