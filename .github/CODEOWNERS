@@ -9,8 +9,11 @@
 /api/contracts/model-api.yaml       @yeeun5364 @majoongcheon
 /.github/workflows/model-api.yml    @yeeun5364
 
-# frontend — 황송해
+# frontend — 황송해 (score-core 는 조정안 A 로 황송해, 백엔드도 쓰므로 팀장 함께 리뷰 · #18)
 /api/services/frontend/             @SonghaeHwang
 /api/contracts/web-api.yaml         @majoongcheon @SonghaeHwang
-/api/packages/score-core/           @majoongcheon @SonghaeHwang
+/api/packages/score-core/           @SonghaeHwang @majoongcheon
 /.github/workflows/frontend.yml     @SonghaeHwang
+
+# Nginx 경로 나누기 — 팀장 (프론트 Nginx 이미지가 include 로 읽으므로 황송해 함께 리뷰 · #21 · #22)
+/api/deploy/nginx/                  @majoongcheon @SonghaeHwang
