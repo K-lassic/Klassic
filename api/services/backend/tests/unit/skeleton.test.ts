@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 beforeAll(() => {
   Object.assign(process.env, {
     DB_HOST: '127.0.0.1', DB_PORT: '1', DB_USER: 'test', DB_PASSWORD: 'test', DB_NAME: 'test',
-    SESSION_SECRET: 'x'.repeat(32),
+    SESSION_SECRET: 'x'.repeat(32), ADDR_HASH_SALT: 'y'.repeat(16),
     SHARED_DIR: process.env.SHARED_DIR ?? join(here, '..', '..', '..', '..', 'shared'),
   });
 });
@@ -40,7 +40,7 @@ describe('설정 검증 (기능 목록 H1)', () => {
   });
   it('기본값 — 0.0.0.0 수신 · 서비스 이름으로 model-api', async () => {
     const { loadEnv } = await import('../../src/config/env.js');
-    const e = loadEnv({ DB_HOST: 'db', DB_USER: 'u', DB_PASSWORD: '', DB_NAME: 'n', SESSION_SECRET: 'x'.repeat(32) });
+    const e = loadEnv({ DB_HOST: 'db', DB_USER: 'u', DB_PASSWORD: '', DB_NAME: 'n', SESSION_SECRET: 'x'.repeat(32), ADDR_HASH_SALT: 'y'.repeat(16) });
     expect([e.WEB_HOST, e.WEB_PORT, e.ADMIN_PORT, e.MODEL_API_URL]).toEqual(['0.0.0.0', 9523, 26101, 'http://model-api:9543']);
   });
 });
@@ -75,10 +75,5 @@ describe('오류 응답 · 준비 상태', () => {
     expect(res.status).toBe(503);
     expect(res.body.error).toMatchObject({ code: 'SERVICE_NOT_READY', details: { reason: 'db' } });
   });
-  it('대응표에 없는 /api 경로는 404', async () => {
-    const { createWebApp } = await import('../../src/app.js');
-    const res = await request(createWebApp()).get('/api/nothing');
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('REQUEST_NOT_FOUND');
-  });
+  // "대응표에 없는 /api 경로는 404" 는 #27 부터 세션(DB)을 거치므로 통합 시험(tests/integration/auth.test.ts)으로 옮겼다
 });

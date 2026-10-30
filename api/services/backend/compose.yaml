@@ -20,6 +20,8 @@ x-backend: &backend
     DB_USER: ${DB_USER:?api/.env 에 DB_USER 가 필요합니다}
     DB_PASSWORD: ${DB_PASSWORD:?api/.env 에 DB_PASSWORD 가 필요합니다}
     SESSION_SECRET: ${SESSION_SECRET:?api/.env 에 SESSION_SECRET(32자 이상)이 필요합니다}
+    ADDR_HASH_SALT: ${ADDR_HASH_SALT:?api/.env 에 ADDR_HASH_SALT(16자 이상)가 필요합니다}
+    SIGNUP_HOURLY_CAP: ${SIGNUP_HOURLY_CAP:-5}
     SERVICE_API_KEY: ${SERVICE_API_KEY:-}
     MODEL_API_URL: http://model-api:9543
     LOG_LEVEL: ${LOG_LEVEL:-info}

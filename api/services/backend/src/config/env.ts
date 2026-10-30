@@ -27,6 +27,10 @@ const schema = z.object({
 
   // 쿠키 서명 — 세션(#27)에서 쓴다. 비밀값이라 실행 시에만 주입
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET 는 32자 이상'),
+  /** 접속 주소는 원문으로 저장하지 않고 이 값을 섞은 SHA-256 만 남긴다 (#27 · 기능 목록 H8 · H11). 비밀값 */
+  ADDR_HASH_SALT: z.string().min(16, 'ADDR_HASH_SALT 는 16자 이상'),
+  /** 같은 접속 주소에서 한 시간에 가입할 수 있는 수 (#27 · 기능 목록 H8). 시험은 크게 둔다 */
+  SIGNUP_HOURLY_CAP: z.coerce.number().int().positive().default(5),
 
   // 프록시 뒤에서 실제 접속 주소를 읽을 범위 (Express trust proxy). Nginx 가 같은 compose 네트워크(사설 대역)에 있다 — #37 에서 확정
   TRUST_PROXY: z.string().default('loopback, uniquelocal'),

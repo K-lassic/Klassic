@@ -35,7 +35,12 @@ web ─▶ model-api (MODEL_API_URL, 서비스 키 SERVICE_API_KEY)
 | 파일 | 하는 일 |
 |---|---|
 | `src/server.ts` | 시작점 — 설정 검증 → 공용 설정 → DB 기다리기(5회 · 2초) → 설정 판본 확인 → 수신 · SIGTERM 정리 |
-| `src/app.ts` | Express 앱 두 개 — `createWebApp`(/api/health) · `createAdminApp`(/admin/health). 기능 라우터는 #27 부터 붙인다 |
+| `src/app.ts` | Express 앱 두 개 — `createWebApp` · `createAdminApp`. `/api` 순서: health → 세션 → 권한 → 라우터 → 404 |
+| `src/web/session.ts` | (#27) 세션 쿠키 `gugak_sid`(서명 · HttpOnly · SameSite=Lax) · 로그인 때 재발급 · `/api/session/end` |
+| `src/auth/accounts.ts` | (#27) `/api/auth/signup` · `login` · `logout` · `me` — argon2id · 잠금 · 한 계정 한 곳 · 가입 한도 |
+| `src/auth/permissions.ts` · `authz.ts` | (#27) 경로 → UC 대응표 + DB `role_permission` → 401 · 403 · 대응표 밖 404 |
+| `src/web/ownership.ts` | (#27) 요청 번호가 이 계정 것인지 (`/api/requests/{no}/…` 라우터가 #34 부터 쓴다) |
+| `src/lib/ids.ts` · `src/services/gateEvents.ts` | (#27) 쿠키 서명 · 접속 주소 해시 / 막힌 사건 `gate_event` (G13 · G14 · G15) |
 | `src/config/env.ts` | 환경변수 zod 검증 — 빠진 키 이름만 알리고 값은 출력하지 않음 |
 | `src/config/shared.ts` | `api/shared` 읽기 — 오류 파일 세 개를 합침 (중복이면 시작 안 함) |
 | `src/config/settings.ts` | 처리 설정 판본(DB) — 5초 캐시 |
@@ -68,6 +73,20 @@ docker run --rm -v "$PWD/api:/src:ro" node:22.21.1-bookworm-slim sh -c '
   cd /w/packages/score-core && npm ci && npm run build
   cd /w/services/backend && npm ci && npm run build && SHARED_DIR=/w/shared npm test'
 ```
+
+위처럼 돌리면 DB 가 필요한 `tests/integration/*` 는 건너뛴다. **통합 시험(#27~)** 은 시험용 DB 프로젝트를 따로 띄워 그 네트워크에서 돌린다 — 실제 `api/` DB 에는 시험 데이터를 넣지 않는다.
+
+```bash
+cd api
+docker compose -p klassic-api-test up -d db && docker compose -p klassic-api-test run --rm migrate
+set -a; . ./.env; set +a            # DB 계정 값을 셸에만 읽는다 (화면에 출력하지 않음)
+docker run --rm --network klassic-api-test_default \
+  -e TEST_DB_HOST=db -e TEST_DB_USER="$DB_USER" -e TEST_DB_PASSWORD="$DB_PASSWORD" -e TEST_DB_NAME="$DB_NAME" \
+  -v "$PWD:/src:ro" node:22.21.1-bookworm-slim sh -c '…위와 같은 복사 · 빌드… && SHARED_DIR=/w/shared npm test'
+docker compose -p klassic-api-test down -v   # 시험용 프로젝트만 지운다 (이름 확인!)
+```
+
+- Windows `curl` 로 손시험할 때 명령줄에 한글을 쓰면 UTF-8 이 아닌 cp949 로 보내져 깨진 글자(`EFBFBD`)로 저장된다 — 본문을 UTF-8 파일로 만들어 `--data-binary @파일` 로 보낸다 (서버 문제 아님, 2026-10-30 확인).
 
 ### 운영 명령줄 도구 (#26)
 
@@ -104,6 +123,8 @@ docker compose up -d web          # web 을 다시 만들어야 새 값을 읽�
 | `/api/health` 503 `reason: db` | 운영 중 DB 끊김 | DB 가 돌아오면 자동 회복 (2026-10-30 시험: 다시 켠 뒤 약 6초) |
 | 도구가 `터미널이 없어 비밀번호를 물을 수 없습니다` | `docker compose run` 에 `-it` 가 없음 | `-it` 를 붙여 다시 실행 |
 | model-api 호출이 401 | `SERVICE_API_KEY` 가 비었거나 폐기된 키 | `issueServiceKey` 로 새로 발급 → `.env` → `docker compose up -d web` |
+| 로그인 · 가입이 가끔 500, 로그에 `sqlState 23000 · errno 4025` | DB CHECK 제약 위반 (mysql2 가 코드 이름을 `AUTOEXTEND_SIZE` 로 잘못 붙임) — `chk_session_time` 이면 서버 PC 시계가 뒤로 보정된 것 | #27 에서 `ended_at = GREATEST(현재, started_at)` 로 막았다. 다른 제약이면 `SHOW CREATE TABLE` 로 확인 |
+| 로그인하면 `LOGIN_ALREADY_ACTIVE` | 같은 계정이 다른 브라우저에서 10분 안에 활동 중 (한 계정 한 곳) | 그 브라우저에서 로그아웃하거나 10분 기다린다 |
 
 ### 2026-10-30 확인 결과
 
