@@ -1,10 +1,11 @@
-// #39 로그인 · 가입 · 머리 메뉴 — v0.1.1 authGuard.test.ts · loginGuard209.test.ts 의 동작 시험을 옮기고,
-// 실패 안내는 #19 전 임시 블록(서버 message · fix) 기준으로 본다
+// #39 로그인 · 가입 · 머리 메뉴 — v0.1.1 authGuard.test.ts · loginGuard209.test.ts 의 동작 시험을 옮겼다.
+// 실패 안내는 C2GateBlock(문구는 api/shared/errors — #19)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import App from '@/App.vue';
+import { gateMessage } from '@/i18n/gateMessages';
 import S0Login from '@/pages/S0Login.vue';
 import { loginGuard, routes } from '@/router';
 import { useAuthStore } from '@/stores/auth';
@@ -114,7 +115,7 @@ describe('S0 로그인 · 가입 화면', () => {
     expect(router.currentRoute.value.fullPath).not.toContain('evil');
   });
 
-  it('실패하면 서버 문구를 보이고 비밀번호를 비운다 (LOGIN_FAILED)', async () => {
+  it('실패하면 C2 차단 블록(사유는 서버 message, 제목 · 해제 주체는 공용 오류 코드)을 보이고 비밀번호를 비운다 (LOGIN_FAILED)', async () => {
     stubApi({
       'GET /api/auth/me': () => jsonResponse(200, GUEST),
       'POST /api/auth/login': () => jsonResponse(401, { error: { code: 'LOGIN_FAILED', message: '이메일이나 비밀번호가 맞지 않습니다.', fix: '다시 넣어 주십시오.', gate: 'G15', retry_after: null } }),
@@ -124,12 +125,14 @@ describe('S0 로그인 · 가입 화면', () => {
     await w.get('#auth-pw').setValue('wrong-password');
     await w.get('form').trigger('submit');
     await flushPromises();
-    expect(w.get('[data-test="auth-fail"]').text()).toContain('이메일이나 비밀번호가 맞지 않습니다.');
+    const block = w.get('[role="alert"]').text();
+    expect(block).toContain('이메일이나 비밀번호가 맞지 않습니다.');
+    expect(block).toContain(gateMessage('LOGIN_FAILED').releaser);
     expect((w.get('#auth-pw').element as HTMLInputElement).value).toBe('');
   });
 
-  it('잠김(LOGIN_LOCKED)이면 버튼을 막고, 다시 시도 시각이 지나면 푼다', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  it('잠김(LOGIN_LOCKED)이면 G15 차단 블록 · 버튼을 막고, 다시 시도 시각이 지나면 푼다', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     stubApi({
       'GET /api/auth/me': () => jsonResponse(200, GUEST),
       'POST /api/auth/login': () => jsonResponse(423, { error: {
@@ -141,12 +144,24 @@ describe('S0 로그인 · 가입 화면', () => {
     await w.get('#auth-pw').setValue('wrong-password');
     await w.get('form').trigger('submit');
     await flushPromises();
-    expect(w.text()).toContain('잠시 로그인할 수 없습니다.');
+    expect(w.text()).toContain('G15 로그인 잠금');
     await w.get('#auth-pw').setValue('password1');
     expect(w.get('button[type="submit"]').attributes('aria-disabled')).toBe('true');
     vi.advanceTimersByTime(600_000);
     await flushPromises();
     expect(w.get('button[type="submit"]').attributes('aria-disabled')).toBeUndefined();
+  });
+});
+
+describe('(209번 · 212번) 한 계정 한 곳 로그인 — 서버 거절 문구(공용 오류 코드)', () => {
+  it('LOGIN_ALREADY_ACTIVE · ALREADY_LOGGED_IN 문구와 해제 주체', () => {
+    expect(gateMessage('LOGIN_ALREADY_ACTIVE').reason).toBe('이미 다른 곳에서 로그인된 상태입니다.');
+    expect(gateMessage('ALREADY_LOGGED_IN').reason).toBe('이미 로그인되어 있습니다.');
+    // (212번) 잠금이 아니므로 G15 틀의 "잠금이 풀린 뒤(10분)" 대신
+    expect(gateMessage('LOGIN_ALREADY_ACTIVE').releaser).toBe('다른 곳에서 로그아웃하거나 10분 뒤 다시 로그인합니다');
+    expect(gateMessage('LOGIN_ALREADY_ACTIVE').fix).toContain('10분 뒤');
+    expect(gateMessage('LOGIN_ALREADY_ACTIVE').fix).not.toContain('2시간');
+    expect(gateMessage('LOGIN_LOCKED').releaser).toContain('잠금이 풀린 뒤');
   });
 });
 

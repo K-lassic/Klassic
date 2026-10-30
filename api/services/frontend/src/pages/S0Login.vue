@@ -3,14 +3,11 @@
 // 로그인 안 한 채 S1~S3·[키 신청]에 오면 여기로 오고(?next=), 로그인·가입하면 그 주소로 돌아간다(UC16 A2).
 // (2026-09-30 황송해 169~172번, SD_02 §9B) 제목 문구 · 로그인/가입하기 탭을 뺐다. 가입 화면은 "가입하기" 링크(주소 ?tab=signup · /signup)로,
 // 로그인으로는 가입 화면의 "로그인" 링크로 오간다. 링크는 주소를 바꿔 뒤로 가기가 되고 next 는 이어진다.
-// #39 임시: 실패 안내는 C2GateBlock · gateFromError(#19 의 오류 코드 파일을 읽음) 대신 서버가 준 message · fix 를 그대로 보인다.
-//           #19 가 끝나면 v0.1.1 그대로(C2GateBlock) 바꾼다 — 바뀌는 곳은 gate 를 만드는 catch 와 template 의 안내 블록뿐.
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
-import { GateError } from '@/api/client';
+import C2GateBlock from '@/components/C2GateBlock.vue';
+import { gateFromError, type GateView } from '@/i18n/gateMessages';
 import { useAuthStore } from '@/stores/auth';
-
-interface GateView { code: string; message: string; fix: string | null }
 
 type Tab = 'login' | 'signup';
 const route = useRoute();
@@ -25,8 +22,6 @@ const form = reactive({ email: '', password: '', name: '' });
 const busy = ref(false);
 const gate = ref<GateView | null>(null);
 const locked = ref(false);
-let unlockTimer: ReturnType<typeof setTimeout> | null = null;
-onBeforeUnmount(() => { if (unlockTimer) clearTimeout(unlockTimer); });
 
 const nextPath = computed(() => {
   const n = typeof route.query.next === 'string' ? route.query.next : '';
@@ -52,12 +47,8 @@ async function submit() {
     else await auth.signup(form.email, form.password, form.name.trim());
     await router.replace(nextPath.value);
   } catch (e) {
-    const body = e instanceof GateError ? e.body : { code: 'INTERNAL_ERROR', message: '서버 안에서 문제가 생겼습니다.', fix: null };
-    gate.value = { code: body.code, message: body.message, fix: body.fix ?? null };
+    gate.value = gateFromError(e);
     locked.value = gate.value.code === 'LOGIN_LOCKED';
-    // 잠금은 다시 시도할 수 있는 시각(retry_after)이 지나면 푼다 — v0.1.1 은 C2GateBlock 의 retry-ready 가 했다
-    const at = e instanceof GateError ? e.retryAt : null;
-    if (locked.value && at) unlockTimer = setTimeout(() => { locked.value = false; }, Math.max(0, at.getTime() - Date.now()));
     form.password = '';
   } finally {
     busy.value = false;
@@ -112,11 +103,7 @@ async function submit() {
           <!-- (172번) 안내 문구 · "가입하기"는 가입 화면 링크 -->
           <p v-else class="small muted" data-test="to-signup">처음이십니까? <RouterLink class="link" :to="otherTo">가입하기</RouterLink>에서 이메일로 바로 가입할 수 있습니다.</p>
         </form>
-        <!-- #39 임시 — #19 뒤 <C2GateBlock v-if="gate" :view="gate" @retry-ready="locked = false" /> 로 바꾼다 -->
-        <div v-if="gate" class="notice n-rejected" role="alert" data-test="auth-fail">
-          <p class="title">{{ gate.message }}</p>
-          <p v-if="gate.fix">{{ gate.fix }}</p>
-        </div>
+        <C2GateBlock v-if="gate" :view="gate" @retry-ready="locked = false" />
       </section>
     </div>
   </div>
