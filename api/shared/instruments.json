@@ -1,0 +1,26 @@
+{
+  "$comment": "악기 목록 — 국악기 먼저(BR-PLY-03), 그다음 서비스가 쓸 수 있는 다른 악기. bank·program 은 서비스 음원(화면 연주·MP3)에서 이 악기 소리를 고르는 번호(결정 C11, 2026-09-29): 다른 악기는 GM 그대로 bank 0(FluidR3_GM.sf2), 국악기는 gugak.sf2 의 전용 bank 1 에 목록 순서대로 program 0부터(가야금 0·거문고 1·대금 2·해금 3·피리 4·아쟁 5), 장구·북은 타악 세트 bank 128 program 1(국악 타악 세트 — GM 표준 드럼 세트는 bank 128 program 0 그대로). 그래서 국악기와 다른 악기의 번호가 겹치지 않는다(예: 아쟁 1/5 ↔ 첼로 0/42). gm_program 은 0부터 센 GM 호환 번호 — 내려받는 MIDI·MusicXML(다른 프로그램용)과 gugak.sf2 가 없을 때 쓴다(research R11: 국악기는 가장 가까운 GM 악기 번호 + 한글 트랙 이름). 타악(장구·북)은 MIDI 채널 10. range_low/high 는 MIDI 음번호로 적은 [추정] 연주 음역 — 국악 전공 팀원 확인 전 임시값(음역 경고용).",
+  "default_ensemble": [
+    { "part_role": "melody", "instrument": "gayageum" },
+    { "part_role": "percussion", "instrument": "janggu" }
+  ],
+  "instruments": [
+    { "code": "gayageum", "name_ko": "가야금", "family": "gugak", "gm_program": 107, "bank": 1, "program": 0, "is_percussion": false, "soundfont": "gugak.sf2", "default_role": "melody", "range_low": 43, "range_high": 81 },
+    { "code": "geomungo", "name_ko": "거문고", "family": "gugak", "gm_program": 106, "bank": 1, "program": 1, "is_percussion": false, "soundfont": "gugak.sf2", "default_role": "melody", "range_low": 36, "range_high": 72 },
+    { "code": "daegeum",  "name_ko": "대금",   "family": "gugak", "gm_program": 77, "bank": 1, "program": 2,  "is_percussion": false, "soundfont": "gugak.sf2", "default_role": "melody", "range_low": 58, "range_high": 87 },
+    { "code": "haegeum",  "name_ko": "해금",   "family": "gugak", "gm_program": 110, "bank": 1, "program": 3, "is_percussion": false, "soundfont": "gugak.sf2", "default_role": "melody", "range_low": 55, "range_high": 86 },
+    { "code": "piri",     "name_ko": "피리",   "family": "gugak", "gm_program": 111, "bank": 1, "program": 4, "is_percussion": false, "soundfont": "gugak.sf2", "default_role": "melody", "range_low": 58, "range_high": 84 },
+    { "code": "ajaeng",   "name_ko": "아쟁",   "family": "gugak", "gm_program": 42, "bank": 1, "program": 5,  "is_percussion": false, "soundfont": "gugak.sf2", "default_role": "melody", "range_low": 38, "range_high": 72 },
+    { "code": "janggu",   "name_ko": "장구",   "family": "gugak", "gm_program": 0, "bank": 128, "program": 1,   "is_percussion": true,  "soundfont": "gugak.sf2", "default_role": "percussion", "range_low": null, "range_high": null },
+    { "code": "buk",      "name_ko": "북",     "family": "gugak", "gm_program": 0, "bank": 128, "program": 1,   "is_percussion": true,  "soundfont": "gugak.sf2", "default_role": "percussion", "range_low": null, "range_high": null },
+    { "code": "piano",    "name_ko": "피아노", "family": "other", "gm_program": 0, "bank": 0, "program": 0,   "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 21, "range_high": 108 },
+    { "code": "acoustic_guitar", "name_ko": "어쿠스틱 기타", "family": "other", "gm_program": 24, "bank": 0, "program": 24, "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 40, "range_high": 88 },
+    { "code": "violin",   "name_ko": "바이올린", "family": "other", "gm_program": 40, "bank": 0, "program": 40, "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 55, "range_high": 103 },
+    { "code": "cello",    "name_ko": "첼로",   "family": "other", "gm_program": 42, "bank": 0, "program": 42,  "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 36, "range_high": 76 },
+    { "code": "harp",     "name_ko": "하프",   "family": "other", "gm_program": 46, "bank": 0, "program": 46,  "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 24, "range_high": 103 },
+    { "code": "flute",    "name_ko": "플루트", "family": "other", "gm_program": 73, "bank": 0, "program": 73,  "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 60, "range_high": 96 },
+    { "code": "clarinet", "name_ko": "클라리넷", "family": "other", "gm_program": 71, "bank": 0, "program": 71, "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 50, "range_high": 94 },
+    { "code": "strings",  "name_ko": "현악 합주", "family": "other", "gm_program": 48, "bank": 0, "program": 48, "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 28, "range_high": 96 },
+    { "code": "marimba",  "name_ko": "마림바", "family": "other", "gm_program": 12, "bank": 0, "program": 12,  "is_percussion": false, "soundfont": "FluidR3_GM.sf2", "default_role": "melody", "range_low": 45, "range_high": 96 }
+  ]
+}

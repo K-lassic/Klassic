@@ -1,0 +1,199 @@
+{
+  "$comment": "#19 백엔드(web · admin) 오류 코드 — backend 만 쓰는 코드. 담당: 팀장. 새 코드는 WEB_ 접두어 권장(v0.1.1 코드 이름은 유지).",
+  "gate_codes": {
+    "UPLOAD_MUSICXML_UNREADABLE": {
+      "http": 422,
+      "gate": "G1",
+      "message": "악보 내용을 읽을 수 없는 MusicXML입니다.",
+      "fix": "악보 프로그램에서 MusicXML로 다시 내보낸 뒤 올려 주십시오."
+    },
+    "UPLOAD_TOO_LARGE": {
+      "http": 413,
+      "gate": "G1",
+      "message": "허용 용량을 넘었습니다.",
+      "fix": "사진·PDF를 20MB 이하로 줄여 올려 주십시오."
+    },
+    "UPLOAD_RESOLUTION_TOO_LOW": {
+      "http": 422,
+      "gate": "G1",
+      "message": "더 선명한 사진이 필요합니다.",
+      "fix": "사진 크기가 너무 작습니다(300픽셀 미만). 가로·세로 모두 300픽셀 이상인 사진으로 다시 찍어 올려 주십시오. 300~649픽셀 사진은 서비스가 키워서 읽습니다."
+    },
+    "UPLOAD_SCORE_TYPE_REQUIRED": {
+      "http": 400,
+      "api_http": 422,
+      "gate": "G1",
+      "message": "악보 종류(정간보/오선보)를 골라 주십시오.",
+      "fix": "올리기 전에 정간보인지 오선보인지 골라 주십시오."
+    },
+    "MIDI_UNAVAILABLE": {
+      "http": 409,
+      "gate": null,
+      "message": "이 악보는 MIDI 로 바꾸지 못했습니다.",
+      "fix": "MusicXML 로 받아 주십시오."
+    },
+    "MY_SCORE_FROM_SHARED": {
+      "http": 403,
+      "gate": null,
+      "message": "공유 악보로 만든 악보는 지울 수 없습니다.",
+      "fix": "공유 악보에서 만든 악보는 보관 기간(24시간)이 지나면 저절로 정리됩니다."
+    },
+    "ADMIN_NETWORK_DENIED": {
+      "http": 403,
+      "gate": "G5",
+      "message": "관리자 화면은 내부망에서만 열 수 있습니다.",
+      "fix": "팀 서버 내부망에서 접속해 주십시오."
+    },
+    "ADMIN_LOGIN_REQUIRED": {
+      "http": 401,
+      "gate": "G5",
+      "message": "로그인이 필요합니다.",
+      "fix": "운영자 계정으로 로그인해 주십시오."
+    },
+    "ADMIN_LOGIN_FAILED": {
+      "http": 401,
+      "gate": "G5",
+      "message": "아이디나 비밀번호가 맞지 않습니다.",
+      "fix": "다시 입력해 주십시오."
+    },
+    "ADMIN_LOCKED": {
+      "http": 423,
+      "gate": "G5",
+      "message": "로그인 실패가 많아 잠시 잠겼습니다.",
+      "fix": "안내된 시각 뒤에 다시 시도해 주십시오."
+    },
+    "SETTINGS_INVALID_VALUE": {
+      "http": 422,
+      "gate": "G6",
+      "message": "저장할 수 없는 값입니다.",
+      "fix": "0·음수를 넣지 않았는지, 경계 순서가 맞는지 확인해 주십시오."
+    },
+    "SETTINGS_UNKNOWN_ENGINE": {
+      "http": 422,
+      "gate": "G6",
+      "message": "등록되지 않았거나 꺼진 모델 이름입니다.",
+      "fix": "'모델' 탭에서 등록·사용 중인 모델만 순서에 넣어 주십시오."
+    },
+    "APPLICATION_MISSING_FIELD": {
+      "http": 422,
+      "gate": "G10",
+      "message": "빠진 항목이 있습니다.",
+      "fix": "이름·소속·연락 이메일·사용 목적을 모두 적어 주십시오."
+    },
+    "APPLICATION_CONSENT_REQUIRED": {
+      "http": 422,
+      "gate": "G10",
+      "message": "개인정보 수집·이용에 동의해 주십시오.",
+      "fix": "안내를 읽고 동의에 표시해 주십시오."
+    },
+    "APPLICATION_RATE_LIMITED": {
+      "http": 429,
+      "gate": "G11",
+      "message": "잠시 뒤에 다시 신청해 주십시오.",
+      "fix": "안내된 시각 뒤에 다시 신청해 주십시오."
+    },
+    "WEB_ACTIVE_REQUEST_EXISTS": {
+      "http": 429,
+      "gate": "G12",
+      "message": "지금 처리 중인 악보가 있습니다.",
+      "fix": "앞 악보의 결과가 나온 뒤에 다시 올려 주십시오."
+    },
+    "WEB_HOURLY_LIMIT": {
+      "http": 429,
+      "gate": "G12",
+      "message": "한 시간에 올릴 수 있는 횟수를 넘었습니다.",
+      "fix": "안내된 시각 뒤에 다시 올려 주십시오."
+    },
+    "MODEL_INVALID": {
+      "http": 422,
+      "gate": "G6",
+      "message": "모델 정보를 저장할 수 없습니다.",
+      "fix": "이름·종류·연결 정보를 확인해 주십시오."
+    },
+    "AUTH_LOGIN_REQUIRED": {
+      "http": 401,
+      "gate": "G13",
+      "message": "로그인이 필요합니다.",
+      "fix": "가입하거나 로그인한 뒤 다시 해 주십시오."
+    },
+    "SIGNUP_INVALID": {
+      "http": 400,
+      "gate": "G14",
+      "message": "가입 정보를 확인해 주십시오.",
+      "fix": "이메일 형식, 비밀번호 8자 이상, 이름을 확인해 주십시오."
+    },
+    "SIGNUP_EMAIL_TAKEN": {
+      "http": 409,
+      "gate": "G14",
+      "message": "이미 가입한 이메일입니다.",
+      "fix": "로그인하거나 다른 이메일로 가입해 주십시오."
+    },
+    "SIGNUP_RATE_LIMITED": {
+      "http": 429,
+      "gate": "G14",
+      "message": "가입 요청이 너무 많습니다.",
+      "fix": "다시 할 수 있는 시각 뒤에 가입해 주십시오."
+    },
+    "LOGIN_FAILED": {
+      "http": 401,
+      "gate": "G15",
+      "message": "이메일 또는 비밀번호가 맞지 않습니다.",
+      "fix": "다시 입력해 주십시오. 5번 틀리면 10분 동안 잠깁니다."
+    },
+    "LOGIN_LOCKED": {
+      "http": 423,
+      "gate": "G15",
+      "message": "잠시 로그인할 수 없습니다.",
+      "fix": "비밀번호가 여러 번 맞지 않아 잠겼습니다. 다시 할 수 있는 시각 뒤에 로그인해 주십시오."
+    },
+    "LOGIN_ALREADY_ACTIVE": {
+      "http": 409,
+      "gate": "G15",
+      "message": "이미 다른 곳에서 로그인된 상태입니다.",
+      "fix": "로그인한 기기에서 로그아웃한 뒤 다시 로그인해 주십시오. 그 기기를 쓰지 않고 있다면 10분 뒤 다시 로그인할 수 있습니다."
+    },
+    "ALREADY_LOGGED_IN": {
+      "http": 409,
+      "gate": "G15",
+      "message": "이미 로그인되어 있습니다.",
+      "fix": "다른 계정으로 로그인하려면 먼저 로그아웃해 주십시오."
+    },
+    "ADMIN_FORBIDDEN": {
+      "http": 403,
+      "gate": "G13",
+      "message": "관리자 권한이 없습니다.",
+      "fix": "운영자 역할이 있는 계정으로 로그인해 주십시오."
+    },
+    "ADMIN_SELF_PROTECTED": {
+      "http": 409,
+      "gate": "G16",
+      "message": "자기 계정의 운영자 역할은 빼거나 사용 중지할 수 없습니다.",
+      "fix": "다른 운영자에게 부탁해 주십시오."
+    },
+    "ADMIN_LAST_OPERATOR": {
+      "http": 409,
+      "gate": "G16",
+      "message": "사용 중인 운영자가 이 계정 하나뿐입니다.",
+      "fix": "다른 계정에 먼저 운영자 역할을 준 뒤 다시 해 주십시오."
+    },
+    "ROLE_NOT_ASSIGNABLE": {
+      "http": 400,
+      "gate": "G16",
+      "message": "계정에 줄 수 없는 역할입니다.",
+      "fix": "계정에는 사용자(user)·운영자(operator) 역할만 줄 수 있습니다."
+    },
+    "ACCOUNT_NOT_FOUND": {
+      "http": 404,
+      "gate": null,
+      "message": "계정을 찾을 수 없습니다.",
+      "fix": "계정 목록에서 다시 골라 주십시오."
+    }
+  },
+  "fallback_reasons": {},
+  "status_codes": {
+    "JEONGGANBO_NOTE": "정간보 : 우리 전통 음악을 적는 악보.",
+    "JEONGGANBO_SCOPE": "현재 「2021 정악보」 형식을 기준으로 인식합니다.",
+    "STAFF_NOTE": "오선보 : 오선 위에 음표를 그려 음의 높이와 길이를 나타내는 악보.",
+    "PDF_FIRST_PAGE_ONLY": "PDF 첫 쪽만 변환했습니다 (전체 {pages}쪽)"
+  }
+}
