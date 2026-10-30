@@ -1,0 +1,145 @@
+{
+  "$comment": "업로드 검사 규칙 — 웹 서비스(TS)와 모델 API 서버(Python)가 같은 파일을 읽는다(research R8, SC-015). 숫자 상한은 처리 설정(processing_setting_version)이 있으면 그 값이 우선이며, 시작할 때 둘이 같은지 확인한다. 2026-09-29 황송해 결정(사진·PDF 입력): 사용자가 올리는 파일(웹 POST /api/requests · /v1/performances · /v1/omr/*)은 user_upload_kinds(사진·PDF)만 받는다. midi·musicxml 은 모델 API 내부 입력(/v1/recommend · /v1/render/*, 생성된 결과)용으로만 남긴다 — 사용자 업로드에서는 형식 반려(UPLOAD_UNSUPPORTED_TYPE). 2026-09-29 황송해 결정(여러 쪽): 한 요청 = 악보 한 곡 — PDF 한 개(모든 쪽을 render_dpi 로 변환) 또는 사진 여러 장(올린 순서), 최대 max_pages 쪽. PDF 여러 개·PDF 와 사진 섞기는 codes.mix(UPLOAD_TOO_MANY_FILES), max_pages 를 넘으면 codes.count(UPLOAD_TOO_MANY_PAGES). 사진은 장마다 max_bytes·min_short_edge_px, PDF 는 파일 하나 max_bytes · 쪽마다 min_short_edge_px. 2026-09-30 황송해 결정(119번 작은 사진 자동 확대): min_short_edge_px(300)는 반려 기준, 짧은 변이 upscale_below_short_edge_px(650)보다 작으면 모델 API 가 upscale_to_short_edge_px(1000)로 늘린 사본(LANCZOS)을 인식에 쓴다(원본은 그대로). 2026-09-30 황송해 123 · 125번: 300 반려 기준 확정, warn_below_short_edge_px(500)보다 작으면 화면이 「500px 미만 사진은 부정확한 결과가 나올 수 있습니다.」를 알린다(반려 아님). 웹이 모델 API 에 닿지 않아 PDF 를 확인할 수 없으면 codes.check_unavailable(UPLOAD_CHECK_UNAVAILABLE).",
+  "version": "2026-09-30.1",
+  "max_files": 10,
+  "max_pages": 10,
+  "check_order": [
+    "count",
+    "type",
+    "corrupted",
+    "size",
+    "resolution"
+  ],
+  "user_upload_kinds": [
+    "image",
+    "pdf"
+  ],
+  "kinds": {
+    "image": {
+      "extensions": [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
+      ],
+      "mime_types": [
+        "image/png",
+        "image/jpeg",
+        "image/webp"
+      ],
+      "magic": [
+        {
+          "format": "png",
+          "hex_prefix": "89504e470d0a1a0a"
+        },
+        {
+          "format": "jpeg",
+          "hex_prefix": "ffd8ff"
+        },
+        {
+          "format": "webp",
+          "hex_prefix": "52494646",
+          "hex_at_8": "57454250"
+        }
+      ],
+      "max_bytes": 20971520,
+      "min_short_edge_px": 300,
+      "upscale_below_short_edge_px": 650,
+      "warn_below_short_edge_px": 500,
+      "upscale_to_short_edge_px": 1000,
+      "requires_score_type": true
+    },
+    "pdf": {
+      "$comment": "PDF(2026-09-29): 머리 %PDF · 손상·암호면 UPLOAD_CORRUPTED · 쪽수 1~max_pages · 파일 20MB · 모든 쪽을 render_dpi 로 PNG 변환(모델 API, pypdfium2) → 사진 크기(min_short_edge_px)는 쪽마다 변환한 그림에. (여러 쪽 결정으로 '첫 쪽만'·converted_page 는 없앴다)",
+      "extensions": [
+        ".pdf"
+      ],
+      "mime_types": [
+        "application/pdf"
+      ],
+      "magic": [
+        {
+          "format": "pdf",
+          "hex_prefix": "25504446"
+        }
+      ],
+      "max_bytes": 20971520,
+      "min_short_edge_px": 300,
+      "upscale_below_short_edge_px": 650,
+      "warn_below_short_edge_px": 500,
+      "upscale_to_short_edge_px": 1000,
+      "requires_score_type": true,
+      "render_dpi": 300
+    },
+    "midi": {
+      "$comment": "사용자 업로드에서는 받지 않음(2026-09-29) — /v1/recommend · /v1/render/* 내부 입력만",
+      "extensions": [
+        ".mid",
+        ".midi"
+      ],
+      "mime_types": [
+        "audio/midi",
+        "audio/x-midi",
+        "audio/mid",
+        "application/x-midi"
+      ],
+      "magic": [
+        {
+          "format": "midi",
+          "hex_prefix": "4d546864"
+        }
+      ],
+      "max_bytes": 5242880,
+      "requires_score_type": false
+    },
+    "musicxml": {
+      "$comment": "사용자 업로드에서는 받지 않음(2026-09-29) — /v1/recommend · /v1/render/* 내부 입력만",
+      "extensions": [
+        ".musicxml",
+        ".xml",
+        ".mxl"
+      ],
+      "mime_types": [
+        "application/vnd.recordare.musicxml+xml",
+        "application/vnd.recordare.musicxml",
+        "application/xml",
+        "text/xml"
+      ],
+      "magic": [
+        {
+          "format": "mxl",
+          "hex_prefix": "504b0304"
+        },
+        {
+          "format": "xml",
+          "text_contains_any": [
+            "<score-partwise",
+            "<score-timewise"
+          ]
+        }
+      ],
+      "max_bytes": 5242880,
+      "requires_score_type": false,
+      "structure": {
+        "min_parts": 1,
+        "min_measures": 1,
+        "requires_note_or_rest": true
+      }
+    }
+  },
+  "score_types": [
+    "staff",
+    "jeongganbo"
+  ],
+  "codes": {
+    "count": "UPLOAD_TOO_MANY_PAGES",
+    "type": "UPLOAD_UNSUPPORTED_TYPE",
+    "corrupted": "UPLOAD_CORRUPTED",
+    "musicxml_structure": "UPLOAD_MUSICXML_UNREADABLE",
+    "size": "UPLOAD_TOO_LARGE",
+    "resolution": "UPLOAD_RESOLUTION_TOO_LOW",
+    "score_type": "UPLOAD_SCORE_TYPE_REQUIRED",
+    "mix": "UPLOAD_TOO_MANY_FILES",
+    "check_unavailable": "UPLOAD_CHECK_UNAVAILABLE"
+  }
+}

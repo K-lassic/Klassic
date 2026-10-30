@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+coverage/
+storage/
+.devdb/
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+*.log
+.DS_Store
+*.tmp
+*.swp
+.vscode/
+.idea/
+# (2026-10-01 조성기) 음원 .sf2 는 MP3 연주에 필요해 저장소에 넣는다(Git LFS — 루트 .gitattributes). 재제작 원재료만 뺀다
+assets/soundfonts/source/
+# 실행 데이터 · 비밀(제출 기준) — 이미 위에 있는 것 외
+*.pid
+*.sock

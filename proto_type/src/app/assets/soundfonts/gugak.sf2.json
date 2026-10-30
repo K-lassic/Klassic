@@ -1,0 +1,883 @@
+{
+  "melodic": [
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 39,
+      "cents": -7,
+      "start_s": 0.106,
+      "length_s": 2.162,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 41,
+      "cents": 3,
+      "start_s": 10.863,
+      "length_s": 2.473,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 44,
+      "cents": 13,
+      "start_s": 19.93,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 46,
+      "cents": -4,
+      "start_s": 32.289,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 51,
+      "cents": 9,
+      "start_s": 40.996,
+      "length_s": 1.938,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 53,
+      "cents": 10,
+      "start_s": 51.161,
+      "length_s": 0.271,
+      "loop": false,
+      "excluded": "0.5초보다 짧아 싣지 않음"
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 56,
+      "cents": 15,
+      "start_s": 60.321,
+      "length_s": 2.417,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 58,
+      "cents": 6,
+      "start_s": 71.56,
+      "length_s": 2.302,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 60,
+      "cents": 9,
+      "start_s": 81.213,
+      "length_s": 2.479,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 63,
+      "cents": 14,
+      "start_s": 88.818,
+      "length_s": 0.207,
+      "loop": false,
+      "excluded": "0.5초보다 짧아 싣지 않음"
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 65,
+      "cents": 6,
+      "start_s": 96.974,
+      "length_s": 1.941,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 68,
+      "cents": 21,
+      "start_s": 105.194,
+      "length_s": 2.085,
+      "loop": false
+    },
+    {
+      "instrument": "gayageum",
+      "file": "jungak_gayageum_sus_mid_04_05.wav",
+      "key": 75,
+      "cents": 15,
+      "start_s": 89.015,
+      "length_s": 0.271,
+      "loop": false,
+      "excluded": "0.5초보다 짧아 싣지 않음"
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_D_scale_mid_80.wav",
+      "key": 39,
+      "cents": -32,
+      "start_s": 0.065,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_D_scale_mid_80.wav",
+      "key": 41,
+      "cents": -34,
+      "start_s": 5.062,
+      "length_s": 2.063,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_D_scale_mid_80.wav",
+      "key": 44,
+      "cents": 13,
+      "start_s": 10.129,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_D_scale_mid_80.wav",
+      "key": 46,
+      "cents": -1,
+      "start_s": 15.089,
+      "length_s": 2.351,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_D_scale_mid_80.wav",
+      "key": 48,
+      "cents": -40,
+      "start_s": 20.129,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_D_scale_mid_80.wav",
+      "key": 50,
+      "cents": -6,
+      "start_s": 25.089,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_D_scale_mid_80.wav",
+      "key": 51,
+      "cents": 31,
+      "start_s": 30.219,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_D_scale_mid_80.wav",
+      "key": 53,
+      "cents": 1,
+      "start_s": 35.078,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 48,
+      "cents": 5,
+      "start_s": 0.086,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 51,
+      "cents": 11,
+      "start_s": 5.041,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 53,
+      "cents": 4,
+      "start_s": 10.033,
+      "length_s": 2.5,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 55,
+      "cents": -8,
+      "start_s": 15.099,
+      "length_s": 2.377,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 56,
+      "cents": 11,
+      "start_s": 20.086,
+      "length_s": 2.406,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 58,
+      "cents": 30,
+      "start_s": 25.131,
+      "length_s": 2.348,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 60,
+      "cents": 16,
+      "start_s": 30.113,
+      "length_s": 2.363,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 62,
+      "cents": 6,
+      "start_s": 35.078,
+      "length_s": 1.769,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 64,
+      "cents": -38,
+      "start_s": 40.203,
+      "length_s": 1.744,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 66,
+      "cents": -37,
+      "start_s": 45.057,
+      "length_s": 1.161,
+      "loop": false
+    },
+    {
+      "instrument": "geomungo",
+      "file": "gumungo_U_scale_mid_02.wav",
+      "key": 67,
+      "cents": 45,
+      "start_s": 50.081,
+      "length_s": 0.725,
+      "loop": false
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 58,
+      "cents": 40,
+      "start_s": 0.294,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 61,
+      "cents": -19,
+      "start_s": 10.971,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 62,
+      "cents": 1,
+      "start_s": 20.971,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 64,
+      "cents": -31,
+      "start_s": 32.363,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 66,
+      "cents": -46,
+      "start_s": 46.097,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 67,
+      "cents": 49,
+      "start_s": 56.87,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 69,
+      "cents": 0,
+      "start_s": 68.459,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 70,
+      "cents": 50,
+      "start_s": 80.39,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 73,
+      "cents": -38,
+      "start_s": 92.113,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 74,
+      "cents": -17,
+      "start_s": 106.145,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 76,
+      "cents": -24,
+      "start_s": 119.046,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 77,
+      "cents": 50,
+      "start_s": 132.203,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 80,
+      "cents": -42,
+      "start_s": 145.926,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 81,
+      "cents": -11,
+      "start_s": 158.689,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 83,
+      "cents": -47,
+      "start_s": 170.294,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 84,
+      "cents": 36,
+      "start_s": 181.382,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 86,
+      "cents": -45,
+      "start_s": 192.091,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "daegeum",
+      "file": "jungak_deageum_scale_sus_25.wav",
+      "key": 88,
+      "cents": -39,
+      "start_s": 202.758,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 56,
+      "cents": -2,
+      "start_s": 0.332,
+      "length_s": 2.634,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 58,
+      "cents": -6,
+      "start_s": 3.432,
+      "length_s": 1.392,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 60,
+      "cents": -4,
+      "start_s": 6.375,
+      "length_s": 0.829,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 64,
+      "cents": 12,
+      "start_s": 8.448,
+      "length_s": 1.984,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 65,
+      "cents": 9,
+      "start_s": 15.216,
+      "length_s": 1.502,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 69,
+      "cents": -5,
+      "start_s": 14.299,
+      "length_s": 0.167,
+      "loop": false
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 70,
+      "cents": 11,
+      "start_s": 23.57,
+      "length_s": 2.605,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 73,
+      "cents": 6,
+      "start_s": 29.108,
+      "length_s": 1.821,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 75,
+      "cents": 7,
+      "start_s": 31.732,
+      "length_s": 2.268,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 77,
+      "cents": -1,
+      "start_s": 34.721,
+      "length_s": 2.425,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 79,
+      "cents": -27,
+      "start_s": 12.68,
+      "length_s": 0.173,
+      "loop": false
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 80,
+      "cents": -1,
+      "start_s": 20.412,
+      "length_s": 2.802,
+      "loop": true
+    },
+    {
+      "instrument": "haegeum",
+      "file": "Haegeum_1.wav",
+      "key": 91,
+      "cents": 11,
+      "start_s": 26.542,
+      "length_s": 1.926,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 57,
+      "cents": -2,
+      "start_s": 0.17,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 59,
+      "cents": -13,
+      "start_s": 17.434,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 61,
+      "cents": -29,
+      "start_s": 37.148,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 62,
+      "cents": 34,
+      "start_s": 55.219,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 64,
+      "cents": 13,
+      "start_s": 72.059,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 66,
+      "cents": 17,
+      "start_s": 93.195,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 69,
+      "cents": 22,
+      "start_s": 112.52,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 71,
+      "cents": 40,
+      "start_s": 130.951,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 73,
+      "cents": 49,
+      "start_s": 159.732,
+      "length_s": 1.322,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 74,
+      "cents": 26,
+      "start_s": 166.535,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 76,
+      "cents": 20,
+      "start_s": 182.992,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 78,
+      "cents": 27,
+      "start_s": 199.484,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "piri",
+      "file": "hyangpiri_scale_05_06.wav",
+      "key": 85,
+      "cents": 27,
+      "start_s": 149.347,
+      "length_s": 2.669,
+      "loop": true
+    },
+    {
+      "instrument": "ajaeng",
+      "file": "Ajaeng_2.wav",
+      "key": 44,
+      "cents": 23,
+      "start_s": 0.408,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "ajaeng",
+      "file": "Ajaeng_2.wav",
+      "key": 46,
+      "cents": -3,
+      "start_s": 9.557,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "ajaeng",
+      "file": "Ajaeng_2.wav",
+      "key": 48,
+      "cents": 0,
+      "start_s": 17.672,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "ajaeng",
+      "file": "Ajaeng_2.wav",
+      "key": 53,
+      "cents": -11,
+      "start_s": 26.821,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "ajaeng",
+      "file": "Ajaeng_2.wav",
+      "key": 56,
+      "cents": 10,
+      "start_s": 35.191,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "ajaeng",
+      "file": "Ajaeng_2.wav",
+      "key": 58,
+      "cents": 1,
+      "start_s": 44.323,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "ajaeng",
+      "file": "Ajaeng_2.wav",
+      "key": 60,
+      "cents": 22,
+      "start_s": 52.02,
+      "length_s": 4.0,
+      "loop": true
+    },
+    {
+      "instrument": "ajaeng",
+      "file": "Ajaeng_2.wav",
+      "key": 63,
+      "cents": 5,
+      "start_s": 60.066,
+      "length_s": 4.0,
+      "loop": true
+    }
+  ],
+  "drums": [
+    {
+      "file": "Janggu_1_2.wav",
+      "label": "덩 중",
+      "keys": [
+        36,
+        35
+      ],
+      "vel": [
+        0,
+        95
+      ],
+      "length_s": 1.22
+    },
+    {
+      "file": "Janggu_1_1.wav",
+      "label": "덩 강",
+      "keys": [
+        36,
+        35
+      ],
+      "vel": [
+        96,
+        127
+      ],
+      "length_s": 1.254
+    },
+    {
+      "file": "Janggu_2_2.wav",
+      "label": "기덕 중",
+      "keys": [
+        38,
+        40
+      ],
+      "vel": [
+        0,
+        95
+      ],
+      "length_s": 0.646
+    },
+    {
+      "file": "Janggu_2_1.wav",
+      "label": "기덕 강",
+      "keys": [
+        38,
+        40
+      ],
+      "vel": [
+        96,
+        127
+      ],
+      "length_s": 0.583
+    },
+    {
+      "file": "Janggu_3_2.wav",
+      "label": "쿵 중",
+      "keys": [
+        42,
+        37
+      ],
+      "vel": [
+        0,
+        95
+      ],
+      "length_s": 1.384
+    },
+    {
+      "file": "Janggu_3_1.wav",
+      "label": "쿵 강",
+      "keys": [
+        42,
+        37
+      ],
+      "vel": [
+        96,
+        127
+      ],
+      "length_s": 1.316
+    },
+    {
+      "file": "Janggu_4_2.wav",
+      "label": "더러러러 중",
+      "keys": [
+        44,
+        46
+      ],
+      "vel": [
+        0,
+        95
+      ],
+      "length_s": 2.0
+    },
+    {
+      "file": "Janggu_4_1.wav",
+      "label": "더러러러 강",
+      "keys": [
+        44,
+        46
+      ],
+      "vel": [
+        96,
+        127
+      ],
+      "length_s": 2.0
+    },
+    {
+      "file": "Jwago_2.wav",
+      "label": "좌고(북)",
+      "keys": [
+        41,
+        43,
+        45
+      ],
+      "vel": [
+        0,
+        127
+      ],
+      "length_s": 1.005
+    }
+  ]
+}

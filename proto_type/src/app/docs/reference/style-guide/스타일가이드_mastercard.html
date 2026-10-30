@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>국악보 스타일가이드</title>
+<meta name="description" content="국악보 디지털 변환·연주·편집 서비스 스타일가이드 — Mastercard DESIGN.md(npx getdesign add mastercard) 기반, 한지·먹·장구 면 테마">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400..700&family=Noto+Sans+KR:wght@400..700&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   디자인 토큰 — 출처: DESIGN_mastercard.md (npx getdesign@latest add mastercard)
+   원본에는 YAML 토큰 키가 없으므로 §2 색 이름을 그대로 kebab-case 로 옮겼다.
+   예) Ink Black → --color-ink-black,  Canvas Cream → --color-canvas-cream
+   역할 이름(--color-primary 등)은 위 토큰을 가리키는 별칭일 뿐, 새 색이 아니다.
+   ========================================================= */
+/* 사이트 글꼴 — 마루 부리(네이버 MaruBuri, SIL OFL 1.1, 2026-09-30 황송해). 서비스는 부분집합 'GugakBuri' 를 싣고(frontend/public/fonts),
+   이 견본 페이지는 네이버 공식 웹폰트 파일을 부른다 */
+@font-face { font-family: 'GugakBuri'; font-weight: 100 600; font-display: swap; src: url('https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-Regular.woff2') format('woff2'); }
+@font-face { font-family: 'GugakBuri'; font-weight: 700 900; font-display: swap; src: url('https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-Bold.woff2') format('woff2'); }
+
+:root {
+  /* colors — neutrals & text (§2) */
+  --color-ink-black: #141413;          /* 먹 — 주요 버튼, 제목·본문, 하단 */
+  --color-charcoal: #262627;
+  --color-slate-gray: #696969;         /* 보조 글자, 비활성 */
+  --color-granite: #555555;
+  --color-graphite: #565656;
+  --color-dust-taupe: #D1CDC7;         /* 속삭임 — 글자 금지(1.40:1), 선·비활성 테두리만 */
+  /* colors — surface (§2) */
+  --color-canvas-cream: #F3F0EE;       /* 한지 — 페이지 바탕 */
+  --color-lifted-cream: #FCFBFA;       /* 한 겹 더 얹은 한지 */
+  --color-white: #FFFFFF;              /* 떠 있는 메뉴, 보조 버튼, 위성 버튼 */
+  --color-soft-bone: #F4F4F4;
+  --color-ghost-cream: #E8E2DA;        /* §4 Ghost Watermark 값 — 배경 글자 전용 */
+  /* colors — secondary & accent (§2) */
+  --color-signal-orange: #CF4500;      /* 동의(개인정보) 전용 */
+  --color-light-signal-orange: #F37338;/* 궤도선, 눈썹 점, 주의 점 — 글자 금지 */
+  --color-clay-brown: #784D25;         /* (2026-09-30) 서비스: 주요 버튼 · 버튼 테두리 · 고른 알약 · 초점 (전: 반려) */
+  --color-clay-deep: #5A3A1C;          /* (2026-09-30 새로) 주요 버튼 누름 · 마우스, 반려(테두리 칩) — 흰 10.79 · 한지 9.51 */
+  --color-gold: #9C7A1F;              /* (2026-09-30 황송해 85·86번) 로고 K · 지금 단계 테 — 흰 4.03 · 한지 3.55 (큰 굵은 글자 · 테 3:1 기준, 작은 본문 글자 금지) */
+  --color-link-blue: #3860BE;          /* 원본: 링크·안내 → 서비스: 링크, 대체 결과 */
+  /* 로고 전용 빨강(#EB001B)·노랑(#F79E1B)은 UI 색이 아니므로 변수로 두지 않는다 */
+
+  /* 역할 별칭 — 새 색 아님 */
+  --color-primary: var(--color-clay-brown);      /* 2026-09-30 황송해: 먹 → 갈색(국악 분위기) */
+  --color-primary-strong: var(--color-clay-deep);
+  --color-on-primary: var(--color-canvas-cream);
+  --color-canvas: var(--color-canvas-cream);
+  --color-text: var(--color-ink-black);
+  --color-text-muted: var(--color-slate-gray);
+  --color-consent: var(--color-signal-orange);
+  --color-orbit: var(--color-light-signal-orange);
+  --color-hairline: rgba(20, 20, 19, .12);     /* 먹 12% — "1px at low opacity" */
+  --color-input-border: rgba(20, 20, 19, .5);  /* 먹 50% — §4 검색 입력 테두리 */
+  --color-footer-divider: rgba(255, 255, 255, .3);
+
+  /* 상태 별칭 — 원본에 오류·성공 색이 없어 기존 토큰에서 골랐다 */
+  --status-done: var(--color-clay-brown);   /* 2026-09-30 황송해: 먹 → 갈색 */
+  --status-progress: var(--color-ink-black);
+  --status-waiting: var(--color-slate-gray);
+  --status-fallback: var(--color-link-blue);
+  --status-caution: var(--color-light-signal-orange);
+  --status-rejected: var(--color-clay-deep);     /* 2026-09-30: 갈색 채움은 버튼이 되어 반려는 짙은 갈색 테두리 칩 */
+  --status-expired: var(--color-slate-gray);
+
+  /* typography — MarkForMC 대체: Sofia Sans(원본 fallback) + Noto Sans KR(한글) */
+  --font-sans: "GugakBuri", "Noto Serif KR", "Nanum Myeongjo", "AppleMyungjo", "Batang", serif;   /* 2026-09-30: 마루 부리(전: 예스 명조 · "Sofia Sans", "Noto Sans KR", …) */
+  /* 서비스 확장: 코드 예시용 고정폭 글꼴(원본에 없음). 시스템 글꼴만 쓰고 새로 불러오지 않는다 */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "D2Coding", monospace;
+  /* (2026-09-30 황송해 83번) 작은 글자 크기 — 마루 부리가 작은 크기에서 깨져 보여 한 단계 키움(전 14 · 13 · 12px) */
+  --text-small: 15px;
+  --text-caption: 14px;
+  --text-micro: 13px;
+
+  /* rounded — §5 Border Radius Scale. 8–16px 중간값은 없다 */
+  --rounded-xs: 3px;
+  --rounded-sm: 6px;
+  --rounded-button: 20px;
+  --rounded-consent: 24px;
+  --rounded-stadium: 40px;
+  --rounded-circle: 50%;
+  --rounded-pill: 999px;
+
+  /* spacing — §5 8px 배수 */
+  --spacing-8: 8px;
+  --spacing-16: 16px;
+  --spacing-24: 24px;
+  --spacing-32: 32px;
+  --spacing-48: 48px;
+  --spacing-64: 64px;
+  --spacing-96: 96px;
+  --spacing-128: 128px;
+
+  /* elevation — §6 */
+  --elevation-0: none;
+  --elevation-1: rgba(0, 0, 0, .04) 0px 4px 24px 0px;
+  --elevation-2: rgba(0, 0, 0, .08) 0px 24px 48px 0px;
+  --elevation-3: rgba(0, 0, 0, .25) 0px 70px 110px 0px;
+  /* (2026-09-30 황송해 124번) 흰 막대끼리 구분 — 머리 막대는 아래쪽, 아래 고정 연주 막대는 위쪽 그림자 */
+  --shadow-bar-down: rgba(20, 20, 19, .14) 0px 8px 18px -6px;
+  --shadow-bar-up: rgba(20, 20, 19, .14) 0px -8px 18px -6px;
+
+  --content-width: 1280px;
+  --gutter: 48px;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; overflow-x: clip; }
+body {
+  margin: 0; overflow-x: clip;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font: 450 16px/1.4 var(--font-sans);
+  word-break: keep-all; overflow-wrap: anywhere;
+}
+a { color: var(--color-link-blue); }
+:focus-visible { outline: 2px solid var(--color-primary-strong); outline-offset: 3px; }
+.on-ink :focus-visible { outline-color: var(--color-canvas-cream); }
+code, pre { font-family: var(--font-mono); }
+section[id], h3[id] { scroll-margin-top: 112px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- typography roles (§3) ---------- */
+.h1 { font: 500 64px/64px var(--font-sans); letter-spacing: -1.28px; margin: 0; }
+.h2 { font: 500 36px/44px var(--font-sans); letter-spacing: -0.72px; margin: 0; }
+.h3 { font: 500 24px/28.8px var(--font-sans); letter-spacing: -0.48px; margin: 0; }
+.h4 { font: 700 var(--text-small)/18.2px var(--font-sans); margin: 0; }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font: 700 var(--text-small)/14px var(--font-sans); letter-spacing: 0.56px; text-transform: uppercase; color: var(--color-ink-black); }
+.eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: var(--rounded-circle); background: var(--color-orbit); flex: none; }
+/* (2026-09-30 황송해 173 · 174번) 큰 눈썹 제목 — 제목 문장 없이 눈썹이 화면 제목(h1)일 때 */
+.eyebrow.eyebrow-title { font: 700 28px/1.2 var(--font-sans); letter-spacing: 0.2px; gap: 12px; margin: 0; }
+.eyebrow.eyebrow-title::before { width: 10px; height: 10px; }
+.body { font: 450 16px/22.4px var(--font-sans); }
+.small { font: 450 var(--text-small)/22px var(--font-sans); }
+.muted { color: var(--color-text-muted); }
+.token { font: 400 var(--text-caption)/1.5 var(--font-mono); color: var(--color-granite); }
+
+/* ---------- layout (§5) ---------- */
+.wrap { max-width: calc(var(--content-width) + 2 * var(--gutter)); margin: 0 auto; padding: 0 var(--gutter); }
+.band { padding: var(--spacing-128) 0; }
+.band-lifted { background: var(--color-lifted-cream); }
+.lede { max-width: 720px; margin: var(--spacing-16) 0 var(--spacing-48); color: var(--color-charcoal); }
+.head-2up { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--spacing-48); align-items: end; margin-bottom: var(--spacing-64); }
+.head-2up .lede { margin: 0; }
+.row { display: flex; flex-wrap: wrap; gap: var(--spacing-16); align-items: center; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-48); align-items: start; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--spacing-24); }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--spacing-24); }
+.sub { margin-top: var(--spacing-96); }
+.sub > .h3 + * { margin-top: var(--spacing-24); }
+.stack { display: grid; gap: var(--spacing-24); }
+code.inline { background: var(--color-white); padding: 1px 8px; border-radius: var(--rounded-sm); font-size: var(--text-small); }
+
+/* ---------- floating nav pill (§4 Navigation) ---------- */
+.site-nav { position: relative; z-index: 30; margin-top: 24px; padding: 0 var(--gutter); }   /* 2026-09-30 황송해 153번: 서비스 머리 막대는 따라 붙지 않는다(전: sticky top 24px) */
+.nav-pill {
+  position: relative; max-width: var(--content-width); margin: 0 auto;
+  display: flex; align-items: center; gap: var(--spacing-48);
+  padding: 12px 16px 12px 40px; background: var(--color-white);
+  border-radius: var(--rounded-pill); box-shadow: var(--elevation-1);
+}
+.brand { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--color-ink-black); font: 700 18px/1 var(--font-sans); letter-spacing: -0.36px; }
+.nav-links { display: flex; gap: var(--spacing-48); }
+.nav-link { font: 500 16px/16px var(--font-sans); letter-spacing: -0.48px; color: var(--color-ink-black); text-decoration: none; padding: 16px 0; }
+.nav-pill .spacer { flex: 1; }
+.menu-toggle { display: none; position: relative; z-index: 2; }
+
+/* ---------- buttons (§4 Buttons) — hover 변형 없음, 눌림만 ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 6px 24px; border-radius: var(--rounded-button);
+  border: 1.5px solid var(--color-primary);
+  font: 500 16px/1 var(--font-sans); letter-spacing: -0.32px;
+  text-decoration: none; cursor: pointer; white-space: nowrap;
+  transition: transform .08s ease;
+}
+.btn-primary { background: var(--color-primary); color: var(--color-on-primary); }
+.btn-primary:not([disabled]):not([aria-disabled="true"]):hover, .btn-primary:not([disabled]):not([aria-disabled="true"]):active { background: var(--color-primary-strong); border-color: var(--color-primary-strong); }
+.btn-secondary:not([disabled]):not([aria-disabled="true"]):hover { border-color: var(--color-primary-strong); color: var(--color-primary-strong); }
+.btn-secondary { background: var(--color-white); color: var(--color-ink-black); font-weight: 450; line-height: 20.8px; }
+.btn:active, .btn.is-active { transform: translateY(2px) scale(.98); }
+.btn-consent {
+  background: var(--color-consent); color: var(--color-white); border: 0;
+  border-radius: var(--rounded-consent); padding: 1px 30px; min-height: 40px;
+  font: 400 var(--text-caption)/1.2 var(--font-sans); letter-spacing: 0.13px;
+}
+.btn-consent[aria-pressed="true"]::before { content: "✓"; }
+.btn-large { padding: 16px 40px; border-radius: var(--rounded-stadium); }
+.btn[disabled], .btn[aria-disabled="true"] { background: transparent; color: var(--color-slate-gray); border-color: var(--color-dust-taupe); cursor: not-allowed; transform: none; }
+.btn-satellite, .btn-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  border-radius: var(--rounded-circle); color: var(--color-ink-black); cursor: pointer; text-decoration: none;
+  font: 500 20px/1 var(--font-sans); transition: transform .08s ease;
+}
+.btn-satellite { width: 56px; height: 56px; background: var(--color-white); border: 0; }
+.btn-icon { width: 48px; height: 48px; background: transparent; border: 1px solid var(--color-primary); }
+.btn-satellite:active, .btn-icon:active { transform: scale(.94); }
+
+/* ---------- inputs (§4 Inputs & Forms) ---------- */
+.field { display: grid; gap: 8px; align-content: start; }
+.field label, .field .label { font: 700 var(--text-small)/18.2px var(--font-sans); color: var(--color-ink-black); }
+.input {
+  width: 100%; min-height: 48px; padding: 12px 24px;
+  background: var(--color-white); color: var(--color-ink-black);
+  border: 1px solid var(--color-input-border); border-radius: var(--rounded-pill);
+  font: 450 16px/1.4 var(--font-sans);
+}
+.input::placeholder { color: var(--color-slate-gray); }
+.input:focus-visible { border-color: var(--color-primary); }
+.input[aria-invalid="true"] { border: 1.5px solid var(--status-rejected); }
+.hint { font: 450 var(--text-small)/20px var(--font-sans); color: var(--color-slate-gray); padding-left: 24px; }
+.field-error { display: flex; gap: 8px; align-items: center; padding-left: 24px; font: 500 var(--text-small)/20px var(--font-sans); color: var(--status-rejected); }
+.field-error::before { content: "!"; flex: none; width: 18px; height: 18px; border-radius: var(--rounded-circle); background: var(--status-rejected); color: var(--color-white); font: 700 var(--text-micro)/18px var(--font-sans); text-align: center; }
+
+/* 악보 종류 — 알약 안의 두 칸 */
+.segmented { display: inline-flex; padding: 4px; gap: 4px; background: var(--color-white); border: 1px solid var(--color-input-border); border-radius: var(--rounded-pill); }
+.segmented label { position: relative; display: block; }
+.segmented input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.segmented span { display: inline-flex; align-items: center; min-height: 40px; padding: 0 24px; border-radius: var(--rounded-pill); font: 500 16px/1 var(--font-sans); letter-spacing: -0.32px; color: var(--color-ink-black); }
+.segmented input:checked + span { background: var(--color-primary); color: var(--color-canvas-cream); }
+.segmented input:focus-visible + span { outline: 2px solid var(--color-ink-black); outline-offset: 2px; }
+
+/* ---------- chips / 상태 (§4 Pill Carousel Card의 chip) ---------- */
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px;
+  background: var(--color-white); color: var(--color-ink-black);
+  border: 1.5px solid transparent; border-radius: var(--rounded-pill);
+  font: 500 var(--text-small)/1.2 var(--font-sans); white-space: nowrap;
+}
+.chip.on-white { background: var(--color-canvas-cream); }
+.chip::before { flex: none; }
+.chip.s-done { background: var(--status-done); color: var(--color-canvas-cream); }
+.chip.s-done::before { content: "✓"; }
+.chip.s-progress::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--status-progress); }
+.chip.s-waiting::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--status-waiting); }
+.chip.s-caution::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--status-caution); }
+.chip.s-fallback { color: var(--status-fallback); border-color: var(--status-fallback); }
+.chip.s-fallback::before { content: "↺"; }
+.chip.s-rejected { background: var(--color-white); color: var(--status-rejected); border: 2px solid var(--status-rejected); font-weight: 700; }
+.chip.s-rejected::before { content: "✕"; }
+.chip.s-expired { background: transparent; color: var(--status-expired); border-color: var(--color-dust-taupe); }
+.chip.s-expired::before { content: "–"; }
+
+/* ---------- code block (서비스 확장: 먹 면 + 모노 글꼴) ---------- */
+.code {
+  display: flex; gap: var(--spacing-16); align-items: flex-start;
+  background: var(--color-ink-black); color: var(--color-canvas-cream);
+  border-radius: var(--rounded-stadium); padding: var(--spacing-32) 40px;
+}
+.code pre { margin: 0; flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-all; font: 400 var(--text-small)/1.7 var(--font-mono); }
+.code .c { color: var(--color-dust-taupe); }
+.copy-btn { flex: none; min-height: 40px; padding: 6px 20px; border-radius: var(--rounded-button); border: 1.5px solid var(--color-canvas-cream); background: transparent; color: var(--color-canvas-cream); font: 500 var(--text-small)/1 var(--font-sans); cursor: pointer; transition: transform .08s ease; }
+.copy-btn:active { transform: translateY(2px) scale(.98); }
+
+/* ---------- hero (§4 Hero Media Frame + Ghost Watermark) ---------- */
+.hero { position: relative; overflow: hidden; padding: var(--spacing-96) 0 var(--spacing-128); }
+.ghost { position: absolute; top: 24px; right: -3vw; z-index: 0; margin: 0; font: 500 clamp(112px, 19vw, 260px)/1 var(--font-sans); letter-spacing: -0.02em; color: var(--color-ghost-cream); white-space: nowrap; pointer-events: none; user-select: none; }
+.hero .wrap { position: relative; z-index: 1; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--spacing-48); align-items: end; }
+.hero-grid .h1 { margin-top: var(--spacing-24); }
+.hero-grid p { margin: 0 0 var(--spacing-32); color: var(--color-charcoal); }
+.stadium { margin-top: var(--spacing-64); height: clamp(240px, 38vw, 460px); border-radius: var(--rounded-stadium); background: var(--color-ink-black); overflow: hidden; }
+.stadium svg { display: block; width: 100%; height: 100%; }
+
+/* ---------- swatches ---------- */
+.group-label { display: block; margin: var(--spacing-48) 0 var(--spacing-16); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--spacing-16); }
+.swatch { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--spacing-16); align-items: center; padding: var(--spacing-16) var(--spacing-24) var(--spacing-16) var(--spacing-16); background: var(--color-lifted-cream); border-radius: var(--rounded-stadium); }
+.swatch .dot { width: 64px; height: 64px; border-radius: var(--rounded-circle); box-shadow: inset 0 0 0 1px var(--color-hairline); }
+.swatch b { display: block; font: 500 15px/1.3 var(--font-sans); letter-spacing: -0.3px; }
+.swatch span { display: block; font: 450 var(--text-caption)/1.45 var(--font-sans); color: var(--color-slate-gray); }
+.swatch .ratio { font-family: var(--font-mono); color: var(--color-granite); }
+
+/* ---------- tables ---------- */
+.table-scroll { overflow-x: auto; }
+table.spec { width: 100%; border-collapse: collapse; min-width: 640px; }
+table.spec th, table.spec td { text-align: left; padding: 14px 12px; border-bottom: 1px solid var(--color-hairline); vertical-align: middle; }
+table.spec th { font: 700 var(--text-small)/18.2px var(--font-sans); color: var(--color-charcoal); }
+table.spec td.desc { color: var(--color-charcoal); font-size: var(--text-small); }
+table.plain { min-width: 0; }
+
+/* spacing / radius / elevation demos */
+.space-demo { display: grid; gap: 10px; }
+.space-demo .bar { display: flex; align-items: center; gap: 12px; font: 400 var(--text-caption)/1.4 var(--font-mono); color: var(--color-granite); }
+.space-demo .bar i { display: block; height: 12px; background: var(--color-ink-black); border-radius: var(--rounded-xs); }
+.radius-demo { display: flex; flex-wrap: wrap; gap: var(--spacing-16); }
+.radius-demo div { width: 104px; height: 72px; border: 1.5px solid var(--color-ink-black); background: var(--color-white); display: flex; align-items: flex-end; justify-content: center; padding: 8px; font: 400 var(--text-micro)/1.2 var(--font-mono); color: var(--color-granite); }
+.elev-demo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--spacing-24); margin-top: var(--spacing-32); }
+.elev-demo div { height: 96px; border-radius: var(--rounded-stadium); background: var(--color-white); display: flex; align-items: center; justify-content: center; text-align: center; font: 400 var(--text-micro)/1.4 var(--font-mono); color: var(--color-granite); padding: 8px; }
+
+/* ---------- key numbers — 장구 면 원 ---------- */
+.num-cell { display: grid; justify-items: center; gap: var(--spacing-16); text-align: center; }
+.drum {
+  width: 100%; max-width: 200px; aspect-ratio: 1; border-radius: var(--rounded-circle);
+  background: var(--color-white); border: 1.5px solid var(--color-ink-black);
+  box-shadow: inset 0 0 0 10px var(--color-white), inset 0 0 0 11.5px var(--color-dust-taupe);
+  display: flex; align-items: center; justify-content: center;
+}
+.drum.ink { background: var(--color-ink-black); color: var(--color-canvas-cream); box-shadow: inset 0 0 0 10px var(--color-ink-black), inset 0 0 0 11.5px var(--color-charcoal); }
+.drum .n { font: 500 56px/1 var(--font-sans); letter-spacing: -1.12px; }
+.drum .u { font: 500 20px/1 var(--font-sans); margin-left: 2px; }
+
+/* ---------- portrait cards + 궤도선 (§4 Service Portrait Card) ---------- */
+.constellation { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--spacing-32); }
+.constellation .orbit { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; overflow: visible; }
+.portrait-card { position: relative; z-index: 1; display: grid; gap: var(--spacing-16); justify-items: start; }
+.portrait-card:nth-of-type(2) { margin-top: var(--spacing-128); }
+.portrait-card:nth-of-type(3) { margin-top: var(--spacing-48); }
+.portrait { position: relative; width: 100%; max-width: 280px; aspect-ratio: 1; margin-bottom: var(--spacing-16); }
+.portrait .face { width: 100%; height: 100%; border-radius: var(--rounded-circle); overflow: hidden; box-shadow: var(--elevation-2); }
+.portrait .face svg { display: block; width: 100%; height: 100%; }
+.portrait .btn-satellite { position: absolute; right: 4%; bottom: 4%; transform: translate(22%, 22%); }
+.portrait .btn-satellite:active { transform: translate(22%, 22%) scale(.94); }
+.portrait-card p { margin: 0; color: var(--color-charcoal); }
+
+/* pill carousel card */
+.pill-card { position: relative; overflow: hidden; min-height: 400px; padding: var(--spacing-32) 40px; border-radius: var(--rounded-stadium); background: var(--color-ink-black); color: var(--color-canvas-cream); display: flex; flex-direction: column; justify-content: space-between; gap: var(--spacing-24); }
+.pill-card .art { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+.pill-card > *:not(.art) { position: relative; z-index: 1; }
+.pill-card p { margin: 8px 0 0; color: var(--color-dust-taupe); }
+
+/* ---------- file band cards ---------- */
+.file-card { background: var(--color-white); border-radius: var(--rounded-stadium); padding: var(--spacing-32); display: grid; gap: 12px; justify-items: start; align-content: start; }
+.file-card .h3 { font-size: 20px; line-height: 24px; }
+.file-card .small { color: var(--color-slate-gray); }
+.file-card .btn { margin-top: 8px; }
+
+/* ---------- service patterns ---------- */
+.dropzone { display: grid; gap: var(--spacing-24); justify-items: start; padding: var(--spacing-48); border: 1.5px dashed var(--color-input-border); border-radius: var(--rounded-stadium); background: var(--color-lifted-cream); }
+.dropzone p { margin: 0; }
+
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.steps li { position: relative; display: grid; justify-items: center; gap: 8px; text-align: center; }
+.steps li + li::before { content: ""; position: absolute; top: 23px; right: 50%; width: 100%; height: 1.5px; background: var(--color-input-border); z-index: 0; }
+.steps li.done + li::before { background: var(--color-ink-black); }
+.steps .mark { position: relative; z-index: 1; width: 48px; height: 48px; border-radius: var(--rounded-circle); display: flex; align-items: center; justify-content: center; background: var(--color-canvas-cream); border: 1.5px solid var(--color-input-border); font: 500 16px/1 var(--font-sans); color: var(--color-slate-gray); }
+.steps .name { font: 500 16px/1.2 var(--font-sans); }
+.steps .state { font: 450 var(--text-caption)/1.3 var(--font-sans); color: var(--color-slate-gray); }
+.steps li.done .mark { background: var(--color-ink-black); border-color: var(--color-ink-black); color: var(--color-canvas-cream); }
+.steps li.current .mark { background: var(--color-white); border: 2px solid var(--color-ink-black); color: var(--color-ink-black); box-shadow: 0 0 0 6px var(--color-canvas-cream), 0 0 0 7.5px var(--color-orbit); }
+.steps li.current .state { color: var(--color-ink-black); font-weight: 700; }
+.steps li.todo .name { color: var(--color-slate-gray); }
+
+.notice { display: grid; gap: 10px; justify-items: start; padding: var(--spacing-32); border-radius: var(--rounded-stadium); background: var(--color-lifted-cream); border: 1.5px solid var(--color-hairline); }
+.notice .title { font: 500 20px/1.3 var(--font-sans); letter-spacing: -0.4px; }
+.notice p { margin: 0; color: var(--color-charcoal); }
+.notice .row { margin-top: 6px; }
+.notice.n-rejected { background: var(--color-white); border-color: var(--status-rejected); }
+.notice.n-fallback { background: var(--color-white); border-color: var(--status-fallback); }
+.notice.n-caution { border-color: var(--status-caution); }
+.notice.n-expired { background: transparent; border-color: var(--color-dust-taupe); }
+.notice.n-expired .title, .notice.n-expired p { color: var(--color-slate-gray); }
+
+.record { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: var(--spacing-24); align-items: center; padding: 20px 0; border-bottom: 1px solid var(--color-hairline); }
+.record:first-child { border-top: 1px solid var(--color-hairline); }
+.record .when { font: 700 var(--text-small)/14px var(--font-sans); letter-spacing: 0.56px; color: var(--color-granite); }
+.record .what { font: 500 16px/1.4 var(--font-sans); }
+.record .what small { display: block; font: 450 var(--text-small)/1.4 var(--font-sans); color: var(--color-slate-gray); }
+
+.form-band { display: grid; gap: var(--spacing-32); padding: var(--spacing-48); border-radius: var(--rounded-stadium); background: var(--color-lifted-cream); }
+.form-band .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-24); }
+.consent { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--spacing-16) var(--spacing-24); align-items: center; padding: var(--spacing-24) var(--spacing-32); border-radius: var(--rounded-consent); background: var(--color-white); }
+.consent p { margin: 0; font: 450 var(--text-small)/20px var(--font-sans); color: var(--color-charcoal); }
+
+/* ---------- rules ---------- */
+.do-dont { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-32); }
+.do-dont > div { padding: var(--spacing-48); border-radius: var(--rounded-stadium); background: var(--color-lifted-cream); }
+.do-dont .dont { background: var(--color-white); }
+.do-dont ul { margin: var(--spacing-24) 0 0; padding-left: 20px; line-height: 1.7; color: var(--color-charcoal); }
+.do-dont li + li { margin-top: 6px; }
+
+/* ---------- footer (§4 Footer) ---------- */
+.footer { background: var(--color-ink-black); color: var(--color-white); padding: var(--spacing-96) 0 148px; }
+.footer .h2 { max-width: 760px; color: var(--color-canvas-cream); margin-bottom: var(--spacing-64); }
+.foot-cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--spacing-32); }
+.foot-col summary { list-style: none; display: flex; justify-content: space-between; align-items: center; font: 700 var(--text-micro)/14px var(--font-sans); letter-spacing: 0.56px; text-transform: uppercase; color: var(--color-dust-taupe); margin-bottom: var(--spacing-16); }
+.foot-col summary::-webkit-details-marker { display: none; }
+.foot-col summary .chev { display: none; }
+.foot-col a { display: block; padding: 8px 0; font: 450 var(--text-small)/20px var(--font-sans); color: var(--color-white); text-decoration: none; }
+.foot-legal { margin-top: var(--spacing-64); padding-top: var(--spacing-24); border-top: 1px solid var(--color-footer-divider); display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--spacing-16); font: 450 var(--text-caption)/1.5 var(--font-sans); color: var(--color-dust-taupe); }
+.foot-legal p { margin: 0; }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; background: var(--color-ink-black); color: var(--color-canvas-cream); padding: 12px 24px; border-radius: var(--rounded-pill); box-shadow: var(--elevation-2); font: 500 var(--text-small)/1.2 var(--font-sans); opacity: 0; transition: opacity .15s; pointer-events: none; }
+.toast.show { opacity: 1; }
+
+/* ---------- responsive (§8) ---------- */
+@media (min-width: 1440px) {
+  .ghost { right: calc((100vw - 1440px) / 2 - 3vw); }
+}
+@media (max-width: 1023px) {
+  /* Tablet 768–1023 */
+  .h1 { font-size: 48px; line-height: 48px; letter-spacing: -0.96px; }
+  .nav-pill { gap: var(--spacing-24); padding-left: 24px; }
+  .nav-links { gap: var(--spacing-24); }
+  .nav-links a:nth-child(n+4) { display: none; }
+  .hero-grid, .head-2up { grid-template-columns: 1fr; gap: var(--spacing-24); }
+  .constellation { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--spacing-64); }
+  .constellation .orbit { display: none; }
+  .portrait-card:nth-of-type(2) { margin-top: var(--spacing-64); }
+  .portrait-card:nth-of-type(3) { margin-top: 0; }
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-2 { gap: var(--spacing-32); }
+  .elev-demo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .band { padding: var(--spacing-96) 0; }
+}
+@media (max-width: 767px) {
+  /* Mobile ≤767 */
+  :root { --gutter: 16px; }
+  .band { padding: var(--spacing-64) 0; }
+  .hero { padding: var(--spacing-48) 0 var(--spacing-64); }
+  .sub { margin-top: var(--spacing-64); }
+  .h1 { font-size: 40px; line-height: 40px; letter-spacing: -0.8px; }
+  .h2 { font-size: 30px; line-height: 36px; letter-spacing: -0.6px; }
+  .site-nav { top: 16px; margin-top: 16px; }
+  .nav-pill { padding: 6px 6px 6px 20px; gap: var(--spacing-16); }
+  .nav-pill > .btn-primary { display: none; }
+  .menu-toggle { display: inline-flex; }
+  .nav-links { display: none; }
+  .nav-links.open {
+    display: flex; flex-direction: column; gap: 0; position: fixed; inset: 0; z-index: 1;
+    padding: 112px var(--gutter) var(--gutter); background: var(--color-canvas-cream); overflow-y: auto;
+  }
+  .nav-links.open a, .nav-links.open a:nth-child(n+4) { display: block; font-size: 28px; line-height: 1.2; letter-spacing: -0.56px; padding: 20px 0; border-bottom: 1px solid var(--color-hairline); }
+  .grid-2, .grid-3, .grid-4, .do-dont, .form-band .fields { grid-template-columns: 1fr; }
+  .constellation { grid-template-columns: 1fr; justify-items: center; }
+  .portrait-card { justify-items: center; text-align: center; }
+  .portrait-card:nth-of-type(2) { margin-top: 0; }
+  .portrait { max-width: 220px; }
+  .keynums { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-16); }
+  .drum .n { font-size: 40px; letter-spacing: -0.8px; }
+  .drum .u { font-size: 16px; }
+  .elev-demo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-16); }
+  .code { flex-direction: column; padding: var(--spacing-32) var(--spacing-24); }
+  .pill-card { min-height: 360px; padding: var(--spacing-32) var(--spacing-24); }
+  .file-card, .notice { padding: var(--spacing-24) var(--spacing-24) var(--spacing-32); }
+  .dropzone, .form-band, .do-dont > div { padding: var(--spacing-32) var(--spacing-24); }
+  .consent { grid-template-columns: 1fr; padding: var(--spacing-24); }
+  .record { grid-template-columns: 1fr; gap: 8px; }
+  .record .chip { justify-self: start; }
+  .steps .name { font-size: var(--text-small); }
+  .steps .state { font-size: var(--text-micro); }
+  .foot-cols { grid-template-columns: 1fr; gap: 0; }
+  .foot-col { border-bottom: 1px solid var(--color-footer-divider); }
+  .foot-col summary { margin: 0; min-height: 48px; cursor: pointer; }
+  .foot-col summary .chev { display: inline; font-size: 16px; transition: transform .15s; }
+  .foot-col[open] summary .chev { transform: rotate(180deg); }
+  .foot-col[open] { padding-bottom: var(--spacing-16); }
+  .footer { padding: var(--spacing-64) 0 var(--spacing-96); }
+  .footer .h2 { margin-bottom: var(--spacing-32); }
+}
+@media (min-width: 768px) {
+  .foot-col summary { pointer-events: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .btn, .btn-satellite, .btn-icon, .copy-btn, .toast { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ================= floating nav pill ================= -->
+<header class="site-nav">
+  <div class="nav-pill">
+    <a class="brand" href="#top" aria-label="국악보 스타일가이드 처음으로">
+      <!-- 정간 격자 마크 — 상표가 아닌 새로 그린 도형 -->
+      <svg width="24" height="28" viewBox="0 0 24 28" aria-hidden="true"><rect x="1" y="1" width="22" height="26" rx="3" fill="none" stroke="#141413" stroke-width="2"/><path d="M1 9.7h22M1 18.3h22M12 1v26" stroke="#141413" stroke-width="2"/><circle cx="6.5" cy="5.4" r="2.4" fill="#141413"/><circle cx="17.5" cy="14" r="2.4" fill="#141413"/></svg>
+      국악보
+    </a>
+    <nav class="nav-links" id="mainnav" aria-label="스타일가이드 목차">
+      <a class="nav-link" href="#foundations">기초 토큰</a>
+      <a class="nav-link" href="#components">컴포넌트</a>
+      <a class="nav-link" href="#patterns">서비스 패턴</a>
+      <a class="nav-link" href="#rules">규칙</a>
+    </nav>
+    <span class="spacer"></span>
+    <a class="btn btn-primary" href="#patterns">악보 올리기</a>
+    <button class="btn-icon menu-toggle" type="button" id="menuToggle" aria-expanded="false" aria-controls="mainnav" aria-label="목차 열기">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 14h14" stroke="#141413" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ================= hero ================= -->
+<section class="hero" aria-labelledby="hero-title">
+  <p class="ghost" aria-hidden="true">장단</p>
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow">Gugakbo design system · v1</span>
+        <h1 class="h1" id="hero-title">국악보를 올리면,<br>바로 듣는다</h1>
+      </div>
+      <div>
+        <p>국악보 디지털 변환·연주·편집 서비스의 스타일가이드. Mastercard DESIGN.md의 크림 바탕을 한지로, 먹빛 알약 버튼을 먹으로, 원형 초상과 궤도선을 장구 면과 장단의 흐름으로 옮겼다.</p>
+        <div class="row">
+          <a class="btn btn-primary" href="#components">컴포넌트 보기</a>
+          <a class="btn btn-secondary" href="#rules">규칙 보기</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hero Media Frame(40px 경기장 모양) — 사진 대신 장구 면·정간 격자 선화 -->
+    <div class="stadium on-ink" role="img" aria-label="먹 바탕 위에 장구 면을 닮은 동심원과 원형으로 잘린 정간 격자, 둘을 잇는 주황 궤도선">
+      <svg viewBox="0 0 1200 460" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <clipPath id="heroGrid"><circle cx="880" cy="230" r="160"/></clipPath>
+        </defs>
+        <!-- 장구 면 (궁편) -->
+        <g fill="none" stroke="#F3F0EE">
+          <circle cx="330" cy="230" r="170" stroke-opacity=".55" stroke-width="1.5"/>
+          <circle cx="330" cy="230" r="150" stroke-opacity=".25" stroke-width="1"/>
+          <circle cx="330" cy="230" r="96" stroke-opacity=".35" stroke-width="1"/>
+          <circle cx="330" cy="230" r="34" stroke-opacity=".6" stroke-width="1.5"/>
+        </g>
+        <g stroke="#D1CDC7" stroke-opacity=".35" stroke-width="1">
+          <path d="M330 60v30M330 370v30M160 230h30M470 230h30M210 110l21 21M429 329l21 21M450 110l-21 21M231 329l-21 21"/>
+        </g>
+        <!-- 원형으로 잘린 정간 격자 -->
+        <circle cx="880" cy="230" r="160" fill="#262627"/>
+        <g clip-path="url(#heroGrid)">
+          <g stroke="#F3F0EE" stroke-opacity=".45" stroke-width="1.5" fill="none">
+            <path d="M760 40v380M840 40v380M920 40v380M1000 40v380"/>
+            <path d="M700 90h360M700 150h360M700 210h360M700 270h360M700 330h360M700 390h360"/>
+          </g>
+          <g fill="#D1CDC7" fill-opacity=".5">
+            <rect x="770" y="100" width="60" height="40" rx="3"/><rect x="850" y="220" width="60" height="40" rx="3"/><rect x="930" y="160" width="60" height="40" rx="3"/><rect x="770" y="280" width="60" height="40" rx="3"/>
+          </g>
+          <rect x="930" y="280" width="60" height="40" rx="3" fill="#F37338"/>
+        </g>
+        <circle cx="880" cy="230" r="160" fill="none" stroke="#F3F0EE" stroke-opacity=".55" stroke-width="1.5"/>
+        <!-- 궤도선 -->
+        <path d="M470 150 C 560 40, 690 30, 760 120" fill="none" stroke="#F37338" stroke-width="1.5"/>
+        <path d="M180 400 C 420 470, 820 470, 1080 330" fill="none" stroke="#F37338" stroke-width="1" stroke-opacity=".7"/>
+        <!-- 위성 -->
+        <circle cx="1000" cy="355" r="28" fill="#FFFFFF"/>
+        <path d="M989 355h20M1001 347l8 8-8 8" fill="none" stroke="#141413" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 01 foundations ================= -->
+<section class="band band-lifted" id="foundations" aria-labelledby="f-title">
+  <div class="wrap">
+    <div class="head-2up">
+      <div>
+        <span class="eyebrow">01 · Foundations</span>
+        <h2 class="h2" id="f-title" style="margin-top:16px">기초 토큰</h2>
+      </div>
+      <p class="lede">색·글꼴·간격·모서리·깊이. 값은 모두 <code class="inline">:root</code> 한 곳에 있고, 이름은 DESIGN.md의 색 이름을 그대로 kebab-case로 옮겼다(예: Ink Black → <code class="inline">--color-ink-black</code>).</p>
+    </div>
+
+    <h3 class="h3" id="colors">색</h3>
+    <p class="lede" style="margin-bottom:0">바탕은 순백이 아닌 한지빛 크림, 글자와 주요 버튼은 따뜻한 먹. 대비는 WCAG 2 공식으로 직접 계산했다(본문 AA 4.5:1, 큰 글자·그래픽 3:1).</p>
+
+    <span class="eyebrow group-label">한지 · 먹 — Surface</span>
+    <div class="swatches">
+      <div class="swatch"><div class="dot" style="background:#F3F0EE"></div><div><b>canvas-cream · 한지</b><span>#F3F0EE — 페이지 바탕</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#FCFBFA"></div><div><b>lifted-cream</b><span>#FCFBFA — 한지 위에 한 겹 더</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#FFFFFF"></div><div><b>white</b><span>#FFFFFF — 메뉴 알약, 보조 버튼, 위성</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#F4F4F4"></div><div><b>soft-bone</b><span>#F4F4F4 — 부품 안쪽 면</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#E8E2DA"></div><div><b>ghost-cream</b><span>#E8E2DA — 배경 글자 '장단' 전용</span><span class="ratio">1.13:1 — 읽는 글자 금지</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#141413"></div><div><b>ink-black · 먹</b><span>#141413 — 주요 버튼, 하단 띠</span></div></div>
+    </div>
+
+    <span class="eyebrow group-label">글자 — Text</span>
+    <div class="swatches">
+      <div class="swatch"><div class="dot" style="background:#141413"></div><div><b>ink-black</b><span>제목·본문</span><span class="ratio">한지 16.25 · 흰 18.43</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#262627"></div><div><b>charcoal</b><span>#262627 — 부드러운 본문</span><span class="ratio">한지 13.33:1</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#555555"></div><div><b>granite</b><span>#555555 — 메타·토큰 글자</span><span class="ratio">한지 6.57:1</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#696969"></div><div><b>slate-gray</b><span>#696969 — 보조 글자, 비활성</span><span class="ratio">한지 4.84 · 흰 5.49 · 먹 3.36(큰 글자만)</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#D1CDC7"></div><div><b>dust-taupe</b><span>#D1CDC7 — 비활성 테두리</span><span class="ratio">한지 1.40 금지 · 먹 위 11.65</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#F3F0EE"></div><div><b>canvas-cream on ink</b><span>먹 버튼 글자 — 순백 아님</span><span class="ratio">먹 16.25:1</span></div></div>
+    </div>
+
+    <span class="eyebrow group-label">강조 · 상태 — Accent</span>
+    <div class="swatches">
+      <div class="swatch"><div class="dot" style="background:#CF4500"></div><div><b>signal-orange</b><span>#CF4500 — 개인정보 동의 전용</span><span class="ratio">흰 글자 4.66 · 한지 4.11</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#F37338"></div><div><b>light-signal-orange</b><span>#F37338 — 궤도선, 눈썹 점, 주의 점</span><span class="ratio">한지 2.53 — 글자 금지</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#784D25"></div><div><b>clay-brown → 주요 버튼</b><span>#784D25 (2026-09-30) · 주요 버튼 · 테두리 · 고른 알약</span><span class="ratio">한지 6.41 · 흰 7.27</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#5A3A1C"></div><div><b>clay-deep → 누름 · 반려</b><span>#5A3A1C (2026-09-30) · 누름 · 마우스 · 반려 테두리 칩</span><span class="ratio">한지 9.00 · 흰 10.21</span></div></div>
+      <div class="swatch"><div class="dot" style="background:#3860BE"></div><div><b>link-blue → 대체 결과</b><span>#3860BE — 링크, 대체 결과</span><span class="ratio">한지 5.16 · 흰 5.86</span></div></div>
+    </div>
+    <p class="small muted" style="margin:16px 0 0;max-width:820px">상태 색 선택: 원본에는 오류·성공 색이 없다. 그래서 새 색을 만들지 않고 기존 토큰에서 골랐다 — 완료·진행 = 먹, 대체 결과 = Link Blue(원본의 안내 색), 반려 = Clay Brown, 주의 = Light Signal Orange 점, 대기·만료 = Slate Gray. Signal Orange는 원본 규칙대로 동의에만 남겨 두었다. Mastercard 로고 빨강(#EB001B)·노랑(#F79E1B)은 UI 색이 아니므로 쓰지 않는다. 서비스 확장 색: 없음.</p>
+
+    <div class="sub">
+      <h3 class="h3" id="type">글꼴</h3>
+      <p class="lede" style="margin-bottom:24px">한 가족 글꼴. MarkForMC 대신 원본 fallback인 Sofia Sans, 한글은 Noto Sans KR(가변 글꼴이라 450 굵기가 그대로 나온다). 제목은 500 + 자간 -2%, 본문은 450. 대문자는 14px 눈썹 라벨에만 쓰고, 명조는 쓰지 않는다(원본: 서체 섞지 않기).</p>
+      <div class="table-scroll">
+        <table class="spec">
+          <thead><tr><th>역할</th><th>보기</th><th>크기 / 굵기 / 줄간격 / 자간</th><th>쓰는 곳</th></tr></thead>
+          <tbody>
+            <tr><td class="token">H1 hero</td><td><span style="font:500 44px/44px var(--font-sans);letter-spacing:-.88px">악보 올리기</span></td><td class="token">64 / 500 / 64 / -1.28</td><td class="desc">첫 화면 제목 (보기는 축소)</td></tr>
+            <tr><td class="token">H2 section</td><td><span class="h2">결과 악보</span></td><td class="token">36 / 500 / 44 / -0.72</td><td class="desc">구역 제목, 배경 글자</td></tr>
+            <tr><td class="token">H3 card</td><td><span class="h3">추천 악기 조합</span></td><td class="token">24 / 500 / 28.8 / -0.48</td><td class="desc">카드·소제목</td></tr>
+            <tr><td class="token">H4 subhead</td><td><span class="h4">연락 이메일</span></td><td class="token">14 / 700 / 18.2 / 0</td><td class="desc">입력 라벨, 표 머리</td></tr>
+            <tr><td class="token">Eyebrow</td><td><span class="eyebrow">Services</span></td><td class="token">14 / 700 / 14 / +0.56 대문자</td><td class="desc">구역 분류 — 점 필수</td></tr>
+            <tr><td class="token">Body</td><td><span class="body">기본 국악기 구성으로 연주합니다.</span></td><td class="token">16 / 450 / 22.4 / 0</td><td class="desc">본문 기본</td></tr>
+            <tr><td class="token">Button</td><td><span class="btn btn-primary">MIDI 받기</span></td><td class="token">16 / 500 / 16 / -0.32</td><td class="desc">모든 버튼, 메뉴(-0.48)</td></tr>
+            <tr><td class="token">Footer link</td><td><span class="small">24시간 뒤 자동 삭제</span></td><td class="token">14 / 450 / 20 / 0</td><td class="desc">하단 링크, 보조 설명</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2 sub">
+      <div>
+        <h3 class="h3" id="spacing">간격</h3>
+        <p class="lede" style="margin-bottom:24px">8px 배수만. 큰 구역 사이는 데스크톱 96–128px, 모바일 64px. 카드 안쪽 32–40px, 모바일 24px.</p>
+        <div class="space-demo">
+          <div class="bar"><i style="width:8px"></i>spacing-8</div>
+          <div class="bar"><i style="width:16px"></i>spacing-16 — 모바일 좌우 여백</div>
+          <div class="bar"><i style="width:24px"></i>spacing-24</div>
+          <div class="bar"><i style="width:32px"></i>spacing-32 — 카드 안쪽</div>
+          <div class="bar"><i style="width:48px"></i>spacing-48 — 데스크톱 좌우 여백</div>
+          <div class="bar"><i style="width:64px"></i>spacing-64</div>
+          <div class="bar"><i style="width:96px"></i>spacing-96</div>
+          <div class="bar"><i style="width:128px"></i>spacing-128 — 구역 사이</div>
+        </div>
+      </div>
+      <div>
+        <h3 class="h3" id="radius">모서리 · 깊이</h3>
+        <p class="lede" style="margin-bottom:24px">작게(≤6) · 중간-크게(20–40) · 알약(999) 셋뿐. 8–16px은 없다. 그림자는 넓게 퍼지고 옅게 — 95%의 면은 그림자가 없다.</p>
+        <div class="radius-demo">
+          <div style="border-radius:6px">sm 6</div>
+          <div style="border-radius:20px">button 20</div>
+          <div style="border-radius:24px">consent 24</div>
+          <div style="border-radius:40px">stadium 40</div>
+          <div style="border-radius:50%;width:72px">50%</div>
+          <div style="border-radius:999px">pill 999</div>
+        </div>
+      </div>
+    </div>
+    <div class="elev-demo" aria-label="깊이 단계 보기">
+      <div style="box-shadow:none;border:1px solid var(--color-hairline)">0 · 없음<br>대부분의 면</div>
+      <div style="box-shadow:var(--elevation-1)">1 · 0 4 24 / 4%<br>메뉴 알약</div>
+      <div style="box-shadow:var(--elevation-2)">2 · 0 24 48 / 8%<br>원형 초상</div>
+      <div style="box-shadow:var(--elevation-3)">3 · 0 70 110 / 25%<br>드물게</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 components ================= -->
+<section class="band" id="components" aria-labelledby="c-title">
+  <div class="wrap">
+    <div class="head-2up">
+      <div>
+        <span class="eyebrow">02 · Components</span>
+        <h2 class="h2" id="c-title" style="margin-top:16px">컴포넌트</h2>
+      </div>
+      <p class="lede">DESIGN.md 컴포넌트를 이름 그대로 옮기고, 서비스 쓰임에 짝지었다. 상태는 기본과 눌림(2px 내려앉음)만 정의한다 — 원본 정책: hover 변형 없음. 키보드 포커스는 먹 2px 링(먹 바탕 위에서는 크림 링).</p>
+    </div>
+
+    <h3 class="h3">원본 → 서비스 대응</h3>
+    <div class="table-scroll" style="margin-top:24px">
+      <table class="spec">
+        <thead><tr><th>DESIGN.md 요소</th><th>국악보 서비스에서</th><th>메모</th></tr></thead>
+        <tbody>
+          <tr><td class="token">Primary — Ink Pill</td><td>악보 올리기, 다시 올리기, 신청하기</td><td class="desc">한 화면의 주 행동</td></tr>
+          <tr><td class="token">Secondary — Outlined Pill</td><td>파일 받기, 대체 악보 듣기</td><td class="desc">주 행동 옆 보조</td></tr>
+          <tr><td class="token">Consent — Orange Pill</td><td>API 키 신청의 개인정보 수집 동의</td><td class="desc">이 용도 밖에서는 쓰지 않음</td></tr>
+          <tr><td class="token">Satellite Micro-CTA</td><td>원형 초상 카드에서 해당 화면으로 가기</td><td class="desc">원형 초상과 늘 짝</td></tr>
+          <tr><td class="token">Service Portrait Card</td><td>기능 소개(인식·연주·편집) — 정간·장구 면 원형 크롭</td><td class="desc">사진 대신 선화</td></tr>
+          <tr><td class="token">Pill Carousel Card</td><td>추천 악기 조합</td><td class="desc">흰 칩 + 큰 버튼</td></tr>
+          <tr><td class="token">Search input (expanded)</td><td>모든 입력 칸</td><td class="desc">알약, 먹 50% 테두리</td></tr>
+          <tr><td class="token">Hero Media Frame</td><td>첫 화면 장구 면·정간 선화</td><td class="desc">40px 경기장 모양</td></tr>
+          <tr><td class="token">Orbital Lines · Ghost Watermark</td><td>장단의 흐름, 배경 글자 '장단'</td><td class="desc">궤도선은 데스크톱만</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sub">
+      <h3 class="h3">버튼</h3>
+      <div class="row">
+        <button class="btn btn-primary" type="button">악보 올리기</button>
+        <button class="btn btn-primary is-active" type="button">눌림</button>
+        <button class="btn btn-secondary" type="button">대체 악보 듣기</button>
+        <button class="btn btn-consent" type="button">개인정보 수집에 동의</button>
+        <button class="btn btn-primary" type="button" disabled>MP3 만드는 중</button>
+        <a class="btn-satellite" href="#patterns" aria-label="서비스 패턴으로 가기" style="box-shadow:var(--elevation-1)">→</a>
+        <button class="btn-icon" type="button" aria-label="재생">▶</button>
+      </div>
+      <p class="token" style="margin-top:16px">primary · primary(눌림) · secondary · consent(동의 전용) · disabled · satellite 56 · icon-circle 48 — 버튼 모서리 20, 최소 높이 44(원본 패딩 6×24에 터치 44px 기준을 더함)</p>
+    </div>
+
+    <div class="grid-2 sub">
+      <div>
+        <h3 class="h3">입력</h3>
+        <div class="stack">
+          <div class="field"><label for="f1">이름</label><input class="input" id="f1" placeholder="홍길동" aria-describedby="f1h"><span class="hint" id="f1h">API 키 신청 필수 항목</span></div>
+          <div class="field"><label for="f2">연락 이메일</label><input class="input" id="f2" type="email" value="gugak@" aria-invalid="true" aria-describedby="f2e"><span class="field-error" id="f2e">이메일 형식을 확인해 주십시오</span></div>
+          <div class="field"><span class="label" id="kind-l">악보 종류</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="kind-l">
+              <label><input type="radio" name="kind" checked><span>정간보</span></label>
+              <label><input type="radio" name="kind"><span>오선보</span></label>
+            </div>
+          </div>
+        </div>
+        <p class="token" style="margin-top:16px">알약 999 · 테두리 먹 50%(한지 대비 3.37:1) · 오류는 Clay Brown 1.5px + 기호 + 글자 + aria-invalid</p>
+      </div>
+      <div>
+        <h3 class="h3">상태 칩</h3>
+        <div class="row">
+          <span class="chip s-done">완료</span>
+          <span class="chip s-progress">변환 중</span>
+          <span class="chip s-waiting">대기</span>
+          <span class="chip s-fallback">대체 결과</span>
+          <span class="chip s-caution">주의</span>
+          <span class="chip s-rejected">반려</span>
+          <span class="chip s-expired">만료</span>
+          <span class="chip">MusicXML</span>
+        </div>
+        <p class="token" style="margin-top:16px">칩 = 원본 Pill Carousel 안의 흰 알약(8×20). 뜻은 늘 글자로 — 기호와 색은 보조. 반려는 채운 적갈 칩, 대체 결과는 파란 테두리 칩으로 모양부터 다르다.</p>
+
+        <h3 class="h3" style="margin-top:48px">코드 · 요청 예시</h3>
+        <div class="code on-ink" style="margin-top:24px">
+          <pre id="snippet1"><span class="c"># API활용 — 첫 연주 요청</span>
+curl -X POST https://&lt;서버&gt;/v1/performances \
+  -H "X-API-Key: &lt;접근 키&gt;" \
+  -F score=@score.png</pre>
+          <button class="copy-btn" type="button" data-copy="snippet1">복사</button>
+        </div>
+        <p class="token" style="margin-top:16px">서비스 확장 — 먹 면 + 40 모서리 + 시스템 고정폭 글꼴. 주석은 Dust Taupe(먹 위 11.65:1). 실제 키는 넣지 않는다.</p>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="h3">핵심 숫자 — 장구 면</h3>
+      <p class="lede" style="margin:16px 0 0">올리기 조건처럼 꼭 알아야 할 숫자를 장구 면 같은 원 안에 둔다. 먹으로 채운 원은 한 화면에 하나.</p>
+      <div class="grid-4 keynums" style="margin-top:32px">
+        <div class="num-cell"><div class="drum"><span class="n">20</span><span class="u">MB</span></div><span class="h4">이미지 용량 상한</span></div>
+        <div class="num-cell"><div class="drum"><span class="n">650</span><span class="u">px</span></div><span class="h4">사진 크기 최소</span></div>
+        <div class="num-cell"><div class="drum ink"><span class="n">24</span><span class="u">h</span></div><span class="h4">결과 보관</span></div>
+        <div class="num-cell"><div class="drum"><span class="n">10</span><span class="u">쪽</span></div><span class="h4">한 번에 올리는 쪽(사진 여러 장·PDF)</span></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="h3">카드 — 원형 초상 + 위성 버튼</h3>
+      <p class="lede" style="margin:16px 0 48px">원형 초상은 격자에 줄 세우지 않고 엇갈려 둔다. 데스크톱에서만 얇은 주황 궤도선이 원을 잇는다(태블릿 2열, 모바일 1열에서는 선을 뺀다).</p>
+      <div class="constellation">
+        <svg class="orbit" viewBox="0 0 1200 520" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M250 120 C 420 20, 520 60, 560 230" fill="none" stroke="#F37338" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+          <path d="M690 330 C 780 420, 900 380, 930 170" fill="none" stroke="#F37338" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+        </svg>
+        <article class="portrait-card">
+          <div class="portrait">
+            <div class="face">
+              <svg viewBox="0 0 280 280" aria-hidden="true"><rect width="280" height="280" fill="#FFFFFF"/><g stroke="#141413" stroke-width="1.5" fill="none"><path d="M70 0v280M140 0v280M210 0v280M0 56h280M0 112h280M0 168h280M0 224h280"/></g><g fill="#141413"><rect x="80" y="66" width="50" height="36" rx="3"/><rect x="150" y="178" width="50" height="36" rx="3"/></g><rect x="150" y="122" width="50" height="36" rx="3" fill="#F37338"/></svg>
+            </div>
+            <a class="btn-satellite" href="#patterns" aria-label="악보 인식 — 악보 올리기로 가기">→</a>
+          </div>
+          <span class="eyebrow">Recognize</span>
+          <h4 class="h3">이미지 인식</h4>
+          <p>정간보·오선보 사진 한 장을 디지털 악보로.</p>
+        </article>
+        <article class="portrait-card">
+          <div class="portrait">
+            <div class="face">
+              <svg viewBox="0 0 280 280" aria-hidden="true"><rect width="280" height="280" fill="#141413"/><g fill="none" stroke="#F3F0EE"><circle cx="140" cy="140" r="120" stroke-opacity=".5" stroke-width="1.5"/><circle cx="140" cy="140" r="84" stroke-opacity=".3"/><circle cx="140" cy="140" r="44" stroke-opacity=".5" stroke-width="1.5"/></g><circle cx="140" cy="140" r="14" fill="#F37338"/><g stroke="#D1CDC7" stroke-opacity=".45"><path d="M140 10v20M140 250v20M10 140h20M250 140h20"/></g></svg>
+            </div>
+            <a class="btn-satellite" href="#patterns" aria-label="바로 연주 — 처리 단계로 가기">→</a>
+          </div>
+          <span class="eyebrow">Perform</span>
+          <h4 class="h3">바로 연주</h4>
+          <p>기본 국악기 구성과 장구 장단으로 들어 본다.</p>
+        </article>
+        <article class="portrait-card">
+          <div class="portrait">
+            <div class="face">
+              <svg viewBox="0 0 280 280" aria-hidden="true"><rect width="280" height="280" fill="#E8E2DA"/><g stroke="#141413" stroke-width="1.2"><path d="M0 100h280M0 116h280M0 132h280M0 148h280M0 164h280"/></g><g fill="#141413"><ellipse cx="70" cy="140" rx="9" ry="7"/><ellipse cx="120" cy="124" rx="9" ry="7"/><ellipse cx="170" cy="108" rx="9" ry="7"/></g><ellipse cx="220" cy="132" rx="9" ry="7" fill="#F37338"/><g stroke="#141413" stroke-width="1.5"><path d="M79 140v-40M129 124v-40M179 108v-40"/></g></svg>
+            </div>
+            <a class="btn-satellite" href="#files-title" aria-label="편집과 받기 — 받을 파일로 가기">→</a>
+          </div>
+          <span class="eyebrow">Edit</span>
+          <h4 class="h3">편집 · 받기</h4>
+          <p>고친 악보를 MIDI·MusicXML·PDF로 받는다.</p>
+        </article>
+      </div>
+
+      <h3 class="h3" style="margin-top:96px">카드 — 추천 악기 조합 (Pill Carousel Card)</h3>
+      <div class="grid-2" style="margin-top:24px">
+        <article class="pill-card on-ink">
+          <svg class="art" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g stroke="#F3F0EE" stroke-opacity=".18" stroke-width="1.2"><path d="M300 0v400M330 0v400M360 0v400M390 0v400M420 0v400M450 0v400M480 0v400M510 0v400M540 0v400M570 0v400"/></g><path d="M280 330 C 380 250, 480 380, 600 290" fill="none" stroke="#F37338" stroke-width="1.5"/></svg>
+          <div>
+            <span class="chip">추천 조합 01</span>
+            <h4 class="h3" style="margin-top:24px">가야금 · 장구</h4>
+            <p>느린 평조 곡에 어울리는 기본 조합.</p>
+          </div>
+          <div class="row"><button class="btn btn-secondary btn-large" type="button">이 조합으로 듣기</button></div>
+        </article>
+        <article class="pill-card on-ink">
+          <svg class="art" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="#F3F0EE" stroke-opacity=".2"><circle cx="470" cy="150" r="110" stroke-width="1.2"/><circle cx="470" cy="150" r="70"/><circle cx="470" cy="150" r="24" stroke-width="1.2"/></g><path d="M200 380 C 300 300, 380 330, 420 250" fill="none" stroke="#F37338" stroke-width="1.5"/></svg>
+          <div>
+            <span class="chip">추천 조합 02</span>
+            <h4 class="h3" style="margin-top:24px">대금 · 해금 · 장구</h4>
+            <p>선율을 두 겹으로 쌓는 조합.</p>
+          </div>
+          <div class="row"><button class="btn btn-secondary btn-large" type="button">이 조합으로 듣기</button></div>
+        </article>
+      </div>
+      <p class="token" style="margin-top:16px">원본은 카드 안에 먹 버튼을 두지만, 먹 바탕 카드라 흰 보조 버튼(16×40, 모서리 40)으로 바꿨다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 받을 파일 (lifted cream 띠) ================= -->
+<section class="band band-lifted" aria-labelledby="files-title">
+  <div class="wrap">
+    <div class="head-2up">
+      <div>
+        <span class="eyebrow">Files</span>
+        <h2 class="h2" id="files-title" style="margin-top:16px">받을 파일</h2>
+      </div>
+      <p class="lede">한지 위에 한 겹 더 얹은 Lifted Cream 띠. 목록처럼 촘촘한 정보는 흰 경기장 카드(모서리 40)에 담는다.</p>
+    </div>
+    <div class="grid-4">
+      <div class="file-card"><span class="chip on-white">MIDI</span><span class="h3">편집 반영 MIDI</span><span class="small">바로 받기 · 렌더러 없음</span><button class="btn btn-secondary" type="button">MIDI 받기</button></div>
+      <div class="file-card"><span class="chip on-white">MusicXML</span><span class="h3">편집본 MusicXML</span><span class="small">바로 받기 · 악기 이름 포함</span><button class="btn btn-secondary" type="button">MusicXML 받기</button></div>
+      <div class="file-card"><span class="chip on-white">PDF</span><span class="h3">인쇄용 악보</span><span class="small">화면 악보와 같음</span><button class="btn btn-secondary" type="button">PDF 받기</button></div>
+      <div class="file-card"><span class="chip on-white s-progress">MP3 · 만드는 중</span><span class="h3">연주 음원</span><span class="small">팀 내부 시연만</span><button class="btn btn-secondary" type="button" disabled>MP3 받기</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 03 service patterns ================= -->
+<section class="band" id="patterns" aria-labelledby="p-title">
+  <div class="wrap">
+    <div class="head-2up">
+      <div>
+        <span class="eyebrow">03 · Service patterns</span>
+        <h2 class="h2" id="p-title" style="margin-top:16px">서비스 패턴</h2>
+      </div>
+      <p class="lede">원본에 없는 우리 서비스 화면 요소. 새 색은 만들지 않고, 상태 칩과 안내 상자 테두리에만 상태 색을 쓴다. 게이트·대체 분기는 <code class="inline">SD_01</code> 프로세스 설계서를 따른다.</p>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <h3 class="h3">악보 올리기 (P1 · G1)</h3>
+        <div class="dropzone" style="margin-top:24px">
+          <div class="segmented" role="radiogroup" aria-label="악보 종류">
+            <label><input type="radio" name="kind2" checked><span>정간보</span></label>
+            <label><input type="radio" name="kind2"><span>오선보</span></label>
+          </div>
+          <p class="body" style="font-size:18px;line-height:1.4">악보 사진 여러 장이나 PDF 한 개를 끌어다 놓으십시오</p>
+          <!-- 2026-09-29 (황송해 결정): 받는 파일 = 사진 + PDF. 여러 쪽 결정 — 사진 여러 장 · PDF 모든 쪽, 한 곡 최대 10쪽 -->
+          <p class="small muted">받는 파일: PNG · JPG(JPEG) · WEBP 사진 여러 장 또는 PDF 한 개 — 한 곡, 최대 10쪽</p>
+          <ol class="small" aria-label="올린 쪽 순서" style="margin-top:12px">
+            <li>1쪽 · page1.jpg · 1800px <button class="btn btn-secondary" type="button">빼기</button></li>
+            <li>2쪽 · page2.jpg · 1650px <button class="btn btn-secondary" type="button">빼기</button></li>
+          </ol>
+          <p class="small muted">20MB 이하 · 사진 크기 650px 이상 · 24시간 보관</p>
+          <button class="btn btn-primary" type="button">파일 고르기</button>
+        </div>
+
+        <h3 class="h3" style="margin-top:64px">처리 단계 (FR-016)</h3>
+        <ol class="steps" aria-label="처리 단계" style="margin-top:32px">
+          <li class="done"><span class="mark" aria-hidden="true">✓</span><span class="name">접수</span><span class="state">끝남</span></li>
+          <li class="done"><span class="mark" aria-hidden="true">✓</span><span class="name">대기</span><span class="state">끝남</span></li>
+          <li class="current" aria-current="step"><span class="mark" aria-hidden="true">3</span><span class="name">변환 중</span><span class="state">진행 중</span></li>
+          <li class="todo"><span class="mark" aria-hidden="true">4</span><span class="name">완료</span><span class="state">아직</span></li>
+        </ol>
+      </div>
+      <div>
+        <h3 class="h3">안내 상자</h3>
+        <div class="stack" style="margin-top:24px;gap:16px">
+          <div class="notice n-rejected" role="alert">
+            <span class="chip s-rejected">반려 · G1</span>
+            <span class="title">접수하지 않았습니다 — 해상도가 너무 낮습니다</span>
+            <p>사진 크기가 650px 이상인 더 선명한 사진을 올려 주십시오.</p>
+            <div class="row"><button class="btn btn-primary" type="button">다시 올리기</button></div>
+          </div>
+          <div class="notice n-fallback">
+            <span class="chip s-fallback">대체 결과</span>
+            <span class="title">악보 구조를 찾지 못했습니다</span>
+            <p>기본 국악 장단 악보를 대신 드렸습니다. 실패가 아니라 들을 수 있는 결과입니다. 더 정확한 결과가 필요하면 사진을 다시 올려 보십시오.</p>
+            <div class="row"><button class="btn btn-primary" type="button">대체 악보 듣기</button><button class="btn btn-secondary" type="button">다시 올리기</button></div>
+          </div>
+          <div class="notice n-caution">
+            <span class="chip s-caution">주의</span>
+            <span class="title">인식이 정확하지 않을 수 있습니다</span>
+            <p>결과를 그대로 보여 드립니다. 이상하면 대체 템플릿으로 바꿀 수 있습니다.</p>
+            <div class="row"><button class="btn btn-secondary" type="button">대체 템플릿 받기</button></div>
+          </div>
+          <div class="notice n-expired">
+            <span class="chip s-expired">만료 · G4</span>
+            <span class="title">보관 기간(24시간)이 지났습니다</span>
+            <p>결과가 지워졌습니다. 악보를 다시 올려 주십시오.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="h3">처리 기록 (관리자 화면)</h3>
+      <div>
+        <div class="record"><span class="when">14:02 · 웹</span><span class="what">오선보 이미지 · homr 0.3<small>인식 변환 · 신뢰</small></span><span class="chip s-done">완료</span></div>
+        <div class="record"><span class="when">14:05 · API</span><span class="what">정간보 이미지 · 템플릿<small>대체 — 인식 결과를 믿기 어려움</small></span><span class="chip s-fallback">대체</span></div>
+        <div class="record"><span class="when">14:09 · 웹</span><span class="what">PDF 파일 · 오선보 · 3쪽<small>3쪽 중 2쪽 변환(못 읽은 쪽: 2쪽) · 인식 변환 · 주의</small></span><span class="chip s-done">완료</span></div>
+        <div class="record"><span class="when">14:11 · 웹</span><span class="what">MIDI 파일<small>접수 전 반려 — 지원하지 않는 형식</small></span><span class="chip s-rejected">반려</span></div>
+        <div class="record"><span class="when">어제 13:40 · 웹</span><span class="what">정간보 이미지<small>보관 24시간 지남</small></span><span class="chip s-expired">만료</span></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="h3">API 키 신청</h3>
+      <form class="form-band" style="margin-top:24px" onsubmit="return false" aria-labelledby="apikey-l">
+        <span class="sr-only" id="apikey-l">API 키 신청</span>
+        <div class="fields">
+          <div class="field"><label for="n1">이름</label><input class="input" id="n1" autocomplete="name"></div>
+          <div class="field"><label for="n2">소속</label><input class="input" id="n2" autocomplete="organization"></div>
+          <div class="field"><label for="n3">연락 이메일</label><input class="input" id="n3" type="email" autocomplete="email"></div>
+          <div class="field"><label for="n4">사용 목적</label><input class="input" id="n4" placeholder="예: 수업용 정간보 연주 앱"></div>
+        </div>
+        <div class="consent">
+          <p id="consent-d">이름·소속·연락 이메일은 키 발급 확인과 연락에만 쓰고, 키를 거두면 지웁니다. 동의해야 신청할 수 있습니다.</p>
+          <button class="btn btn-consent" type="button" id="consentBtn" aria-pressed="false" aria-describedby="consent-d">개인정보 수집에 동의</button>
+        </div>
+        <div class="row"><button class="btn btn-primary" type="submit" id="applyBtn" disabled>신청하기</button><span class="small muted">신청 번호로 승인 뒤 키를 한 번만 확인합니다</span></div>
+      </form>
+      <p class="token" style="margin-top:16px">Signal Orange가 이 페이지에서 나오는 유일한 곳 — 원본 Consent Pill(24 모서리, 13px, 1×30). 동의 전에는 신청하기가 비활성.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 04 rules ================= -->
+<section class="band band-lifted" id="rules" aria-labelledby="r-title">
+  <div class="wrap">
+    <div class="head-2up">
+      <div>
+        <span class="eyebrow">04 · Rules</span>
+        <h2 class="h2" id="r-title" style="margin-top:16px">규칙</h2>
+      </div>
+      <p class="lede">원본 Do's and Don'ts에 서비스 규칙을 더했다.</p>
+    </div>
+    <div class="do-dont">
+      <div>
+        <h3 class="h3">할 것</h3>
+        <ul>
+          <li>바탕은 한지빛 Canvas Cream(#F3F0EE). 표면 순서는 한지 → Lifted Cream → 먹 하단</li>
+          <li>주요 버튼은 먹빛 알약(모서리 20), 글자는 순백이 아닌 크림</li>
+          <li>제목은 500 + 자간 -2%, 본문은 450</li>
+          <li>기능 그림은 원형(장구 면·정간 원형 크롭)으로 자르고, 오른쪽 아래에 흰 위성 버튼</li>
+          <li>눈썹 라벨 앞에는 작은 주황 점</li>
+          <li>상태는 칩(기호 + 글자)과 안내 상자 테두리로 — 색만으로 뜻을 전하지 않는다</li>
+          <li>반려(채운 적갈 칩, role="alert")와 대체 결과(파란 테두리 칩)를 모양부터 다르게</li>
+          <li>메뉴는 흰 알약으로 화면 위에서 24px 띄운다</li>
+        </ul>
+      </div>
+      <div class="dont">
+        <h3 class="h3">하지 말 것</h3>
+        <ul>
+          <li>Signal Orange를 동의 밖에서 쓰기 — 마케팅 버튼·반려 표시 금지</li>
+          <li>대체 결과에 반려 색을 쓰기 — 대체는 실패가 아니다</li>
+          <li>순백 페이지 바탕, 8–16px 모서리</li>
+          <li>서체 섞기 — 명조·손글씨·장식 글꼴 금지</li>
+          <li>14px 눈썹 라벨 밖의 대문자</li>
+          <li>딱딱한 그림자 — 48px 이상 퍼짐, 10% 이하만</li>
+          <li>hover 변형 만들기 — 눌림(active)만 정의</li>
+          <li>Dust Taupe·Light Signal Orange를 글자색으로 쓰기(대비 1.40·2.53)</li>
+          <li>Mastercard 빨강·노랑·로고 쓰기 — 마크는 정간 격자</li>
+          <li>메뉴 링크를 6개보다 많이 두기</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================= footer (먹 띠) ================= -->
+<footer class="footer on-ink">
+  <div class="wrap">
+    <h2 class="h2">필요할 때 언제든, 악보 한 장으로 시작하십시오</h2>
+    <div class="foot-cols">
+      <details class="foot-col" open><summary>Foundations <span class="chev" aria-hidden="true">⌄</span></summary><a href="#colors">색</a><a href="#type">글꼴</a><a href="#spacing">간격</a><a href="#radius">모서리 · 깊이</a></details>
+      <details class="foot-col" open><summary>Components <span class="chev" aria-hidden="true">⌄</span></summary><a href="#components">버튼 · 입력</a><a href="#components">상태 칩 · 코드</a><a href="#components">카드</a><a href="#files-title">받을 파일</a></details>
+      <details class="foot-col" open><summary>Service <span class="chev" aria-hidden="true">⌄</span></summary><a href="#patterns">악보 올리기</a><a href="#patterns">안내 상자</a><a href="#patterns">처리 기록</a><a href="#patterns">API 키 신청</a></details>
+      <details class="foot-col" open><summary>Source <span class="chev" aria-hidden="true">⌄</span></summary><a href="DESIGN_mastercard.md">DESIGN_mastercard.md ↗</a><a href="스타일가이드.html">Ferrari 판 스타일가이드 ↗</a><a href="../SD_01_프로세스설계서_국악보변환서비스.md">SD_01 프로세스 설계서 ↗</a></details>
+    </div>
+    <div class="foot-legal">
+      <p>출처: npx getdesign@latest add mastercard (DESIGN.md) · 3팀 황송해 · 2026-09-28</p>
+      <p>MarkForMC·Mastercard 로고는 쓰지 않음 — 대체 글꼴 Sofia Sans · Noto Sans KR, 정간 격자 마크</p>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  var toast = document.getElementById('toast');
+  function show(msg) {
+    toast.textContent = msg; toast.classList.add('show');
+    clearTimeout(show.t); show.t = setTimeout(function () { toast.classList.remove('show'); }, 1400);
+  }
+
+  /* 복사 — 주석 줄은 빼고 복사 */
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var el = document.getElementById(b.getAttribute('data-copy'));
+      var text = Array.prototype.filter.call(el.childNodes, function (n) { return !(n.nodeType === 1 && n.classList.contains('c')); })
+        .map(function (n) { return n.textContent; }).join('').trim();
+      try {
+        navigator.clipboard.writeText(text).then(function () { show('복사했어요'); }, function () { show('복사하지 못했어요'); });
+      } catch (e) { show('복사하지 못했어요'); }
+    });
+  });
+
+  /* 모바일 목차 — 전체 화면 덮개 */
+  var toggle = document.getElementById('menuToggle'), nav = document.getElementById('mainnav');
+  function setMenu(open) {
+    nav.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.setAttribute('aria-label', open ? '목차 닫기' : '목차 열기');
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  toggle.addEventListener('click', function () { setMenu(!nav.classList.contains('open')); });
+  nav.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', function () { setMenu(false); }); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && nav.classList.contains('open')) { setMenu(false); toggle.focus(); } });
+
+  /* 동의 — 동의해야 신청하기가 켜진다 */
+  var consent = document.getElementById('consentBtn'), apply = document.getElementById('applyBtn');
+  consent.addEventListener('click', function () {
+    var on = consent.getAttribute('aria-pressed') !== 'true';
+    consent.setAttribute('aria-pressed', on ? 'true' : 'false');
+    consent.textContent = on ? ' 동의했어요' : '개인정보 수집에 동의';
+    apply.disabled = !on;
+  });
+
+  /* 하단 — 모바일에서는 접이식, 데스크톱에서는 펼침 */
+  var mq = window.matchMedia('(max-width: 767px)');
+  function syncFooter() {
+    document.querySelectorAll('.foot-col').forEach(function (d) { d.open = !mq.matches; });
+    if (!mq.matches) setMenu(false);
+  }
+  syncFooter();
+  if (mq.addEventListener) mq.addEventListener('change', syncFooter); else if (mq.addListener) mq.addListener(syncFooter);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+# =============================================================================
+# K-lassic 로컬 실행 구성 (Docker Desktop · WSL2)
+#
+#   브라우저 ─▶ 127.0.0.1:9503 gateway ─┬─ /api/v1/* ─▶ model-api (127.0.0.1:9543)
+#                                        ├─ /demo/*   ─▶ demo      (127.0.0.1:26102, 선택)
+#                                        └─ 그 밖     ─▶ web       (127.0.0.1:9523)
+#   관리자    ─▶ 127.0.0.1:26101 admin (내 컴퓨터에서만 접속)
+#   web · admin · model-api ─▶ db (MariaDB, 내부 네트워크 전용)
+#
+# 기존 코드(gateway.mjs 등)는 서로를 127.0.0.1 로 부른다. 코드를 고치지 않기 위해
+# admin · model-api · gateway · demo 는 web 컨테이너의 네트워크를 함께 쓴다(network_mode: service:web).
+#
+# 사용:  docker compose up -d --build        (처음 · 코드 변경 후)
+#        docker compose ps / logs -f web
+#        docker compose down                 (데이터 볼륨은 남음)
+# =============================================================================
+name: klassic
+
+x-app-common: &app-common
+  image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-app:${APP_TAG:-0.1.0}
+  pull_policy: never
+  restart: unless-stopped
+  volumes:
+    - ./.env:/app/.env:ro          # 비밀값은 이미지가 아니라 실행 때 읽기 전용으로 넣는다
+    - storage:/app/storage
+  logging: &logging
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  # ---------------------------------------------------------------------------
+  # DB — 개발용 로컬 MariaDB (팀 DB 와 분리)
+  # ---------------------------------------------------------------------------
+  db:
+    image: mariadb:${MARIADB_TAG:-12.0}
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?.env 에 DB_ROOT_PASSWORD 가 필요합니다}
+      MARIADB_DATABASE: ${DB_NAME:?.env 에 DB_NAME 이 필요합니다}
+      MARIADB_USER: ${DB_USER:?.env 에 DB_USER 가 필요합니다}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?.env 에 DB_PASSWORD 가 필요합니다}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks: [klassic]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # migrate — DB 표 만들기 + 기본 설정 넣기 (한 번 실행하고 끝남, 다시 실행해도 안전)
+  # ---------------------------------------------------------------------------
+  migrate:
+    <<: *app-common
+    build:
+      context: ./src/app
+      dockerfile: ../../docker/app.Dockerfile
+    pull_policy: build
+    restart: "no"
+    command: ["node", "backend/dist/db/migrate.js", "--seed"]
+    networks: [klassic]
+    depends_on:
+      db: { condition: service_healthy }
+
+  # ---------------------------------------------------------------------------
+  # web — 웹 화면 + 웹 서비스 API. 이 컨테이너가 네트워크(포트)의 주인이다
+  # ---------------------------------------------------------------------------
+  web:
+    <<: *app-common
+    command: ["node", "backend/dist/server.js", "--role=web"]
+    networks: [klassic]
+    ports:
+      - "127.0.0.1:${GATEWAY_PUBLISH_PORT:-9503}:9503"   # 서비스 입구
+      - "127.0.0.1:${ADMIN_PUBLISH_PORT:-26101}:26101"   # 관리자 (내 컴퓨터에서만)
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9523/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  admin:
+    <<: *app-common
+    command: ["node", "backend/dist/server.js", "--role=admin"]
+    network_mode: "service:web"
+    depends_on:
+      web: { condition: service_started }
+
+  gateway:
+    <<: *app-common
+    command: ["node", "ops/gateway.mjs"]
+    network_mode: "service:web"
+    depends_on:
+      web: { condition: service_started }
+
+  # ---------------------------------------------------------------------------
+  # model-api — 인식 · 추천 · 렌더링(MP3) · 연주 API
+  # ---------------------------------------------------------------------------
+  model-api:
+    image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-model-api:${APP_TAG:-0.1.0}
+    build:
+      context: ./src/app
+      dockerfile: ../../docker/model-api.Dockerfile
+    restart: unless-stopped
+    network_mode: "service:web"
+    environment:
+      # 엔진 폴더 해석(engines/base.py resolve_ref)은 .env 가 아니라 프로세스 환경변수를 본다
+      # → DB 의 provider_ref '~/gugak-engines/<이름>' 이 /opt/gugak-engines/<이름> 으로 바뀐다
+      ENGINES_DIR: /opt/gugak-engines
+    volumes:
+      - ./.env:/app/.env:ro
+      - storage:/app/storage
+      - engines:/opt/gugak-engines     # 인식 엔진(homr · jeongganbo) 설치 위치 — engines-installer 로 설치
+    depends_on:
+      web: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9543/v1/health', timeout=4).status==200 else 1)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 60s     # 시작 때 모델 데우기(warm-up) 시간
+    logging: *logging
+
+  # ---------------------------------------------------------------------------
+  # demo — API 예시 홈페이지 (선택). 외부 키(DEMO_API_KEY)를 받은 뒤:
+  #        docker compose --profile demo up -d demo
+  # ---------------------------------------------------------------------------
+  demo:
+    <<: *app-common
+    profiles: [demo]
+    command: ["node", "demo/server.mjs"]
+    network_mode: "service:web"
+    depends_on:
+      web: { condition: service_started }
+
+  # 인식 엔진(homr · jeongganbo) 설치 — 필요할 때만 실행하는 일회성 작업
+  #   docker compose --profile tools run --rm engines-installer
+  #   설치 뒤: docker compose restart model-api
+  engines-installer:
+    profiles: [tools]
+    image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-engines-installer:${APP_TAG:-0.1.0}
+    build:
+      context: ./docker
+      dockerfile: engines-installer.Dockerfile
+    volumes:
+      - ./src/app/ops/engines:/scripts:ro
+      - engines:/opt/gugak-engines
+    networks: [klassic]
+    logging: *logging
+
+networks:
+  klassic:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24     # 관리자 접속 허용 범위(ADMIN_ALLOWED_CIDRS)와 맞춰 고정
+          gateway: 172.30.0.1
+
+volumes:
+  db-data:
+  storage:
+  engines:

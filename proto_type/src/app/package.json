@@ -1,0 +1,24 @@
+{
+  "name": "gugak-score-app",
+  "private": true,
+  "description": "국악보 디지털 변환·연주·편집 서비스 (1단계) — 웹 화면·웹 서비스·공유 모듈 (모델 API 서버는 model-api/, uv)",
+  "workspaces": [
+    "packages/score-core",
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w packages/score-core && npm run build -w frontend && npm run build -w backend",
+    "test": "npm run test -w packages/score-core && npm run test -w backend && npm run test -w frontend",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:seed-settings": "npm run db:seed-settings -w backend",
+    "admin:create": "npm run admin:create -w backend --"
+  },
+  "overrides": {
+    "spessasynth_core": "3.27.8"
+  }
+}

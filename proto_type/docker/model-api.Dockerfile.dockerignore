@@ -1,0 +1,14 @@
+# model-api.Dockerfile 전용 제외 목록 — 필요한 폴더만 허용(allowlist)
+*
+!model-api/
+!shared/
+!assets/
+
+# 허용한 폴더 안에서도 제외
+model-api/.venv
+model-api/tests
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+assets/soundfonts/source
+**/.DS_Store

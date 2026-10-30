@@ -1,0 +1,40 @@
+# 파이썬 패키지는 여기와 uv.lock. FluidSynth · LAME(MP3)과 인식 엔진처럼 pip 으로 설치되지 않는 것은 ../REQUIREMENTS.md
+[project]
+name = "gugak-model-api"
+version = "0.1.0"
+description = "국악보 모델 API 서버 — 인식·추천·렌더링·연주 (FR-038, FastAPI + uvicorn)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.8",
+  "python-multipart>=0.0.9",
+  "music21>=9.1",
+  "pretty_midi>=0.2.10",
+  "opencv-python-headless>=4.10",
+  "numpy>=1.26",
+  "scikit-learn>=1.5",
+  "verovio>=4.3",
+  "svglib>=1.5",
+  "reportlab>=4.2",
+  "aiomysql>=0.2",
+  "httpx>=0.27",
+  "pyyaml>=6.0",
+  "pillow>=10.4",
+  "pypdfium2>=5.13.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 의존성·폼 선언은 기본값 자리에서 부르는 것이 관례다(B008 예외)
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Query", "fastapi.Header"]

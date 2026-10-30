@@ -1,0 +1,25 @@
+# app.Dockerfile 전용 제외 목록 (빌드 컨텍스트: src/app)
+# 비밀값 — 이미지에 절대 넣지 않는다 (.env 는 실행 때 읽기 전용으로 마운트)
+.env
+.env.*
+!.env.example
+
+# 각 OS 에서 설치된 의존성 · 빌드 결과 — 이미지 안에서 Linux 용으로 새로 만든다
+**/node_modules
+**/dist
+**/coverage
+model-api/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+
+# 실행 데이터
+storage
+.devdb
+
+# 사운드폰트 재제작 원재료 · 기타
+assets/soundfonts/source
+**/*.log
+**/.DS_Store
+.vscode
+.idea

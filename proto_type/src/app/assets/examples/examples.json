@@ -1,0 +1,29 @@
+{
+  "_comment": "S1 [예시 파일 고르기] 목록(2026-09-30 황송해 70~73, SD_02 · UC_01). 이 목록에 있는 id 의 file 만 서버가 접수한다. 순서 = 화면 순서. 목록 밖 파일은 같은 폴더에 있어도 쓰지 않는다.",
+  "items": [
+    {
+      "id": "arirang-semachi-staff",
+      "title": "아리랑 세마치 (오선보)",
+      "score_type": "staff",
+      "file": "arirang-semachi-staff.png"
+    },
+    {
+      "id": "arirang-98-staff",
+      "title": "아리랑 9/8 (가사 오선보)",
+      "score_type": "staff",
+      "file": "arirang-98-staff-1000.jpg"
+    },
+    {
+      "id": "minuet-staff",
+      "title": "미뉴에트 G장조 (피아노 오선보)",
+      "score_type": "staff",
+      "file": "minuet-staff-1000.jpg"
+    },
+    {
+      "id": "taryeong-gayageum-jeongganbo",
+      "title": "타령 (가야금 정간보)",
+      "score_type": "jeongganbo",
+      "file": "2021 가야금정악보.pdf"
+    }
+  ]
+}

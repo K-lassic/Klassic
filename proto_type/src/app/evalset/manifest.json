@@ -1,0 +1,260 @@
+{
+  "$comment": "평가셋 목록 (tasks T137, research R17). real = 팀원이 준비한 진짜 국악보 15종(정간보·오선보·손악보), fake = 구조 확인·타당성 확인을 재는 가짜 악보 묶음(약 20장). 파일을 real/·fake/ 에 넣고 여기에 한 줄씩 적은 뒤 `uv run --project ../model-api python run.py --register` 로 eval_item 에 올린다. 지금은 비어 있다 — 평가셋 이미지가 아직 들어오지 않았다.",
+  "real": [
+    {
+      "file": "real/S01_clean_arirang.png",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S02_clean_doraji.png",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S03_clean_ongheya.png",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S04_clean_bach66.png",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S05_clean_bach7.png",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S06_photo_rot3_arirang.jpg",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S07_photo_shadow_doraji.jpg",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S08_photo_persp_ongheya.jpg",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S09_photo_blur_bach66.jpg",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S10_photo_mix_bach7.jpg",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S11_lowres_arirang.jpg",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S12_lowres_doraji.jpg",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S13_hard_ongheya.jpg",
+      "sheet_kind": "staff"
+    },
+    {
+      "file": "real/S14_single_line_arirang.png",
+      "sheet_kind": "staff"
+    }
+  ],
+  "fake": [
+    {
+      "file": "fake/F01_blank_white.png",
+      "fake_label": "백지"
+    },
+    {
+      "file": "fake/F02_blank_gray.png",
+      "fake_label": "백지(회색)"
+    },
+    {
+      "file": "fake/F03_notebook.png",
+      "fake_label": "공책"
+    },
+    {
+      "file": "fake/F04_wongoji.png",
+      "fake_label": "원고지"
+    },
+    {
+      "file": "fake/F05_table.png",
+      "fake_label": "표"
+    },
+    {
+      "file": "fake/F06_document.png",
+      "fake_label": "글자 문서"
+    },
+    {
+      "file": "fake/F07_blinds.png",
+      "fake_label": "블라인드·창문"
+    },
+    {
+      "file": "fake/F08_landscape.png",
+      "fake_label": "풍경"
+    },
+    {
+      "file": "fake/F09_empty_staff.png",
+      "fake_label": "빈 오선지"
+    },
+    {
+      "file": "fake/F10_empty_staff_bars.png",
+      "fake_label": "빈 오선지(마디줄)"
+    },
+    {
+      "file": "fake/F11_graph_paper.png",
+      "fake_label": "모눈종이"
+    },
+    {
+      "file": "fake/F12_barcode.png",
+      "fake_label": "바코드"
+    },
+    {
+      "file": "fake/F13_noise.png",
+      "fake_label": "잡음"
+    },
+    {
+      "file": "fake/F14_calendar.png",
+      "fake_label": "달력"
+    },
+    {
+      "file": "fake/F15_receipt.png",
+      "fake_label": "영수증"
+    },
+    {
+      "file": "fake/F16_brick.png",
+      "fake_label": "벽돌"
+    },
+    {
+      "file": "fake/F17_keyboard.png",
+      "fake_label": "건반 사진"
+    },
+    {
+      "file": "fake/F18_empty_jeonggan_grid.png",
+      "fake_label": "빈 정간 칸"
+    },
+    {
+      "file": "fake/F19_dots.png",
+      "fake_label": "점무늬"
+    },
+    {
+      "file": "fake/F20_doc_photo.png",
+      "fake_label": "문서 사진"
+    },
+    {
+      "file": "fake/P01_notebook1.png",
+      "fake_label": "공책",
+      "source": "조성기 수집 실제 이미지 '공책1' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P02_notebook2.png",
+      "fake_label": "공책",
+      "source": "조성기 수집 실제 이미지 '공책2' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P03_notebook3.png",
+      "fake_label": "공책",
+      "source": "조성기 수집 실제 이미지 '공책3' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P04_document1.png",
+      "fake_label": "글자 문서",
+      "source": "조성기 수집 실제 이미지 '문서1' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P05_document2.png",
+      "fake_label": "글자 문서",
+      "source": "조성기 수집 실제 이미지 '문서2' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P06_document3.png",
+      "fake_label": "글자 문서",
+      "source": "조성기 수집 실제 이미지 '문서3' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P07_blank1.png",
+      "fake_label": "백지",
+      "source": "조성기 수집 실제 이미지 '백지' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P08_blinds1.png",
+      "fake_label": "블라인드·창문",
+      "source": "조성기 수집 실제 이미지 '블라인드1' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P09_blinds2.png",
+      "fake_label": "블라인드·창문",
+      "source": "조성기 수집 실제 이미지 '블라인드2' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P10_blinds3.png",
+      "fake_label": "블라인드·창문",
+      "source": "조성기 수집 실제 이미지 '블라인드3' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P11_empty_staff1.png",
+      "fake_label": "빈 오선지",
+      "source": "조성기 수집 실제 이미지 '오선지 빈악보1' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P12_empty_staff2.png",
+      "fake_label": "빈 오선지",
+      "source": "조성기 수집 실제 이미지 '오선지 빈악보2' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P13_wongoji1.png",
+      "fake_label": "원고지",
+      "source": "조성기 수집 실제 이미지 '원고지1' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P14_wongoji2.png",
+      "fake_label": "원고지",
+      "source": "조성기 수집 실제 이미지 '원고지2' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P15_empty_staff_note1.png",
+      "fake_label": "빈 오선지",
+      "source": "조성기 수집 실제 이미지 '일반노트(온니오선)' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P16_table1.png",
+      "fake_label": "표",
+      "source": "조성기 수집 실제 이미지 '표1' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P17_table2.png",
+      "fake_label": "표",
+      "source": "조성기 수집 실제 이미지 '표2' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P18_table3.png",
+      "fake_label": "표",
+      "source": "조성기 수집 실제 이미지 '표3' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P19_landscape1.png",
+      "fake_label": "풍경",
+      "source": "조성기 수집 실제 이미지 '풍경1' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    },
+    {
+      "file": "fake/P20_landscape2.png",
+      "fake_label": "풍경",
+      "source": "조성기 수집 실제 이미지 '풍경2' — 짧은 변 1000px로 확대(JSG/변환실험/결과/확대본)"
+    }
+  ],
+  "fake_labels": [
+    "공책",
+    "원고지",
+    "표",
+    "글자 문서",
+    "블라인드·창문",
+    "풍경",
+    "백지",
+    "빈 오선지"
+  ],
+  "sheet_kinds": [
+    "jeongganbo",
+    "staff",
+    "handwritten"
+  ],
+  "source": "HSH_조합B 대체(임시) — 2026-09-29 황송해가 HSH_조합B/evalset 에서 복사. 오선보 14장은 MusicXML 5곡(아리랑·도라지·옹헤야·바흐 66·7)을 그려 만든 합성 이미지, 가짜 20장. 정간보·손악보·실제 사진 없음. 진짜 평가셋 15종이 들어오면 교체한다 / 2026-09-29 조성기: 실제 가짜 사진 20장(P01~P20, 짧은 변 1000px 확대본) 추가 — 항목별 source 참고",
+  "answers": "answers.json (staff: 파일별 정답 음높이 MIDI 번호)"
+}

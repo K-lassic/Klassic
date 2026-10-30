@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- pioneer3 사용자 에이전트: 로그인하면 pm2 에 저장해 둔 web·admin·model-api 를 되살린다 (research R4, tasks T143).
+     설치: cp ops/launchd/com.team3.gugak.pm2.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.team3.gugak.pm2.plist
+     먼저 pm2 start ops/ecosystem.config.cjs && pm2 save 를 해 둔다. -->
+<!-- 2026-10-02 조성기 (교수님 지시, SD_04 §4-1 · tasks T431): 자동 되살리기 끔. 이 파일은 설치하지 않는다(설치된 적 없음).
+     교수님이 모든 팀 데이터를 모아 따로 다시 시작할 예정이라 서비스 · 개발 DB 를 내린 상태로 둔다.
+     다시 켤 때는 사람이 ./check_project.sh start 로만 켠다. 아래 Disabled 는 실수로 설치해도 실행되지 않게 하는 표시. -->
+<plist version="1.0">
+<dict>
+  <key>Disabled</key><true/>
+  <key>Label</key><string>com.team3.gugak.pm2</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string><string>-lc</string><string>pm2 resurrect</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/pioneer3/Library/Logs/gugak-pm2.log</string>
+  <key>StandardErrorPath</key><string>/Users/pioneer3/Library/Logs/gugak-pm2.err.log</string>
+</dict>
+</plist>

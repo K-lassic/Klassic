@@ -1,0 +1,45 @@
+{
+  "name": "@gugak/backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts --role=both",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js --role=both",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed-settings": "tsx src/db/migrate.ts --seed",
+    "admin:create": "tsx src/admin/createOperator.ts",
+    "shared:seed-examples": "tsx src/admin/seedSharedExamples.ts"
+  },
+  "dependencies": {
+    "@gugak/score-core": "*",
+    "@tonejs/midi": "^2.0.28",
+    "argon2": "^0.41.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "fast-xml-parser": "^5.11.1",
+    "fflate": "^0.8.3",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.11.3",
+    "node-cron": "^4.6.0",
+    "pino": "^9.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.7",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.16.10",
+    "@types/supertest": "^6.0.2",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.1",
+    "typescript": "~5.5.4",
+    "vitest": "^2.1.2"
+  }
+}

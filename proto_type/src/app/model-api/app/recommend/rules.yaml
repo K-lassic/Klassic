@@ -1,0 +1,77 @@
+# 악기 추천 규칙표 (T088, research R18 · BR-REC-01)
+# 빠르기(slow <70 BPM · medium 70~110 · fast >110) × 선법(pyeongjo 평조 · gyemyeonjo 계면조 · unknown) → 조합 최대 3개.
+# 악기 코드는 shared/instruments.json 의 code. 국악기를 먼저 둔다(BR-PLY-03).
+#
+# status: draft — 국악 전공 팀원이 확인·보완하기 전의 초안이다(UC5 비고). 칸을 비워 두면([] 또는 항목 없음)
+#         추천 대신 기본 국악기 구성(가야금 · 장구)을 돌려준다.
+# 이 파일의 해시 앞 12자가 추천 모델 버전(model_version)이 된다 — 내용을 바꾸면 버전도 바뀐다.
+status: draft
+version_note: "2026-09-28 초안(조성기 세션, 국악 전공 확인 전)"
+
+rules:
+  slow:
+    pyeongjo:
+      - label: 정악 관현
+        instruments: [daegeum, gayageum, janggu]
+        reason: 느린 평조 선율은 대금의 긴 호흡과 가야금이 잘 어울립니다.
+      - label: 거문고 중심
+        instruments: [geomungo, daegeum, janggu]
+        reason: 느린 곡에서 거문고의 무게감이 선율을 받쳐 줍니다.
+      - label: 해금 가락
+        instruments: [haegeum, gayageum, buk]
+        reason: 해금이 선율을 이어 가고 가야금이 장식합니다.
+    gyemyeonjo:
+      - label: 시나위 느린 가락
+        instruments: [ajaeng, daegeum, janggu]
+        reason: 계면조의 슬픈 느낌을 아쟁과 대금이 살려 줍니다.
+      - label: 가야금 산조
+        instruments: [gayageum, janggu]
+        reason: 느린 계면 가락은 가야금 산조처럼 연주하기 좋습니다.
+      - label: 해금 독주
+        instruments: [haegeum, janggu]
+        reason: 해금의 떨림이 계면조와 잘 맞습니다.
+    unknown: []
+  medium:
+    pyeongjo:
+      - label: 가야금 병창풍
+        instruments: [gayageum, janggu]
+        reason: 보통 빠르기의 밝은 선율은 가야금과 장구가 기본입니다.
+      - label: 관현 합주
+        instruments: [daegeum, haegeum, gayageum, janggu]
+        reason: 대금·해금·가야금이 함께 선율을 나눕니다.
+      - label: 피리 선율
+        instruments: [piri, gayageum, janggu]
+        reason: 피리가 또렷하게 선율을 이끕니다.
+    gyemyeonjo:
+      - label: 시나위
+        instruments: [piri, haegeum, ajaeng, janggu]
+        reason: 계면조 보통 빠르기는 시나위 편성이 잘 어울립니다.
+      - label: 거문고·대금
+        instruments: [geomungo, daegeum, janggu]
+        reason: 거문고의 술대 소리와 대금이 어두운 색을 더합니다.
+      - label: 가야금·해금
+        instruments: [gayageum, haegeum, janggu]
+        reason: 가야금과 해금이 번갈아 가락을 주고받습니다.
+    unknown: []
+  fast:
+    pyeongjo:
+      - label: 풍물 가락
+        instruments: [piri, gayageum, janggu, buk]
+        reason: 빠르고 밝은 곡은 피리와 장구·북이 흥을 돋웁니다.
+      - label: 가야금 빠른 가락
+        instruments: [gayageum, janggu]
+        reason: 가야금의 빠른 뜯음이 잘 들립니다.
+      - label: 대금·장구
+        instruments: [daegeum, janggu]
+        reason: 대금의 시원한 소리가 빠른 선율을 살립니다.
+    gyemyeonjo:
+      - label: 자진모리 시나위
+        instruments: [piri, ajaeng, janggu, buk]
+        reason: 빠른 계면 가락은 피리·아쟁과 타악이 힘을 줍니다.
+      - label: 해금·가야금
+        instruments: [haegeum, gayageum, janggu]
+        reason: 해금과 가야금이 빠른 가락을 주고받습니다.
+      - label: 거문고 산조
+        instruments: [geomungo, janggu]
+        reason: 빠른 거문고 산조처럼 힘 있게 연주합니다.
+    unknown: []

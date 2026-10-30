@@ -1,0 +1,9 @@
+# 3조 「풍악을 울려라」 project2610 저장소 (2026-10-01 조성기)
+# 서비스(app/)와 README 만 올린다 — 제출용 압축과 같은 기준.
+# 설계서 · 팀원 작업 기록 · 백업 · 발표자료 등 나머지는 올리지 않는다.
+/*
+!/README.md
+!/.gitignore
+!/.gitattributes
+!/app/
+.DS_Store
