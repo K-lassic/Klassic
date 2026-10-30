@@ -127,6 +127,13 @@
 - **#19 뒤로 미룬 것**: `C2GateBlock`(반려 안내) · `i18n/gateMessages` · `i18n/fallbackReasons` — v0.1.1 `shared/error-codes.json` 을 읽는데, #19 에서 `shared/errors/*.json` 으로 나뉘므로 그 모양이 정해진 뒤 옮긴다.
 - 화면마다 쓰는 부품(C3 결과 띠 · C4 악기 고르기 · C5 연주 막대 · C6 내려받기 카드 · 악보 보기)은 그 화면 이슈에서 옮긴다.
 
+### 로그인 · 가입 · 머리 메뉴 (#39)
+
+- `stores/auth.ts` · `App.vue`(머리 메뉴 "○○ 님 · [로그아웃]" · 알림 · 바닥글) · `pages/S0Login.vue` 를 v0.1.1 그대로 옮겼다.
+- 로그인 가드(`router.ts` 의 `loginGuard`): S1~S3 은 `GET /api/auth/me` 로 확인해 로그인 안 했으면 `/login?next=<주소>`, 로그인한 채 `/login` · `/signup` 은 `/` + "이미 로그인되어 있습니다." 알림. 시험에서 메모리 라우터에 붙이려고 함수로 따로 내보낸다.
+- **임시 (#19 뒤 바꿈)**: 로그인 실패 안내는 `C2GateBlock` 대신 서버가 준 `message` · `fix` 를 그대로 보인다 (`data-test="auth-fail"`). 잠금(`LOGIN_LOCKED`)은 `retry_after` 가 지나면 버튼을 다시 연다.
+- 확인 (2026-10-30): 이 판 이미지를 v0.1.1 백엔드(9503)에 붙여 브라우저(Playwright)로 가입 → 로그아웃 → 틀린 비밀번호 → 로그인 → 새로고침 유지 → 로그아웃까지 통과.
+
 ## Runbook
 
 ### 무엇
@@ -160,7 +167,7 @@
 cd api/services/frontend
 npm ci
 npm run lint
-npm test          # vitest — 라우터 10 · 클라이언트 오류 처리 10 · 공통 부품 8
+npm test          # vitest — 라우터 10 · 클라이언트 오류 처리 10 · 공통 부품 8 · 로그인 · 머리 메뉴 12
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
