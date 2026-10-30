@@ -112,7 +112,20 @@
 
 - 화면은 아직 모두 빈 화면(`pages/Placeholder.vue`)이다. 경로는 v0.1.1 `router.ts` 와 같고, 화면 이슈(#39 · #40 · #41 · #43)에서 component 만 바꾼다.
 - 의존성은 지금 쓰는 것만 넣었다 (vue · vue-router · pinia). score-core · 연주기(spessasynth) · 악보 그리기(OSMD) · idb 는 쓰는 이슈에서 넣는다. 판은 v0.1.1 lock 과 같게 고정한다.
-- 스타일 · 문구(`i18n/`)는 #38 에서 옮긴다. v0.1.1 의 `i18n/` 은 라이브러리가 아니라 `shared/error-codes.json` 을 읽는 문구 모듈이라 #19(shared 이전) 뒤에 옮긴다.
+
+### 공통 부품 · API 클라이언트 (#38)
+
+| 위치 | 내용 (v0.1.1 에서 그대로 옮김) |
+|---|---|
+| `src/styles/` · `src/app.css` · `public/fonts/` | 스타일 토큰 · 스타일가이드 · 공통 배치 · 글꼴(마루 부리를 나눈 `GugakBuri` · 로고 글자 `KlassicWordmark`, 출처 · 라이선스는 `public/fonts/SOURCES.md`). 사용자 · 관리자 진입점이 함께 읽는다 |
+| `src/components/` | `C9StepBar`(단계 표시) · `StepNav`([이전] [다음]) · `PageNav`(쪽 넘기기) · `GuardedButton`(막힌 이유를 글자로) · `HelpTip`([?] 도움말) · `LeaveConfirm`(나가기 확인 창) |
+| `src/api/client.ts` | fetch 래퍼. 오류 응답(`ErrorResponse`)을 `GateError`(status · code · gate · retryAt)로, 연결 실패는 `NETWORK`, 401 `AUTH_LOGIN_REQUIRED` 면 `/login?next=<지금 주소>` 로 보낸다 |
+| `src/types/api.ts` · `score.ts` | 응답 타입. 계약 `web-api.yaml` 스키마와 필드 이름을 대조해 모두 같음 (2026-10-30) |
+| `src/composables/useLeaveGuard.ts` | 지금은 클라이언트가 쓰는 부분(만료 이동 · 한 번 건너뛰기 · 같은 흐름 판정)만. `useLeaveGuard()` 는 편집 기록 저장소와 함께 #40 · #41 에서 더한다 |
+| `src/composables/useNow.ts` · `src/lib/time.ts` | 지금 시각 · 남은 시간 표시 |
+
+- **#19 뒤로 미룬 것**: `C2GateBlock`(반려 안내) · `i18n/gateMessages` · `i18n/fallbackReasons` — v0.1.1 `shared/error-codes.json` 을 읽는데, #19 에서 `shared/errors/*.json` 으로 나뉘므로 그 모양이 정해진 뒤 옮긴다.
+- 화면마다 쓰는 부품(C3 결과 띠 · C4 악기 고르기 · C5 연주 막대 · C6 내려받기 카드 · 악보 보기)은 그 화면 이슈에서 옮긴다.
 
 ## Runbook
 
@@ -131,11 +144,13 @@
 
 | server | 내주는 것 | 404 | include |
 |---|---|---|---|
-| 사용자 `8080` | `index.html` · `/assets/*` · `public/` 파일. 없는 경로는 `index.html` (history 라우터 새로고침 유지) | `/admin.html` · 없는 `/assets/*` | `/etc/nginx/klassic/*.conf` — `/api` · `/api/v1` · `/soundfonts` 등 |
-| 관리자 `8081` | `/` → `admin.html` · `/assets/*` · `public/` 파일 | `/index.html` · 그 밖의 경로 | `/etc/nginx/klassic/admin/*.conf` — `/admin/*` → backend(admin) |
+| 사용자 `8080` | `index.html` · `/assets/*` · `public/` 파일. 없는 경로는 `index.html` (history 라우터 새로고침 유지) | `/admin.html` · 없는 `/assets/*` | `deploy/nginx/proxy.conf` — `/api` → web · `/api/v1` → model-api · `/soundfonts`, `/admin/*` · `/api/v1/internal` 은 404 JSON |
+| 관리자 `8081` | `/` → `admin.html` · `/assets/*` · `public/` 파일 | `/index.html` · 그 밖의 경로 | `deploy/nginx/admin/admin.conf` — `/admin/*` → admin |
 
 - 캐시: `index.html` · `admin.html` 은 `no-cache`(새 배포가 바로 보이게), `/assets/*` 는 파일 이름에 해시가 있어 1년 `immutable`.
 - `deploy/nginx` 가 비어 있으면 include 할 파일이 없어 화면만 내준다 (glob 은 맞는 파일이 없어도 오류가 아니다).
+- #22 설정은 `resolver` + 변수로 서비스 주소를 찾으므로, 백엔드 · model-api 가 아직 없어도 Nginx 는 뜨고 그 경로만 502 JSON(`WEB_UNAVAILABLE`)을 준다. 화면의 API 클라이언트는 이것을 `GateError` 로 받는다.
+- 서비스 이름 · 컨테이너 안 포트 약속(#22): `web` 9523 · `admin` 26101 · `model-api` 9543.
 - 볼륨 경로가 호스트에 없으면 Docker 가 빈 `api/deploy/nginx/` 폴더를 만든다 — 빈 폴더라 Git 에는 올라가지 않는다.
 
 ### 어떻게 — 빌드 · 시험 · 기동
@@ -145,11 +160,12 @@
 cd api/services/frontend
 npm ci
 npm run lint
-npm test          # vitest — 라우터 10개
+npm test          # vitest — 라우터 10 · 클라이언트 오류 처리 10 · 공통 부품 8
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
 cd api
+cp .env.example .env              # 처음 한 번 — DB_* 값을 채운다 (#20 이후 compose 가 요구, Git 제외)
 docker compose config --quiet
 docker compose up -d --build frontend
 docker compose ps frontend            # (healthy) — 이미지 HEALTHCHECK 가 8080/index.html 을 부른다
@@ -165,6 +181,8 @@ docker compose exec frontend id       # uid=101(nginx)
 | `127.0.0.1:26201/` · `/admin.html` | 200 `admin.html` |
 | `127.0.0.1:26201/index.html` · `/r/12/listen` | 404 |
 | LAN 주소(`192.168.x.x`)로 9603 · 26201 | 연결 안 됨 (127.0.0.1 에만 공개 — 외부는 Funnel 로만) |
+| (#22 붙인 뒤) `9603/admin/x` · `9603/api/v1/internal/x` | 404 JSON `NOT_FOUND` |
+| (#22 붙인 뒤, 백엔드 없음) `9603/api/me` · `26201/admin/me` | 502 JSON `WEB_UNAVAILABLE` |
 
 개발 서버는 `npm run dev`(5173). `/api` · `/soundfonts` · `/admin/` 은 v0.1.1 대역(9503 · 26101)으로 넘긴다. api/ 로 붙이려면 `DEV_PUBLIC_TARGET=http://127.0.0.1:9603 DEV_ADMIN_TARGET=http://127.0.0.1:26201 npm run dev`.
 
