@@ -10,10 +10,13 @@
     "build": "tsc -p tsconfig.json",
     "start:web": "node dist/server.js --role=web",
     "start:admin": "node dist/server.js --role=admin",
-    "test": "vitest run"
+    "test": "vitest run",
+    "tool:create-operator": "node dist/tools/createOperator.js",
+    "tool:issue-service-key": "node dist/tools/issueServiceKey.js"
   },
   "dependencies": {
     "@gugak/score-core": "file:../../packages/score-core",
+    "argon2": "^0.41.1",
     "cookie-parser": "^1.4.7",
     "express": "^4.21.1",
     "mysql2": "^3.11.3",

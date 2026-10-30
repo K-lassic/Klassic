@@ -69,6 +69,30 @@ docker run --rm -v "$PWD/api:/src:ro" node:22.21.1-bookworm-slim sh -c '
   cd /w/services/backend && npm ci && npm run build && SHARED_DIR=/w/shared npm test'
 ```
 
+### 운영 명령줄 도구 (#26)
+
+관리자 API(P3)가 생기기 전까지, 운영자 계정과 서비스 키는 서버 PC 에서 명령줄로 만든다. 웹 · 외부에서는 부를 수 없다.
+
+```bash
+cd api
+# 1) 운영자 계정 — 비밀번호(12자 이상)를 화면에 안 보이게 두 번 묻는다 (-it 필요)
+docker compose run --rm -it web node dist/tools/createOperator.js --login <아이디> --name <이름>
+
+# 2) 서비스 키 — 이전 서비스 키는 폐기되고 새 키 원문이 한 번만 나온다
+docker compose run --rm web node dist/tools/issueServiceKey.js --operator <운영자 아이디>
+#    → api/.env 의 SERVICE_API_KEY= 뒤에 붙여 넣고
+docker compose up -d web          # web 을 다시 만들어야 새 값을 읽는다
+```
+
+| 도구 | 파일 | DB 에 남는 것 |
+|---|---|---|
+| 운영자 만들기 | `src/tools/createOperator.ts` | `account`(argon2id 해시) · `operator_account` · `account_role`(operator · user). 이미 가입한 계정이면 operator 역할만 더함 |
+| 서비스 키 발급 | `src/tools/issueServiceKey.ts` → `src/services/accessKeys.ts` | `access_key`(SHA-256 해시 + 앞 8글자, 원문 없음) · 이전 서비스 키 `revoked` · `change_history`(누가 발급 · 폐기했는지) |
+
+- 키 원문은 **표준 출력에만** 나오고, 안내는 표준 오류로 나온다 — `> 파일` 로 받으면 키만 남는다. 로그 · DB 에는 원문이 없다.
+- 비밀번호는 명령줄 인자로 받지 않는다(셸 기록 · 프로세스 목록에 남으므로). 자동화할 때만 환경변수 `ADMIN_PASSWORD`.
+- 외부 키 발급(예시 홈페이지 · 키 신청, P2)은 `services/accessKeys.ts` 에 `issueExternalKey` 로 더한다 (시간당 호출 한도 필수 — DB 제약).
+
 ### 장애 조치 (증상 → 근거 → 조치)
 
 | 증상 | 근거 | 조치 |
@@ -78,6 +102,8 @@ docker run --rm -v "$PWD/api:/src:ro" node:22.21.1-bookworm-slim sh -c '
 | `처리 설정 판본이 없습니다` | 마이그레이션(초기 데이터)이 안 됨 | `docker compose run --rm migrate` |
 | `오류 코드 중복` 으로 시작 안 함 | `api/shared/errors/*.json` 에 같은 코드 | `python api/shared/check_errors.py` 로 찾아 한쪽에서 지운다 |
 | `/api/health` 503 `reason: db` | 운영 중 DB 끊김 | DB 가 돌아오면 자동 회복 (2026-10-30 시험: 다시 켠 뒤 약 6초) |
+| 도구가 `터미널이 없어 비밀번호를 물을 수 없습니다` | `docker compose run` 에 `-it` 가 없음 | `-it` 를 붙여 다시 실행 |
+| model-api 호출이 401 | `SERVICE_API_KEY` 가 비었거나 폐기된 키 | `issueServiceKey` 로 새로 발급 → `.env` → `docker compose up -d web` |
 
 ### 2026-10-30 확인 결과
 
