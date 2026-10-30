@@ -1,8 +1,1519 @@
-# 화면(frontend) ↔ backend 계약 — 담당: 팀장 · 리뷰: 황송해
-# 1차 내용은 proto_type v0.1.1 백엔드(/api/*, /admin/*)와 같게 채운다.
+# =============================================================================
+# #4 화면(frontend) ↔ backend 계약 — K-lassic Web API
+#   담당: 팀장(@majoongcheon) · 리뷰: 황송해(@SonghaeHwang)
+#   1차 내용 = proto_type v0.1.1 과 동일. 근거 자료:
+#     - proto_type/src/app/docs/INTERFACES.md §1·§2·§4·§4-A·§5 (v0.1.1 "구속력 있는" 인터페이스 약속)
+#     - proto_type/src/app/backend/src/web/*.ts · auth/accounts.ts · admin/*.ts (실제 라우터)
+#     - proto_type/src/app/frontend/src/types/api.ts (화면이 기대하는 응답 모양)
+#   바꾸는 내용은 `contract` 라벨 이슈 → PR(상대 담당 리뷰) → 병합 후 구현.
+#   우선순위 표시(x-priority): P1 발표 필수 · P2 여유 있으면 · P3 발표 이후 (#5 기능 목록과 같음)
+# =============================================================================
 openapi: 3.1.0
 info:
   title: K-lassic Web API
-  version: 0.0.0
-  description: 사용자 API(/api/*)와 관리자 API(/admin/*, 외부 비공개)
-paths: {}
+  version: 0.1.1
+  description: |
+    사용자 API(`/api/*`, web 역할)와 관리자 API(`/admin/*`, admin 역할 · **외부 비공개**).
+
+    - 사용자 식별: 익명 세션 쿠키 `gugak_sid`(`세션ID.HMAC서명`, HttpOnly · SameSite=Lax). 없으면 서버가 새로 발급한다.
+    - 권한: 경로 → 유스케이스(UC) → 역할 권한표(`role_permission`). 로그인 없이 쓰는 UC 는 UC11 · UC16 뿐.
+      **대응표에 없는 경로는 404**(권한 존재를 드러내지 않음).
+    - 요청 번호 `{no}` = `R-MMDD-XXXXXXXX`(대문자 · 숫자 8자, 0/O/1/I 제외). 이 계정 · 세션의 요청만 볼 수 있다(아니면 404 `REQUEST_NOT_FOUND`).
+    - 모든 오류는 `ErrorResponse` 한 모양이고, 코드 · 문구 · HTTP 상태는 `shared/error-codes.json` 에서 온다.
+      `retry_after` 가 있으면 `Retry-After` 머리글도 보낸다.
+
+# --- 서버 --------------------------------------------------------------------
+# 외부에서는 gateway(Tailscale Funnel) 경유, 관리자는 서버 PC 의 127.0.0.1 에서만 (#9)
+servers:
+  - url: https://{funnel_host}
+    description: 외부 공개 (Tailscale Funnel → gateway → web) — 사용자 API 만
+    variables:
+      funnel_host:
+        default: example.ts.net
+  - url: http://127.0.0.1:9503
+    description: 서버 PC 로컬 (gateway)
+  - url: http://127.0.0.1:26101
+    description: 관리자 (서버 PC 에서만 · 외부 비공개)
+
+tags:
+  - { name: health, description: 상태 확인 }
+  - { name: auth, description: "UC16 세션 · 가입 · 로그인 (P1)" }
+  - { name: requests, description: "UC1 · UC2 악보 올리기 → 인식 → 결과 · 대체 결과 (P1)" }
+  - { name: edit-export, description: "UC6 · UC7 편집 저장 · 내보내기 · 내려받기 (P1)" }
+  - { name: instruments, description: "UC5 악기 목록 · 추천 · 악기 고르기 (P2, 악기 목록은 P1)" }
+  - { name: my-scores, description: "UC7 내가 만든 악보 (P2)" }
+  - { name: shared, description: "UC18 공유 악보 · 좋아요 (P2)" }
+  - { name: api-guide, description: "UC11 · UC15 API 안내 · 외부 API 키 신청 (P2)" }
+  - { name: admin, description: "관리자 API — 외부 비공개 (P3, 서비스 키 발급은 P1 대체 수단 필요)" }
+
+# --- 인증 방식 ---------------------------------------------------------------
+security:
+  - session: []
+
+paths:
+  # ===========================================================================
+  # 상태 확인
+  # ===========================================================================
+  /api/health:
+    get:
+      tags: [health]
+      summary: 상태 확인
+      description: |
+        v0.1.1 은 DB 확인 없이 항상 200. **재구성에서는 DB · 설정 판본을 읽을 수 있을 때만 200**(#5 C2), 아니면 503.
+      security: []
+      x-priority: P1
+      responses:
+        "200":
+          description: 준비됨
+          content:
+            application/json:
+              schema: { type: object, required: [status], properties: { status: { const: ok } } }
+        "503": { $ref: "#/components/responses/Error" }
+
+  # ===========================================================================
+  # UC16 세션 · 가입 · 로그인 (P1) — backend/src/auth/accounts.ts · web/session.ts
+  # ===========================================================================
+  /api/auth/signup:
+    post:
+      tags: [auth]
+      summary: 가입 (가입하면 바로 로그인 · 세션 재발급)
+      description: 같은 접속 주소에서 시간당 `SIGNUP_HOURLY_CAP`(기본 5)번까지. 역할 `user` 가 붙는다.
+      x-priority: P1
+      x-uc: UC16
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 8, maxLength: 200 }
+                name: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        "201":
+          description: 가입 · 로그인됨 (`Set-Cookie` 로 새 세션)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } }
+        "400": { $ref: "#/components/responses/Error" }   # SIGNUP_INVALID (details: 필드별 통과 여부)
+        "409": { $ref: "#/components/responses/Error" }   # SIGNUP_EMAIL_TAKEN
+        "429": { $ref: "#/components/responses/Error" }   # SIGNUP_RATE_LIMITED + Retry-After
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: 로그인 (세션 재발급 — 세션 고정 공격 방지)
+      description: |
+        - 실패 `login_max_failures`(기본 5)번이면 `login_lock_minutes`(기본 10)분 잠금 → `LOGIN_LOCKED` + 다시 시도 시각.
+        - 이미 이 세션이 로그인 중이면 `ALREADY_LOGGED_IN`.
+        - 같은 계정이 최근 10분 안에 다른 곳에서 활동 중이면 `LOGIN_ALREADY_ACTIVE`(한 계정 한 곳). 비밀번호가 맞은 뒤에만 판단한다.
+      x-priority: P1
+      x-uc: UC16
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: 로그인됨 (`Set-Cookie` 로 새 세션)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } }
+        "401": { $ref: "#/components/responses/Error" }   # LOGIN_FAILED
+        "409": { $ref: "#/components/responses/Error" }   # ALREADY_LOGGED_IN · LOGIN_ALREADY_ACTIVE
+        "423": { $ref: "#/components/responses/Error" }   # LOGIN_LOCKED + Retry-After
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: 로그아웃 (세션 종료)
+      x-priority: P1
+      x-uc: UC16
+      responses:
+        "204": { description: 종료됨 }
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: 내 계정 정보 (로그인 안 했으면 account=null)
+      x-priority: P1
+      x-uc: UC16
+      responses:
+        "200":
+          description: 내 정보
+          content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } }
+
+  /api/session/end:
+    post:
+      tags: [auth]
+      summary: "[나가기] — 세션만 끝낸다"
+      x-priority: P1
+      x-uc: UC16
+      responses:
+        "204": { description: 종료됨 }
+
+  # ===========================================================================
+  # UC1 · UC2 악보 올리기 → 인식 → 결과 (P1) — backend/src/web/requests.ts
+  # ===========================================================================
+  /api/models/status:
+    get:
+      tags: [requests]
+      summary: 인식 · 추천 모델 준비 상태 (화면의 "모델 준비" 안내)
+      x-priority: P1
+      x-uc: UC1
+      responses:
+        "200":
+          description: 모델 상태
+          content: { application/json: { schema: { $ref: "#/components/schemas/ModelStatusPublic" } } }
+
+  /api/requests:
+    post:
+      tags: [requests]
+      summary: 악보 올리기 (사진 여러 장 또는 PDF 1개)
+      description: |
+        - 한 요청 = 악보 한 곡. **PDF 한 개(모든 쪽) 또는 PNG · JPG(JPEG) · WEBP 사진 여러 장(올린 순서 = 쪽 순서), 최대 10쪽**.
+        - 검사 순서: 개수 → 형식 → 손상 → 용량 → 사진 짧은 변 (`shared/upload-rules.json`).
+          PDF 의 열기 · 쪽 수 · 쪽마다 크기는 model-api `POST /v1/internal/upload-check` 에 맡긴다 — 닿지 않으면 503 `UPLOAD_CHECK_UNAVAILABLE`(접수 안 함).
+        - MIDI · MusicXML 등은 415 `UPLOAD_UNSUPPORTED_TYPE`(details.allowed=['image','pdf']).
+        - 사용자 요청 한도(G12): 처리 중 1건 · 시간당 상한 → 429 + `Retry-After`.
+        - 접수하면 인식 대기열에 넣고 202. 이후 `GET /api/requests/{no}` 를 1초마다 확인한다.
+      x-priority: P1
+      x-uc: UC1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, score_type]
+              properties:
+                file:
+                  description: 사진이면 여러 개(같은 이름 `file` 반복, 올린 순서), PDF 면 한 개
+                  type: array
+                  maxItems: 10
+                  items: { type: string, format: binary }
+                score_type: { $ref: "#/components/schemas/ScoreType" }
+      responses:
+        "202":
+          description: 접수됨
+          content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
+        "400": { $ref: "#/components/responses/Error" }   # UPLOAD_TOO_MANY_FILES · UPLOAD_TOO_MANY_PAGES · UPLOAD_TOO_SMALL 등
+        "413": { $ref: "#/components/responses/Error" }   # UPLOAD_TOO_LARGE
+        "415": { $ref: "#/components/responses/Error" }   # UPLOAD_UNSUPPORTED_TYPE
+        "422": { $ref: "#/components/responses/Error" }   # UPLOAD_CORRUPTED (손상 · 암호 PDF)
+        "429": { $ref: "#/components/responses/Error" }   # WEB_ACTIVE_REQUEST_EXISTS · WEB_HOURLY_LIMIT (G12)
+        "503": { $ref: "#/components/responses/Error" }   # UPLOAD_CHECK_UNAVAILABLE
+
+  /api/requests/example:
+    post:
+      tags: [requests]
+      summary: 예시 악보로 올리기
+      description: 서버 전용 폴더의 예시 파일로 `POST /api/requests` 와 같은 검사 · 접수. 목록 밖 id · 경로 문자는 404.
+      x-priority: P2
+      x-uc: UC1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [example_id]
+              properties:
+                example_id: { type: string }
+                score_type: { $ref: "#/components/schemas/ScoreType" }
+      responses:
+        "202":
+          description: 접수됨
+          content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/examples:
+    get:
+      tags: [requests]
+      summary: 예시 악보 목록
+      x-priority: P2
+      x-uc: UC1
+      responses:
+        "200":
+          description: 예시 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, title, score_type]
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        score_type: { $ref: "#/components/schemas/ScoreType" }
+
+  /api/examples/{id}/thumb:
+    get:
+      tags: [requests]
+      summary: 예시 미리보기 (짧은 변 200px JPEG)
+      x-priority: P2
+      x-uc: UC1
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: 미리보기, content: { image/jpeg: { schema: { type: string, format: binary } } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/requests/{no}:
+    get:
+      tags: [requests]
+      summary: 요청 상태 (화면은 1초마다 확인)
+      description: 보관 기간이 지난 요청도 상태는 보여 준다(`status:"expired"`).
+      x-priority: P1
+      x-uc: UC1
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      responses:
+        "200":
+          description: 상태
+          content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
+        "404": { $ref: "#/components/responses/Error" }   # REQUEST_NOT_FOUND
+
+  /api/requests/{no}/type-confirmation:
+    post:
+      tags: [requests]
+      summary: 악보 종류 확인 답 (`awaiting_type_answer` 일 때)
+      description: 오선보로 올렸는데 정간보처럼 보이면(또는 반대) 사용자에게 묻는다. `change_to=null` 이면 처음 고른 종류로 계속.
+      x-priority: P2
+      x-uc: UC1
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [change_to]
+              properties:
+                change_to: { oneOf: [{ $ref: "#/components/schemas/ScoreType" }, { type: "null" }] }
+      responses:
+        "202":
+          description: 답을 받아 처리 계속
+          content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
+        "400": { $ref: "#/components/responses/Error" }   # BAD_REQUEST (details.field=change_to)
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/requests/{no}/score:
+    get:
+      tags: [requests]
+      summary: 결과 악보 (ScoreDoc + MusicXML)
+      description: 완료 전이면 409 `REQUEST_NOT_FOUND`(details.reason=not_completed), 결과 파일이 지워졌으면 `RESULT_EXPIRED`.
+      x-priority: P1
+      x-uc: UC1
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      responses:
+        "200":
+          description: 결과 악보
+          content: { application/json: { schema: { $ref: "#/components/schemas/ScoreResponse" } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }   # RESULT_EXPIRED
+
+  /api/requests/{no}/fallback:
+    post:
+      tags: [requests]
+      summary: 대체 결과 요청 (UC2 — 사용자가 직접)
+      description: 인식 결과(`route=recognize`)가 완료된 요청만 바뀐다(`fallback_reason=USER_REQUEST`). 이미 대체 · 직행이면 상태만 돌려준다.
+      x-priority: P1
+      x-uc: UC2
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      responses:
+        "200":
+          description: 대체 결과로 바뀐 상태
+          content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }   # INTERNAL_ERROR (details.reason=template_unavailable)
+
+  /api/requests/{no}/events:
+    post:
+      tags: [requests]
+      summary: 화면 이벤트 기록 (결과 표시 · 첫 연주)
+      description: "`result_shown` 이면 실제로 놓인 기본 악기 구성을 첫 선택 기록으로 남긴다."
+      x-priority: P2
+      x-uc: UC1
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event]
+              properties:
+                event: { enum: [result_shown, first_played] }
+      responses:
+        "204": { description: 기록됨 }
+        "400": { $ref: "#/components/responses/Error" }   # BAD_REQUEST (details.field=event)
+
+  # ===========================================================================
+  # UC6 · UC7 편집 저장 · 내보내기 · 내려받기 (P1) — web/edits.ts · web/exports.ts
+  # ===========================================================================
+  /api/requests/{no}/edits:
+    put:
+      tags: [edit-export]
+      summary: 편집 기록(연산 목록) 저장
+      description: 편집 자체는 브라우저 IndexedDB. 원본 결과는 덮어쓰지 않고 연산(ops)만 저장한다. `finished:false` = [작업 저장하기](편집 마침 아님).
+      x-priority: P1
+      x-uc: UC6
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [summary, ops]
+              properties:
+                summary: { $ref: "#/components/schemas/EditSummary" }
+                ops: { type: array, items: { $ref: "#/components/schemas/EditOp" } }
+                finished: { type: boolean, default: true }
+      responses:
+        "204": { description: 저장됨 }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/requests/{no}/exports:
+    post:
+      tags: [edit-export]
+      summary: 내보내기 시작 (MP3 · PDF · MIDI · MusicXML)
+      description: |
+        원본 결과 + 악기 지정 + `edit_ops` 를 적용한 악보로 만든다.
+        MIDI · MusicXML 은 백엔드가 바로 만들어 곧 `ready`, MP3 · PDF 는 렌더링 대기열(동시 상한 `max_concurrency_render`) → model-api.
+      x-priority: P1
+      x-uc: UC7
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format, edit_ops]
+              properties:
+                format: { $ref: "#/components/schemas/ExportFormat" }
+                edit_ops: { type: array, items: { $ref: "#/components/schemas/EditOp" } }
+                instruments: { $ref: "#/components/schemas/InstrumentChoiceBody" }
+      responses:
+        "202":
+          description: 내보내기 작업
+          content: { application/json: { schema: { $ref: "#/components/schemas/ExportTask" } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }   # RESULT_EXPIRED
+
+  /api/requests/{no}/exports/{fileId}:
+    get:
+      tags: [edit-export]
+      summary: 내보내기 상태
+      x-priority: P1
+      x-uc: UC7
+      parameters:
+        - { $ref: "#/components/parameters/RequestNo" }
+        - { $ref: "#/components/parameters/FileId" }
+      responses:
+        "200":
+          description: 내보내기 작업
+          content: { application/json: { schema: { $ref: "#/components/schemas/ExportTask" } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/requests/{no}/exports/{fileId}/file:
+    get:
+      tags: [edit-export]
+      summary: 내보낸 파일 내려받기 (`download_event` 에 기록)
+      x-priority: P1
+      x-uc: UC7
+      parameters:
+        - { $ref: "#/components/parameters/RequestNo" }
+        - { $ref: "#/components/parameters/FileId" }
+      responses:
+        "200":
+          description: "파일 (`Content-Disposition: attachment`)"
+          content:
+            audio/mpeg: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+            audio/midi: { schema: { type: string, format: binary } }
+            application/vnd.recordare.musicxml+xml: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }
+
+  /api/requests/{no}/original/{format}:
+    get:
+      tags: [edit-export]
+      summary: 원본 결과 내려받기 (편집 전 MusicXML · MIDI)
+      description: MIDI 안전 변환에 실패한 결과는 MIDI 가 없다 → `MIDI_UNAVAILABLE`(MusicXML 로 받게 안내).
+      x-priority: P1
+      x-uc: UC7
+      parameters:
+        - { $ref: "#/components/parameters/RequestNo" }
+        - { name: format, in: path, required: true, schema: { enum: [musicxml, midi] } }
+      responses:
+        "200":
+          description: 파일 (`{no}.musicxml` · `{no}.mid`)
+          content:
+            audio/midi: { schema: { type: string, format: binary } }
+            application/vnd.recordare.musicxml+xml: { schema: { type: string, format: binary } }
+        "400": { $ref: "#/components/responses/Error" }   # BAD_REQUEST (details.field=format)
+        "404": { $ref: "#/components/responses/Error" }   # MIDI_UNAVAILABLE 포함 (HTTP 는 error-codes.json 기준)
+        "410": { $ref: "#/components/responses/Error" }   # RESULT_EXPIRED
+
+  # ===========================================================================
+  # UC5 악기 · 추천 (P2, 악기 목록은 편집 · 연주에 필요해서 P1) — web/instruments.ts · web/recommendation.ts
+  # ===========================================================================
+  /api/instruments:
+    get:
+      tags: [instruments]
+      summary: 악기 목록
+      x-priority: P1
+      x-uc: UC5
+      responses:
+        "200":
+          description: 악기 목록
+          content: { application/json: { schema: { $ref: "#/components/schemas/InstrumentCatalog" } } }
+
+  /api/requests/{no}/recommendation:
+    get:
+      tags: [instruments]
+      summary: 국악기 조합 추천
+      description: LLM 모델이 준비 전이면 기다리지 않고 규칙표 결과를 먼저 준다(`pending:true`).
+      x-priority: P2
+      x-uc: UC5
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      responses:
+        "200":
+          description: 추천 (추천할 수 없으면 available=false)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Recommendation" } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/requests/{no}/instrument-choice:
+    put:
+      tags: [instruments]
+      summary: 악기 고르기 (선택 기록)
+      description: 기록(`instrument_selection`)은 **실제로 놓인 악기만** — 타악 성부가 없으면 장구는 빠진다.
+      x-priority: P2
+      x-uc: UC5
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/InstrumentChoiceBody" } } }
+      responses:
+        "204": { description: 기록됨 }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  # ===========================================================================
+  # UC7 내가 만든 악보 (P2) — web/myScores.ts
+  # ===========================================================================
+  /api/my-scores:
+    get:
+      tags: [my-scores]
+      summary: 내가 만든 악보 목록 (이 계정 · 완료 · 보관 기간 안 · 최근 50)
+      description: 공유 악보로 만든 요청은 빼고 준다. 예시로 올린 요청은 `title` 이 예시 이름 · `from_example:true`.
+      x-priority: P2
+      x-uc: UC7
+      responses:
+        "200":
+          description: 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MyScoreItem" } }
+
+  /api/my-scores/{no}:
+    delete:
+      tags: [my-scores]
+      summary: 내가 만든 악보 지우기 (파일 · 편집 기록 즉시 삭제)
+      description: 이미 지웠으면 204. 다른 계정 · 미완료는 404. 공유 악보로 만든 요청은 403 `MY_SCORE_FROM_SHARED`. 공유 복사본은 남는다.
+      x-priority: P2
+      x-uc: UC7
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      responses:
+        "204": { description: 지움 }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  # ===========================================================================
+  # UC18 공유 악보 · 좋아요 (P2) — web/shared.ts · INTERFACES §4-A
+  # ===========================================================================
+  /api/requests/{no}/share:
+    parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+    get:
+      tags: [shared]
+      summary: 이 요청의 공유 상태 (올린 사람만)
+      x-priority: P2
+      x-uc: UC18
+      responses:
+        "200":
+          description: 공유 상태
+          content: { application/json: { schema: { $ref: "#/components/schemas/ShareState" } } }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [shared]
+      summary: 공유하기 (이미 공유 중이면 제목만 바꿈)
+      description: 결과 MusicXML 을 `storage/shared/<share_no>/score.musicxml` 로 복사한다(24시간 정리 밖, 공유 3일 뒤 정리).
+      x-priority: P2
+      x-uc: UC18
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 60 }
+      responses:
+        "200":
+          description: 공유 상태
+          content: { application/json: { schema: { $ref: "#/components/schemas/ShareState" } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [shared]
+      summary: 공유 거두기 (복사본 삭제)
+      x-priority: P2
+      x-uc: UC18
+      responses:
+        "200":
+          description: "`{shared:false}`"
+          content: { application/json: { schema: { $ref: "#/components/schemas/ShareState" } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/shared-scores:
+    get:
+      tags: [shared]
+      summary: 공유 게시판 (올린 사람 · 요청 번호 없음, 3일 지나면 빠짐)
+      x-priority: P2
+      x-uc: UC18
+      parameters:
+        - { name: sort, in: query, schema: { enum: [likes, recent], default: likes } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: 목록
+          content: { application/json: { schema: { $ref: "#/components/schemas/SharedScoreList" } } }
+
+  /api/shared-scores/{shareNo}/score:
+    get:
+      tags: [shared]
+      summary: 공유 악보 받기 (듣기용)
+      x-priority: P2
+      x-uc: UC18
+      parameters: [{ $ref: "#/components/parameters/ShareNo" }]
+      responses:
+        "200":
+          description: 공유 악보
+          content: { application/json: { schema: { $ref: "#/components/schemas/SharedScoreBody" } } }
+        "404": { $ref: "#/components/responses/Error" }   # 내림 · 거둠 · 3일 지남
+
+  /api/shared-scores/{shareNo}/use:
+    post:
+      tags: [shared]
+      summary: "[이 악보로 작업하기] — 공유 복사본으로 내 새 요청 (인식 없음, 바로 완료)"
+      x-priority: P2
+      x-uc: UC18
+      parameters: [{ $ref: "#/components/parameters/ShareNo" }]
+      responses:
+        "202":
+          description: 새 요청 (`route=direct` · `from_shared=true`)
+          content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/shared-scores/{shareNo}/like:
+    post:
+      tags: [shared]
+      summary: 좋아요 (다시 누르면 취소)
+      x-priority: P2
+      x-uc: UC18
+      parameters: [{ $ref: "#/components/parameters/ShareNo" }]
+      responses:
+        "200":
+          description: 좋아요 상태
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [share_no, liked, likes]
+                properties:
+                  share_no: { type: string }
+                  liked: { type: boolean }
+                  likes: { type: integer }
+        "404": { $ref: "#/components/responses/Error" }
+
+  # ===========================================================================
+  # UC11 · UC15 API 안내 · 외부 API 키 신청 (P2) — web/apiDocs.ts · web/keyApplications.ts
+  # ===========================================================================
+  /api/api-docs:
+    get:
+      tags: [api-guide]
+      summary: API 활용 안내 (model-api openapi.json 을 가져와 정리, 못 가져오면 마지막으로 받은 값)
+      description: 안내에 보이는 외부 주소는 `PUBLIC_API_URL` — **재구성에서는 Funnel 주소**(#9).
+      security: []
+      x-priority: P2
+      x-uc: UC11
+      responses:
+        "200":
+          description: 안내
+          content: { application/json: { schema: { $ref: "#/components/schemas/ApiDocs" } } }
+
+  /api/key-applications:
+    post:
+      tags: [api-guide]
+      summary: 외부 API 키 신청 (바로 발급 — 키 원문은 이 응답에서 한 번만)
+      x-priority: P2
+      x-uc: UC15
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, organization, contact_email, purpose, consent]
+              properties:
+                name: { type: string }
+                organization: { type: string }
+                contact_email: { type: string, format: email }
+                purpose: { type: string }
+                consent: { const: true }
+      responses:
+        "201":
+          description: 발급됨
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [application_no, api_key, key_prefix, call_limit_per_hour]
+                properties:
+                  application_no: { type: string, description: "`A-` + 무작위 10자" }
+                  api_key: { type: string, description: "`gk_` + base62 43자 — DB 에는 SHA-256 만 저장" }
+                  key_prefix: { type: string, description: 앞 8글자 (`gk_` 포함) }
+                  call_limit_per_hour: { type: integer }
+        "400": { $ref: "#/components/responses/Error" }
+
+  # ===========================================================================
+  # 관리자 API (/admin) — 외부 비공개 · 운영자 쿠키 `gugak_admin` (P3)
+  #   backend/src/admin/*.ts · INTERFACES §5
+  #   접속 주소가 ADMIN_ALLOWED_CIDRS 밖이면 403 ADMIN_NETWORK_DENIED(G5).
+  #   모든 변경은 change_history 에 남는다. 응답 상세 모양은 1차에서 v0.1.1 코드를 따른다(관리자 화면 이슈에서 보강).
+  # ===========================================================================
+  /admin/login:
+    post:
+      tags: [admin]
+      summary: 운영자 로그인
+      security: []
+      x-priority: P3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login_id, password]
+              properties:
+                login_id: { type: string }
+                password: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/AdminObject" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }   # ADMIN_NETWORK_DENIED (G5)
+        "423": { $ref: "#/components/responses/Error" }
+  /admin/logout:
+    post:
+      tags: [admin]
+      summary: 운영자 로그아웃
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "204": { description: 로그아웃 } }
+  /admin/me:
+    get:
+      tags: [admin]
+      summary: 운영자 정보
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" }, "401": { $ref: "#/components/responses/Error" } }
+
+  # --- 계정 · 권한 (UC17) ---
+  /admin/accounts:
+    get:
+      tags: [admin]
+      summary: 계정 목록 (50개씩)
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: role, in: query, schema: { enum: [user, operator, none] } }
+        - { name: status, in: query, schema: { enum: [active, locked, disabled] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/accounts/{id}:
+    get:
+      tags: [admin]
+      summary: 계정 상세 (요청 20 · 키 · 변경 이력 · 인증 사건 20)
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/AccountId" }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" }, "404": { $ref: "#/components/responses/Error" } }
+  /admin/accounts/{id}/reveal-email:
+    post:
+      tags: [admin]
+      summary: 전체 이메일 보기 (조회 이력 남김)
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/AccountId" }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/accounts/{id}/roles:
+    put:
+      tags: [admin]
+      summary: 역할 주기 · 빼기 (user · operator 만, 자기 · 마지막 operator 보호 G16)
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/AccountId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                grant: { type: array, items: { enum: [user, operator] } }
+                revoke: { type: array, items: { enum: [user, operator] } }
+      responses:
+        "200": { $ref: "#/components/responses/AdminObject" }
+        "400": { $ref: "#/components/responses/Error" }   # ROLE_NOT_ASSIGNABLE
+        "409": { $ref: "#/components/responses/Error" }   # ADMIN_SELF_PROTECTED · ADMIN_LAST_OPERATOR
+  /admin/accounts/{id}/unlock:
+    post:
+      tags: [admin]
+      summary: 잠금 풀기
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/AccountId" }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/accounts/{id}/disable:
+    post:
+      tags: [admin]
+      summary: 사용 중지 (열린 세션 모두 종료)
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/AccountId" }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" }, "409": { $ref: "#/components/responses/Error" } }
+  /admin/accounts/{id}/enable:
+    post:
+      tags: [admin]
+      summary: 다시 사용
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/AccountId" }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/permissions:
+    get:
+      tags: [admin]
+      summary: 역할 → UC 권한표 (읽기 전용)
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/auth-events:
+    get:
+      tags: [admin]
+      summary: 인증 사건 (G5 · G13~G16, 최대 200줄)
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters:
+        - { name: gate, in: query, schema: { type: string } }
+        - { name: hours, in: query, schema: { type: integer } }
+        - { name: account, in: query, schema: { type: integer } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+
+  # --- 접근 키 · 키 신청 · 라이선스 (S4-B) ---
+  /admin/keys:
+    get:
+      tags: [admin]
+      summary: 접근 키 목록
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/keys/{id}/revoke:
+    post:
+      tags: [admin]
+      summary: 접근 키 폐기
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/KeyId" }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/keys/{id}/limit:
+    put:
+      tags: [admin]
+      summary: 접근 키 시간당 호출 한도 바꾸기
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/KeyId" }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/service-key:
+    post:
+      tags: [admin]
+      summary: 서비스 전용 키 발급 (이전 키 폐기 · 원문은 이 응답에서 한 번만)
+      description: |
+        backend → model-api 호출(`X-API-Key`)에 쓰는 키. 발급 뒤 `.env` 의 `SERVICE_API_KEY` 에 넣는다.
+        **관리자 API 가 늦어지면 이 기능만 명령줄 도구로 먼저 만든다**(#5 ※).
+      security: [{ admin: [] }]
+      x-priority: P1
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/applications:
+    get:
+      tags: [admin]
+      summary: 키 신청 목록 (가린 값만)
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/applications/{no}/archive:
+    post:
+      tags: [admin]
+      summary: 키 신청 보관 처리
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ name: no, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/license:
+    get:
+      tags: [admin]
+      summary: MP3 라이선스 확인 상태
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+    put:
+      tags: [admin]
+      summary: MP3 라이선스 확인 (G7 해제 기록)
+      security: [{ admin: [] }]
+      x-priority: P3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [confirmed], properties: { confirmed: { type: boolean } } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+
+  # --- 처리 설정 · 모델 등록부 ---
+  /admin/settings:
+    get:
+      tags: [admin]
+      summary: 처리 설정 현재 판본 + 엔진 순서
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+    put:
+      tags: [admin]
+      summary: 처리 설정 바꾸기 (바뀐 값만 → 새 판본 → model-api 다시 읽기)
+      security: [{ admin: [] }]
+      x-priority: P3
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" }, "400": { $ref: "#/components/responses/Error" } }
+  /admin/models:
+    get:
+      tags: [admin]
+      summary: 모델 등록부 + 실시간 상태
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+    post:
+      tags: [admin]
+      summary: 모델 등록
+      security: [{ admin: [] }]
+      x-priority: P3
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses: { "201": { $ref: "#/components/responses/AdminObject" }, "422": { $ref: "#/components/responses/Error" } }
+  /admin/models/ollama-available:
+    get:
+      tags: [admin]
+      summary: Ollama 서버의 등록 가능 모델 (10GB 이하 · :cloud 아님)
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/models/{name}:
+    parameters: [{ name: name, in: path, required: true, schema: { type: string } }]
+    put:
+      tags: [admin]
+      summary: 모델 바꾸기 (enabled · display_name · provider_ref · config)
+      security: [{ admin: [] }]
+      x-priority: P3
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+    delete:
+      tags: [admin]
+      summary: 모델 등록 해제 (설정 순서에서 쓰는 중이면 422 MODEL_INVALID)
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "204": { description: 해제됨 }, "422": { $ref: "#/components/responses/Error" } }
+  /admin/models/{name}/load:
+    post:
+      tags: [admin]
+      summary: 모델 불러오기(워밍업) 시작
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ name: name, in: path, required: true, schema: { type: string } }]
+      responses: { "202": { $ref: "#/components/responses/AdminObject" } }
+
+  # --- 운영 현황 · 작업 · 감사 · 평가 ---
+  /admin/metrics:
+    get:
+      tags: [admin]
+      summary: 운영 지표
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/jobs:
+    get:
+      tags: [admin]
+      summary: 작업 목록
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters:
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+        - { name: channel, in: query, schema: { enum: [web, api] } }
+        - { name: route, in: query, schema: { enum: [recognize, direct, fallback] } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/jobs/{no}:
+    get:
+      tags: [admin]
+      summary: 작업 상세 (엔진 시도 · 점검 항목 · 단계 시간)
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" }, "404": { $ref: "#/components/responses/Error" } }
+  /admin/model-api-status:
+    get:
+      tags: [admin]
+      summary: model-api 상태 · 버전
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/audit:
+    get:
+      tags: [admin]
+      summary: 변경 이력 전체
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/evaluation:
+    get:
+      tags: [admin]
+      summary: 평가 지표
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/evaluation/run:
+    post:
+      tags: [admin]
+      summary: 평가 실행 시작
+      security: [{ admin: [] }]
+      x-priority: P3
+      responses: { "202": { $ref: "#/components/responses/AdminObject" } }
+
+  # --- 공유 악보 관리 (UC19) ---
+  /admin/shared-scores:
+    get:
+      tags: [admin]
+      summary: 공유 악보 목록
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters:
+        - { name: status, in: query, schema: { enum: [all, visible, taken_down, unshared, expired] } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/shared-scores/{shareNo}/take-down:
+    post:
+      tags: [admin]
+      summary: 공유 악보 내리기
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/ShareNo" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { reason: { type: string } } }
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+  /admin/shared-scores/{shareNo}/restore:
+    post:
+      tags: [admin]
+      summary: 내린 공유 악보 되살리기
+      security: [{ admin: [] }]
+      x-priority: P3
+      parameters: [{ $ref: "#/components/parameters/ShareNo" }]
+      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+
+# =============================================================================
+# 공통 구성 요소
+# =============================================================================
+components:
+  securitySchemes:
+    # 사용자 — 익명 세션 쿠키 (없으면 서버가 발급). 재구성 · 외부 공개에서는 Secure 속성 추가 (#5 C5)
+    session:
+      type: apiKey
+      in: cookie
+      name: gugak_sid
+    # 운영자 — 관리자 쿠키 (외부 비공개)
+    admin:
+      type: apiKey
+      in: cookie
+      name: gugak_admin
+
+  parameters:
+    RequestNo:
+      name: no
+      in: path
+      required: true
+      description: 요청 번호 `R-MMDD-XXXXXXXX`
+      schema: { type: string, pattern: "^R-\\d{4}-[A-HJ-NP-Z2-9]{8}$" }
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      description: 내보내기 작업 번호 (`ExportTask.id`)
+      schema: { type: string }
+    ShareNo:
+      name: shareNo
+      in: path
+      required: true
+      schema: { type: string }
+    AccountId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+    KeyId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+
+  responses:
+    # 모든 오류 — 코드 · 문구 · HTTP 상태는 shared/error-codes.json (v0.1.1 기준 70개)
+    Error:
+      description: 오류 (`ErrorResponse`). 429 · 423 등 `retry_after` 가 있으면 `Retry-After` 머리글
+      headers:
+        Retry-After:
+          description: 다시 시도할 때까지 초
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    # 관리자 API 응답 — 1차는 v0.1.1 코드 모양 그대로 (관리자 화면 이슈에서 스키마 보강)
+    AdminObject:
+      description: 관리자 응답 (모양은 proto_type/src/app/backend/src/admin/*.ts · INTERFACES §5)
+      content:
+        application/json:
+          schema: { type: object }
+
+  schemas:
+    # --- 공통 값 이름 (INTERFACES §1) ---
+    ScoreType:
+      enum: [staff, jeongganbo]
+      description: staff = 오선보 · jeongganbo = 정간보
+    FileKind:
+      enum: [image, pdf, midi, musicxml]
+      description: 새 요청은 image · pdf 만 (midi · musicxml 은 이전 행 · 공유 악보로 만든 요청)
+    RequestState:
+      enum: [received, queued, converting, awaiting_type_answer, completed, service_down, expired]
+      description: expired 는 저장하지 않고 보관 기간으로 계산해서 덮어쓴다
+    Route:
+      enum: [recognize, direct, fallback]
+    ResultBand:
+      enum: [trust, caution, fallback, direct]
+    ValidityGrade:
+      enum: [trust, caution, distrust]
+    ExportFormat:
+      enum: [mp3, pdf, midi, musicxml]
+
+    # --- 오류 (INTERFACES §2) ---
+    ErrorResponse:
+      type: object
+      required: [error, api_version]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, examples: [UPLOAD_TOO_LARGE] }
+            message: { type: string }
+            fix: { type: [string, "null"], description: 사용자가 할 일 }
+            gate: { type: [string, "null"], description: "검사 지점 (G1 업로드 · G12 요청 한도 · G13 권한 …)" }
+            retry_after: { type: [string, "null"], format: date-time }
+            details: { type: object }
+        api_version: { const: v1 }
+
+    # --- 계정 ---
+    Me:
+      type: object
+      required: [account, roles]
+      properties:
+        account:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [account_id, login_id, display_name]
+              properties:
+                account_id: { type: integer }
+                login_id: { type: string, description: 이메일 }
+                display_name: { type: string }
+        roles: { type: array, items: { enum: [user, operator] } }
+
+    # --- 요청 상태 (INTERFACES §4 RequestStatus) ---
+    RequestStatus:
+      type: object
+      required: [id, file_kind, score_type, status, status_label, queue_position, route, result_band, fallback,
+                 fallback_reason, fallback_message, retry_hint, type_mismatch, detected_type, validity_grade, engine,
+                 received_at, expires_at, remaining_seconds, deadline_at, model_wait, has_original_instruments,
+                 page_count, pages, notice]
+      properties:
+        id: { type: string, description: 요청 번호 }
+        file_kind: { $ref: "#/components/schemas/FileKind" }
+        score_type: { oneOf: [{ $ref: "#/components/schemas/ScoreType" }, { type: "null" }] }
+        status: { $ref: "#/components/schemas/RequestState" }
+        status_label: { type: string, description: "접수 · 대기 · 변환 중 · 종류 확인 · 완료 · 대체 · 서비스 중단 · 만료" }
+        queue_position: { type: [integer, "null"] }
+        route: { $ref: "#/components/schemas/Route" }
+        result_band: { oneOf: [{ $ref: "#/components/schemas/ResultBand" }, { type: "null" }] }
+        fallback: { type: boolean }
+        fallback_reason:
+          type: [string, "null"]
+          description: "대문자 코드 — RECOGNITION_FAILED · TIMEOUT · ENGINE_DOWN · NO_NOTES · NO_SCORE_STRUCTURE · UNTRUSTED_RESULT · USER_REQUEST"
+        fallback_message: { type: [string, "null"] }
+        retry_hint: { type: [string, "null"] }
+        type_mismatch: { type: boolean }
+        detected_type: { oneOf: [{ $ref: "#/components/schemas/ScoreType" }, { type: "null" }] }
+        validity_grade: { oneOf: [{ $ref: "#/components/schemas/ValidityGrade" }, { type: "null" }] }
+        engine:
+          oneOf:
+            - type: "null"
+            - { type: object, required: [name, version], properties: { name: { type: string }, version: { type: string } } }
+        received_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: 보관 기한 (접수 + 24시간) }
+        remaining_seconds: { type: integer }
+        deadline_at: { type: string, format: date-time, description: "처리 마감 — 처리 시작 전이면 접수 + 제한 × 쪽 수, 시작했으면 시작 + 제한 × 쪽 수" }
+        model_wait:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [model, display_name, state, expected_seconds, elapsed_seconds]
+              properties:
+                model: { type: string }
+                display_name: { type: string }
+                state: { enum: [cold, loading] }
+                expected_seconds: { type: [integer, "null"] }
+                elapsed_seconds: { type: [integer, "null"] }
+        has_original_instruments: { type: boolean }
+        pdf_page_count: { type: [integer, "null"] }
+        midi_available: { type: [boolean, "null"], description: 지금 결과에 원본 MIDI 가 있는가 (결과 전이면 null) }
+        from_shared: { type: boolean }
+        validity_items:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                note_count: { type: number }
+                beat_sum: { type: number }
+                range_leap: { type: number }
+                yulmyeong_ratio: { type: number }
+                engine_confidence: { type: number }
+        page_count: { type: integer, minimum: 1 }
+        pages: { type: array, items: { $ref: "#/components/schemas/PageStatus" } }
+        notice:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [code, message, pages, converted, failed_pages]
+              description: "일부 쪽만 못 읽었을 때 — \"N쪽 중 M쪽 변환했어요 (못 읽은 쪽: 3·7쪽)\""
+              properties:
+                code: { const: PAGES_PARTIAL }
+                message: { type: string }
+                pages: { type: integer }
+                converted: { type: integer }
+                failed_pages: { type: array, items: { type: integer } }
+
+    PageStatus:
+      type: object
+      required: [page_no, file_no, source, outcome, fallback_reason, fallback_message, validity_grade]
+      properties:
+        page_no: { type: integer }
+        file_no: { type: integer }
+        source: { enum: [file, pdf_page] }
+        outcome: { enum: [pending, converted, failed] }
+        fallback_reason: { type: [string, "null"] }
+        fallback_message: { type: [string, "null"] }
+        validity_grade: { oneOf: [{ $ref: "#/components/schemas/ValidityGrade" }, { type: "null" }] }
+        short_edge_px: { type: [integer, "null"] }
+        upscaled_short_side_px: { type: [integer, "null"], description: 작은 사진을 늘려 읽었으면 늘린 짧은 변 }
+
+    # --- 결과 악보 · 편집 (INTERFACES §3, packages/score-core) ---
+    ScoreResponse:
+      type: object
+      required: [scoredoc, musicxml, has_original_instruments, fallback, fallback_reason, fallback_message, retry_hint]
+      properties:
+        scoredoc: { $ref: "#/components/schemas/ScoreDoc" }
+        musicxml: { type: string }
+        has_original_instruments: { type: boolean }
+        fallback: { type: boolean }
+        fallback_reason: { type: [string, "null"] }
+        fallback_message: { type: [string, "null"] }
+        retry_hint: { type: [string, "null"] }
+
+    ScoreDoc:
+      type: object
+      description: score-core 악보 문서 (브라우저 · 백엔드 공용). parts[0] = 원래 선율
+      required: [version, ppq, tempoBpm, timeSignature, keyFifths, parts]
+      properties:
+        version: { const: 1 }
+        title: { type: string }
+        ppq: { type: integer, description: 4분음표당 틱 (480) }
+        tempoBpm: { type: number }
+        timeSignature:
+          type: object
+          required: [beats, beatType]
+          properties: { beats: { type: integer }, beatType: { type: integer } }
+        keyFifths: { type: integer, minimum: -7, maximum: 7 }
+        parts:
+          type: array
+          items:
+            type: object
+            required: [id, name, instrument, isPercussion, volume, origin, notes]
+            properties:
+              id: { type: string, examples: [P1] }
+              name: { type: string }
+              instrument: { type: string, description: "악기 코드 (shared/instruments.json)" }
+              sourceInstrument:
+                oneOf:
+                  - type: "null"
+                  - { type: object, properties: { name: { type: string }, program: { type: [integer, "null"] } } }
+              isPercussion: { type: boolean }
+              volume: { type: integer, minimum: 0, maximum: 127 }
+              origin: { enum: [original, melody_copy] }
+              notes:
+                type: array
+                items:
+                  type: object
+                  required: [id, startTick, durationTicks, pitch, velocity]
+                  properties:
+                    id: { type: string, examples: [P1-n12] }
+                    startTick: { type: integer }
+                    durationTicks: { type: integer }
+                    pitch: { type: integer, description: MIDI 음번호 }
+                    velocity: { type: integer, minimum: 1, maximum: 127 }
+
+    EditOp:
+      description: 편집 연산 (part 는 0부터). 규칙은 score-core `validateOps` · `applyOps`
+      oneOf:
+        - { type: object, required: [op, instrument], properties: { op: { const: add_instrument }, instrument: { type: string } } }
+        - { type: object, required: [op, part], properties: { op: { const: remove_track }, part: { type: integer } }, description: 추가한 트랙(melody_copy)만 }
+        - { type: object, required: [op, part, instrument], properties: { op: { const: change_instrument }, part: { type: integer }, instrument: { type: string } }, description: 타악기는 타악 성부에만 · 선율 악기는 선율 성부에만 }
+        - { type: object, required: [op, semitones], properties: { op: { const: transpose }, semitones: { type: integer } } }
+        - { type: object, required: [op, part, velocity], properties: { op: { const: set_track_volume }, part: { type: integer }, velocity: { type: integer } } }
+        - { type: object, required: [op, note_id, velocity], properties: { op: { const: set_note_volume }, note_id: { type: string }, velocity: { type: integer } } }
+        - { type: object, required: [op, bpm], properties: { op: { const: set_tempo }, bpm: { type: integer, minimum: 20, maximum: 300 } } }
+        - { type: object, required: [op, note_id, midi_pitch], properties: { op: { const: set_note_pitch }, note_id: { type: string }, midi_pitch: { type: integer } } }
+
+    EditSummary:
+      type: object
+      description: score-core `summarizeOps(ops)` 결과 (편집 사용 지표용)
+
+    ExportTask:
+      type: object
+      required: [id, format, basis, status, queue_position, failure_reason, notices, download_url, renderer]
+      properties:
+        id: { type: string }
+        format: { $ref: "#/components/schemas/ExportFormat" }
+        basis: { enum: [original, edited] }
+        status: { enum: [queued, rendering, ready, failed] }
+        queue_position: { type: [integer, "null"] }
+        failure_reason: { enum: [RENDER_FAILED, RENDER_TIMEOUT, RENDERER_MISSING, ENGINE_DOWN, null] }
+        notices: { type: array, items: { type: string } }
+        download_url: { type: [string, "null"] }
+        renderer: { type: [string, "null"] }
+
+    # --- 악기 · 추천 ---
+    Instrument:
+      type: object
+      required: [id, name, group, gm_program, percussion, range_low, range_high, soundfont]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        group: { enum: [gugak, other, original] }
+        gm_program: { type: [integer, "null"], description: 내려받는 MIDI · MusicXML 용 GM 호환 번호 }
+        bank: { type: [integer, "null"], description: "서비스 안 연주 번호 — 일반 0(GM) · 국악기 1 · 장구 · 북 128" }
+        program: { type: [integer, "null"] }
+        percussion: { type: boolean }
+        range_low: { type: [integer, "null"] }
+        range_high: { type: [integer, "null"] }
+        soundfont: { type: [string, "null"] }
+
+    InstrumentCatalog:
+      type: object
+      required: [default_set, gugak, others]
+      properties:
+        default_set: { type: array, items: { type: string }, examples: [[gayageum, janggu]] }
+        gugak: { type: array, items: { $ref: "#/components/schemas/Instrument" } }
+        others: { type: array, items: { $ref: "#/components/schemas/Instrument" } }
+
+    InstrumentChoiceBody:
+      type: object
+      required: [mode]
+      properties:
+        mode: { enum: [default, recommend, original, custom] }
+        recommendation_index: { type: integer, minimum: 0 }
+        tracks:
+          type: array
+          items:
+            type: object
+            required: [part, instrument]
+            properties: { part: { type: integer }, instrument: { type: string } }
+
+    Recommendation:
+      type: object
+      required: [available, reason, pending, combinations, model, features]
+      properties:
+        available: { type: boolean }
+        reason: { type: [string, "null"] }
+        pending: { type: boolean, description: LLM 준비 중이라 규칙표 결과만 먼저 줌 }
+        combinations:
+          type: array
+          items:
+            type: object
+            required: [label, instruments]
+            properties:
+              label: { type: string, examples: ["아쟁 · 대금 · 장구"] }
+              instruments: { type: array, items: { type: string } }
+              reason: { type: string }
+        model:
+          oneOf:
+            - type: "null"
+            - { type: object, properties: { name: { type: string }, version: { type: string }, provider: { type: string } } }
+        features:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                tempo: { type: string }
+                bpm: { type: [number, "null"] }
+                mode: { type: string }
+                range: { type: string }
+                density: { type: [number, "null"] }
+
+    ModelStatusPublic:
+      type: object
+      required: [checked_at, model_api, models]
+      properties:
+        checked_at: { type: string, format: date-time }
+        model_api: { enum: [running, stopped] }
+        models:
+          type: array
+          items:
+            type: object
+            required: [name, display_name, kind, provider, state, expected_seconds]
+            properties:
+              name: { type: string }
+              display_name: { type: string }
+              kind: { enum: [omr_staff, omr_jeongganbo, recommend] }
+              provider: { enum: [venv, ollama, builtin] }
+              state: { enum: [ready, cold, loading, failed, unavailable] }
+              expected_seconds: { type: [integer, "null"] }
+
+    # --- 내 악보 · 공유 ---
+    MyScoreItem:
+      type: object
+      required: [id, title, file_name, score_type, created_at, expires_at, remaining_seconds, edited, edit_ops, midi_available, fallback]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        file_name: { type: [string, "null"] }
+        score_type: { oneOf: [{ $ref: "#/components/schemas/ScoreType" }, { type: "null" }] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        remaining_seconds: { type: integer }
+        edited: { type: boolean }
+        edit_ops: { type: [array, "null"], items: { $ref: "#/components/schemas/EditOp" } }
+        midi_available: { type: boolean }
+        fallback: { type: boolean }
+        from_shared: { type: boolean }
+        from_example: { type: boolean }
+
+    ShareState:
+      oneOf:
+        - type: object
+          required: [shared]
+          properties: { shared: { const: false } }
+        - type: object
+          required: [shared, share_no, title, shared_at, taken_down]
+          properties:
+            shared: { const: true }
+            share_no: { type: string }
+            title: { type: string }
+            shared_at: { type: string, format: date-time }
+            expires_at: { type: string, format: date-time, description: 공유 + 3일 }
+            taken_down: { type: boolean }
+
+    SharedScoreList:
+      type: object
+      required: [sort, items, has_more]
+      properties:
+        sort: { enum: [likes, recent] }
+        has_more: { type: boolean }
+        items:
+          type: array
+          items:
+            type: object
+            required: [share_no, title, score_type, shared_at, likes, liked_by_me]
+            properties:
+              share_no: { type: string }
+              title: { type: string }
+              score_type: { $ref: "#/components/schemas/ScoreType" }
+              shared_at: { type: string, format: date-time }
+              expires_at: { type: [string, "null"], format: date-time }
+              example: { type: boolean, description: 예시 공유 악보 }
+              likes: { type: integer }
+              liked_by_me: { type: boolean }
+
+    SharedScoreBody:
+      type: object
+      required: [share_no, title, score_type, musicxml]
+      properties:
+        share_no: { type: string }
+        title: { type: string }
+        score_type: { $ref: "#/components/schemas/ScoreType" }
+        musicxml: { type: string }
+
+    # --- API 안내 ---
+    ApiDocs:
+      type: object
+      required: [server_status, spec_source, checked_at, endpoints, guideline, manual]
+      properties:
+        server_status: { type: string }
+        spec_source: { type: string, description: "live | last_known …" }
+        checked_at: { type: [string, "null"], format: date-time }
+        endpoints:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              method: { type: string }
+              path: { type: string }
+              summary: { type: string }
+              description: { type: string }
+              example: { type: string }
+        guideline: { type: object }
+        manual: { type: object }
