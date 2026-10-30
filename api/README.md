@@ -50,15 +50,19 @@
 ## Nginx 설정 나누기 (#21 · #22)
 
 ```
-services/frontend/nginx/default.conf   황송해 — 화면 정적 파일 · 새로고침 시 화면 유지 · 관리자 server 블록 · 캐시
-                                        └ 끝에 include /etc/nginx/klassic/*.conf;
-deploy/nginx/proxy.conf                팀장 — /api → backend · /api/v1 → model-api · /soundfonts · 실제 접속 주소 ·
-                                        업로드 크기 · 대기 시간 · /api/v1/internal 차단
+services/frontend/nginx/default.conf   황송해 — 화면 정적 파일 · 새로고침 시 화면 유지 · 캐시
+   ├ 사용자 server (8080 → 호스트 9603)  끝에 include /etc/nginx/klassic/*.conf;
+   └ 관리자 server (8081 → 127.0.0.1:26201) 끝에 include /etc/nginx/klassic/admin/*.conf;
+deploy/nginx/proxy.conf                팀장 — 사용자 server: /api → web · /api/v1 → model-api · /soundfonts ·
+                                        /api/v1/internal · /admin 404 · 실제 접속 주소 · 업로드 크기 · 대기 시간
+deploy/nginx/admin/admin.conf          팀장 — 관리자 server: /admin/* → admin
 ```
 
 - 프론트 이미지는 `default.conf` 로 굽고, `deploy/nginx/` 는 실행할 때 `/etc/nginx/klassic:ro` 로 붙인다.
 - 둘이 맞물리는 곳은 `services/frontend/compose.yaml` 의 볼륨 한 줄뿐이다 (처음 한 번 황송해가 쓰고 바꾸지 않는다).
+- 관리자 경로는 `admin/` 폴더에만 둔다 — 사용자 server 의 `*.conf` 는 하위 폴더를 읽지 않으므로, 관리자 API 가 외부 공개 쪽에 실수로 들어가지 않는다 (2026-10-30 황송해 제안).
 - model-api 경로는 계약(`model-api.yaml`)으로 약속하고, 예은은 Nginx 파일을 고치지 않는다.
+- **서비스 이름 · 컨테이너 안 포트 약속** (#22 ↔ #23 · #24 compose): `web` 9523 · `admin` 26101 · `model-api` 9543. Nginx 는 이 이름을 요청 때마다 Docker DNS 로 찾으므로, 서비스가 아직 없어도 뜨고 그 경로만 502 JSON 을 돌려준다.
 
 ## 작업 규칙
 
