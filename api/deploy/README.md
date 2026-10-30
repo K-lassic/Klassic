@@ -1,20 +1,23 @@
 # deploy (담당: 팀장 @majoongcheon)
 
-DB · gateway · 외부 공개 · 운영 설정.
+DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 ## 외부 공개 — Tailscale Funnel
 
 ```
-인터넷 ──HTTPS──▶ Tailscale Funnel (<기기이름>.<tailnet>.ts.net)
-                     └─▶ gateway ─┬─ /api/v1/*  ─▶ model-api
-                                  ├─ /api/*     ─▶ backend(web)
-                                  └─ 그 밖      ─▶ frontend
-관리자 ──▶ 127.0.0.1:<관리자 포트> ─▶ backend(admin) · 관리자 화면   (외부 비공개)
+인터넷 ──HTTPS──▶ Tailscale Funnel (klassic.tailafa5c2.ts.net)
+                     └─▶ 127.0.0.1:9603 Nginx(frontend 이미지) ─┬─ /api/v1/*      ─▶ model-api
+                                                               ├─ /api/* · /soundfonts/* ─▶ backend(web)
+                                                               └─ 그 밖           ─▶ 화면 정적 파일
+관리자 ──▶ 127.0.0.1:26201 Nginx 관리자 server ─┬─ /admin/* ─▶ backend(admin)       (외부 비공개)
+                                               └─ admin.html
 ```
+
+- 입구는 **Nginx 하나**다 (2026-10-30 2안 확정 — Node gateway 없음). 경로 나누기는 `deploy/nginx/proxy.conf`(팀장), 화면 서빙은 `services/frontend/nginx/default.conf`(황송해) → [api/README.md](../README.md) 「Nginx 설정 나누기」
 
 - 도메인 없이 `*.ts.net` 주소와 HTTPS 인증서를 받는다. 공유기 포트를 열지 않는다.
 - **Tailscale 은 Windows 앱(서비스)으로 돌린다** (#9 결정). 컨테이너로 돌리지 않으므로 인증 키(`TS_AUTHKEY`)가 필요 없다 — 로그인은 앱에서 사람이 한다.
-- 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 gateway 하나이고, 관리자 · 내부 포트(26101 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
+- 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(proto_type 9503 또는 api/ 9603)이고, 관리자 · 내부 포트(26101 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
 - Funnel 은 대역폭 제한이 있으므로 시연 · 소규모 사용 기준으로 본다.
 
 ### 켜기 · 끄기 (#9)
@@ -22,7 +25,7 @@ DB · gateway · 외부 공개 · 운영 설정.
 ```powershell
 pwsh api/deploy/funnel.ps1 status             # 로그인 상태 · 공개 주소
 pwsh api/deploy/funnel.ps1 start              # 예비 시연: proto_type gateway(9503) 공개
-pwsh api/deploy/funnel.ps1 start -Port <포트> # 재구성: api/ gateway 로 전환
+pwsh api/deploy/funnel.ps1 start -Port 9603   # 재구성: api/ 입구(Nginx)로 전환 (#48)
 pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 ```
 
@@ -53,7 +56,7 @@ pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 - 원인: Docker Desktop 포트 전달로 들어온 연결의 출발 주소가 `172.30.0.1` 이고, gateway 는 `GATEWAY_TRUSTED_PROXIES`(기본 `127.0.0.1,::1,192.168.0.19`)에서 온 요청의 `X-Forwarded-For` 만 믿는다.
 - 조치(코드 수정 없음): proto_type `.env` 에 `GATEWAY_TRUSTED_PROXIES=127.0.0.1,::1,172.30.0.1` → `docker compose up -d --force-recreate gateway` → 다시 대조하니 실제 공인 IP 와 일치.
   호스트 포트를 `127.0.0.1` 에만 공개하므로 `172.30.0.1` 로 들어오는 것은 이 PC 안(Tailscale · 로컬 브라우저)뿐이다.
-- **재구성(api/) 반영**: gateway · backend 의 신뢰 프록시를 설정값으로 두고, compose 네트워크 게이트웨이 주소를 넣는다 (백엔드 외부 공개 대응 이슈).
+- **재구성(api/) 반영**: Nginx `set_real_ip_from`(#22) · backend 신뢰 프록시(#37) 를 설정값으로 두고 compose 네트워크 게이트웨이 주소를 넣는다.
 
 **문제 2 — 로그아웃하면 공개가 끊김 (설정 필요)**
 
@@ -62,7 +65,7 @@ pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 
 ### 예비 시연 ↔ 재구성 전환
 
-- proto_type(v0.1.1)은 9503 을 쓴다. `api/` gateway 는 **다른 호스트 포트**로 띄워서 둘이 같이 떠 있게 한다.
+- proto_type(v0.1.1)은 9503 · 26101 을 쓴다. `api/` 는 **9603 · 26201**(`API_PUBLIC_PORT` · `API_ADMIN_PORT`)로 띄워서 둘이 같이 떠 있게 한다 (#20).
 - 발표에 쓸 쪽을 정하면 `start -Port <포트>` 로 Funnel 이 가리키는 곳만 바꾼다. 컨테이너는 끄지 않는다.
 
 ## 이 PC 서버 운영 체크
@@ -74,5 +77,5 @@ pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 
 ## 참고
 
-- `proto_type/src/app/ops/gateway.mjs` (127.0.0.1 고정 호출 → 서비스 이름 호출로 바꾼다)
-- `proto_type/docker-compose.yml` 의 `db` · `gateway`
+- `proto_type/src/app/ops/gateway.mjs` — 경로 규칙 · 내부 API 차단 · 대기 시간을 Nginx `proxy.conf` 로 옮긴다 (127.0.0.1 고정 호출 → 서비스 이름)
+- `proto_type/docker-compose.yml` 의 `db`
