@@ -1,5 +1,5 @@
 // 시험용 표본 파일 만들기: .mxl(손으로 쓴 MusicXML 을 압축) · 피아노 MIDI(@tonejs/midi 로 직접, ppq 96)
-// 실행: ../../node_modules/.bin/tsx scripts/make-fixtures.ts  (packages/score-core 에서)
+// 실행: npx --yes tsx@4.19.2 scripts/make-fixtures.ts  (api/packages/score-core 에서)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

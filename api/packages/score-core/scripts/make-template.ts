@@ -1,8 +1,8 @@
 // 대체 템플릿 만들기 (tasks T043, research R9, UC_02 BR-FBK-09): 「아리랑 (세마치장단)」 9/8 · 16마디 · 가야금 선율 + 장구.
 // (2026-09-30 박예은 팀장 결정·국악 검수) 임시였던 「굿거리장단 기본」(gutgeori-v1)을 바꾼다 — 옛 파일은 지우지 않는다(DB 옛 행이 가리킴).
 // 선율은 검수한 9/8 악보(PYE_국악검수/아리랑8분의9박자.jpg · 아리랑_세마치_이벤트표.md) 그대로 — 음높이·리듬을 바꾸지 않는다.
-// 실행: app/ 에서  node_modules/.bin/tsx packages/score-core/scripts/make-template.ts
-//   (TEMPLATE_OUT_DIR 를 주면 그 폴더에 쓴다 — 서비스 폴더에 넣기 전에 확인할 때)
+// 실행: api/packages/score-core 에서  TEMPLATE_OUT_DIR=<출력 폴더> npx --yes tsx@4.19.2 scripts/make-template.ts
+//   (재구성 구조에는 기본 출력 경로 api/assets/templates 가 없으므로 TEMPLATE_OUT_DIR 를 꼭 준다)
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
