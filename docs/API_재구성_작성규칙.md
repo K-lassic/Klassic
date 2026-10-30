@@ -232,7 +232,9 @@
 ## 8. 커밋 규칙
 
 - 커밋 메시지는 Conventional Commits 규칙을 따른다. (사용자 작업 지시)
-  - 예: `feat(model-api): add /version endpoint` · `build(docker): pin python 3.11-slim base` · `fix(gateway): call services by name instead of 127.0.0.1` · `docs: add API rework rules`
+  - **앞의 종류 · 범위만 영어, 설명은 한글로 쓴다** (2026-10-30 — GitHub 에 남기는 글은 한글). PR 제목 · 본문도 한글.
+  - 예: `feat(model-api): /version 경로 추가` · `build(docker): 기반 이미지를 python 3.11-slim 으로 고정` · `fix(nginx): 127.0.0.1 대신 서비스 이름으로 호출` · `docs: API 재구성 작성규칙 추가`
+  - 브랜치 이름 · 파일 이름 · 코드 안의 이름은 영어로 둔다.
 - 이미지 릴리스 태그와 Git 커밋을 연결한다 (`<버전>-g<짧은 커밋 해시>`). (M8-C)
 
 ---

@@ -135,7 +135,10 @@
      ```
    - 이미 push 한 브랜치는 rebase 하지 않는다. **강제 push(`--force`) 금지**, 특히 `main`.
    - PR 을 병합하기 전에도 GitHub 에서 "This branch is out-of-date" 가 보이면 먼저 `main` 을 합친다.
-2. 커밋 메시지는 Conventional Commits (`feat(backend): …` · `build(model-api): …` · `docs(contracts): …`).
+2. **GitHub 에 남기는 글은 한글로 쓴다** (2026-10-30 추가) — 커밋 메시지 · PR 제목 · PR / 이슈 본문 · 리뷰 댓글.
+   - 커밋 메시지 형식은 Conventional Commits. **앞의 종류 · 범위만 영어, 설명은 한글**: `feat(backend): 로그인할 때 세션을 새로 발급` · `build(model-api): 기반 이미지를 python 3.11-slim 으로 고정` · `docs(contracts): web-api 계약에 화면 대조 결과 반영`
+   - 종류: `feat` 기능 · `fix` 버그 수정 · `docs` 문서 · `build` 빌드 · Docker · `test` 시험 · `chore` 그 밖 · `refactor` 동작은 같고 구조만 바꿈
+   - 브랜치 이름 · 파일 이름 · 코드 안의 이름은 영어로 둔다 (도구 호환).
 3. 같은 파일을 함께 고치지 않는다:
    - 서비스 정의는 각 서비스 폴더의 `compose.yaml` (루트는 `include` 만)
    - 서비스마다 lock 파일 따로 · score-core 는 `file:` 경로로 연결
