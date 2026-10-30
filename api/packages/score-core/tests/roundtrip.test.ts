@@ -4,7 +4,7 @@ import {
   BUILTIN_DEFAULT_ENSEMBLE, BUILTIN_INSTRUMENTS, instrumentsCatalog, parseMidi, parseMusicXml, toMidi, toMusicXml, toMxl,
   type ScoreDoc,
 } from '../src/index.js';
-import { fixture, fixtureText, noteKey, partKey, sharedJson, templateFile } from './helpers.js';
+import { fixture, fixtureText, hasShared, noteKey, partKey, sharedJson, templateFile } from './helpers.js';
 
 const sources: [string, () => ScoreDoc][] = [
   ['템플릿 MusicXML', () => parseMusicXml(templateFile('gutgeori-v1.musicxml'))],
@@ -149,7 +149,7 @@ describe('쓰기 세부', () => {
 });
 
 describe('악기 목록', () => {
-  it('기본 악기 목록이 shared/instruments.json 과 같다', () => {
+  it.skipIf(!hasShared('instruments.json'))('기본 악기 목록이 shared/instruments.json 과 같다', () => {
     const shared = sharedJson('instruments.json');
     const pick = (i: Record<string, unknown>) => ({ code: i.code, name_ko: i.name_ko, gm_program: i.gm_program, bank: i.bank, program: i.program, is_percussion: i.is_percussion, range_low: i.range_low, range_high: i.range_high });
     expect(BUILTIN_INSTRUMENTS.map(pick)).toEqual(shared.instruments.map(pick));

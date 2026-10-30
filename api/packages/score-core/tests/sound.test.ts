@@ -5,7 +5,7 @@ import {
   BUILTIN_INSTRUMENTS, createScoreDoc, originalCode, parseMidi, serviceSound, toMidi, toMusicXml,
   type Part, type ScoreDoc,
 } from '../src/index.js';
-import { sharedJson } from './helpers.js';
+import { hasShared, sharedJson } from './helpers.js';
 
 function part(id: string, instrument: string, isPercussion = false): Part {
   return {
@@ -54,7 +54,7 @@ function channelEvents(bytes: Uint8Array): Ev[][] {
 }
 
 describe('서비스 음원 소리 번호 (결정 C11)', () => {
-  it('악기 목록의 bank·program 이 shared/instruments.json 과 같고 국악기와 일반 악기가 겹치지 않는다', () => {
+  it.skipIf(!hasShared('instruments.json'))('악기 목록의 bank·program 이 shared/instruments.json 과 같고 국악기와 일반 악기가 겹치지 않는다', () => {
     const shared = sharedJson('instruments.json');
     const pick = (i: Record<string, unknown>) => ({ code: i.code, bank: i.bank, program: i.program });
     expect(BUILTIN_INSTRUMENTS.map(pick)).toEqual(shared.instruments.map(pick));
