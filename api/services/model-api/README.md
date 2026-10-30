@@ -17,9 +17,150 @@
 
 `app/` · `tests/` · `pyproject.toml` · `uv.lock` · `Dockerfile` · `.dockerignore` · `compose.yaml` · `.env.example` · 이 README(Runbook)
 
+## 엔진 볼륨 구성·검사 — 이슈 #25
+
+### 무엇을 구성했나
+
+**기존 설치가 끝난 `klassic_engines` 볼륨을 읽기 전용으로 재사용한다.** #7 조사를 바탕으로 #25가 우선 검토하도록 지정한 방식이다. 6GB가량의 엔진을 다시 받거나 복사하지 않고, 기존 프로토타입의 파일·컨테이너·설치 상태를 유지한다.
+
+| 항목 | 구성 |
+|---|---|
+| 엔진 제공 | Docker 외부 볼륨 `klassic_engines`, `external: true` |
+| 소비 경로 | `ENGINES_DIR=/opt/gugak-engines`, 마운트 `read_only: true`, `nocopy: true` |
+| 아키텍처 | `linux/amd64` 고정. ARM64용으로 검증하지 않음 |
+| 검사 런타임 | 로컬의 `klassic/klassic-model-api:0.1.1`, Python 3.11.18·Debian bookworm 계열 |
+| 이번 검증 이미지 ID | `sha256:908e979868cd0c2275932488668757efe7b7f8459cae2d262a7678b8fabff749` |
+| 이미지 배포 상태 | 기존 로컬 이미지 사용. 이번 작업에서 Docker Hub에 게시하지 않음 |
+| 검사 실행 | `engine-selftest`, `tools` 프로필의 일회성 도구. uid/gid 1000, 네트워크 차단, 호스트 포트 없음 |
+| 쓰기 위치 | 임시 캐시만 컨테이너의 `/tmp` tmpfs에 기록. 루트 파일시스템과 엔진 볼륨은 읽기 전용 |
+
+`compose.yaml`의 `x-engine-runtime`은 이후 model-api가 사용할 환경변수·아키텍처·엔진 마운트의 공통 정의다. 이번 `engine-selftest`가 그 정의를 실제로 사용한다. YAML anchor는 같은 파일에서만 사용할 수 있다. **#24에서 HTTP용 `model-api` 서비스를 추가할 때 이 정의를 병합하고 `engine-volume` 마운트를 함께 재사용한다.** 서비스에서 `environment`나 `volumes`를 새로 선언하면 해당 매핑/목록은 덮어써지므로 환경 매핑은 `<<: *engine-environment`, 엔진 마운트는 `- *engine-volume`을 명시적으로 포함해야 한다.
+
+현재 `api/`에는 #24의 HTTP 서비스·Dockerfile이 아직 없다. #25는 기존 이미지의 엔진 어댑터를 사용한 **엔진 소비·영속성 검사**이며, 새 API의 인증·DB·`/health`·실인식 완료 보고가 아니다. 엔진 공통 구현과 실제 사진 인식은 #29·#30에서 검증한다. 검사 도구에는 기존 이미지의 API healthcheck를 적용하지 않는다.
+
+**이미지 포함 배포는 최종 목표로 유지한다.** 다만 #25에서는 기존 볼륨 재사용으로 발표 준비 시간을 줄인다. 새 볼륨+설치 컨테이너는 기존 설치 결과가 없는 PC의 대안이며, 현재 방식에서는 빈 볼륨을 자동 생성하거나 설치를 시작하지 않는다. CPU 전용 의존성 검증·엔진 포함 이미지 빌드·Docker Hub 버전 배포는 별도 후속 작업이다. 이미지 포함 방식으로 전환할 때는 엔진 볼륨이 이미지 속 파일을 가리지 않게 해야 한다.
+
+### 준비와 설정
+
+아래 명령은 **이 이슈 worktree의 `api/` 폴더**에서 PowerShell로 실행한다. 프로토타입 폴더에서 실행하지 않는다.
+
+```powershell
+# worktree 루트에서
+Set-Location api
+
+# 실제 설치 볼륨명·이미지·아키텍처를 확인한다.
+docker volume inspect klassic_engines --format '{{.Name}}'
+docker image inspect klassic/klassic-model-api:0.1.1 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+
+docker compose -p klassic-api-issue25 --profile tools config --quiet
+docker compose -p klassic-api-issue25 --profile tools run --rm engine-selftest
+if ($LASTEXITCODE -ne 0) { throw '엔진 selftest 실패: 출력 JSON의 error 확인' }
+```
+
+이 도구는 새 설치를 수행하지 않는다. 기존 엔진 설치가 끝난 볼륨과 Linux 이미지가 선행 조건이며, 서버 키·DB·프로토타입 `.env` 복사는 필요 없다. `pull_policy: never`라서 로컬 이미지가 없으면 명확하게 실패한다. 검사 때문에 비공개 이미지를 원격에서 내려받거나 새 이미지를 자동 빌드하지 않는다.
+
+이미지가 없으면 기존 프로젝트의 model-api 이미지 빌드 절차를 따른다. 명시적으로 재빌드하려면 저장소 루트에서 다음 명령을 사용할 수 있다. 실행할 서비스는 없으며, 엔진 볼륨을 변경하지 않는다. 빌드에는 네트워크와 의존성 다운로드가 필요하고, 기존 태그 덮어쓰기를 피하도록 별도 로컬 태그를 쓴다.
+
+```powershell
+# 저장소/worktree 루트에서 (필요한 PC에서만 수행)
+docker build -f proto_type/docker/model-api.Dockerfile -t klassic/klassic-model-api:issue25-check proto_type/src/app
+# 이후 api/에서 검사할 때 사용할 로컬 태그 선택
+$env:ENGINE_CHECK_IMAGE = 'klassic/klassic-model-api:issue25-check'
+```
+
+설정 형식은 이 폴더의 [.env.example](.env.example)에 있다. `api/`의 전체 compose로 실행할 때 이 파일이 자동으로 읽히는 것은 아니므로, 필요한 항목을 **`api/.env`에 추가하거나 현재 셸의 환경변수로 지정**한다. 기존 `.env` 파일을 덮어쓰지 않는다.
+
+| 설정 키 | 기본값 | 주의 |
+|---|---|---|
+| `ENGINES_VOLUME_NAME` | `klassic_engines` | Docker에서 확인한 실제 설치 완료 볼륨명. 없는 볼륨은 자동 생성하지 않음 |
+| `ENGINES_DIR` | `/opt/gugak-engines` | 엔진 가상환경의 절대 경로와 Python 심볼릭 링크 때문에 기존 볼륨 재사용 시 유지 |
+| `ENGINE_CHECK_IMAGE` | `klassic/klassic-model-api:0.1.1` | 로컬 Linux/amd64 model-api 이미지. 검증 이미지 ID와 비교하거나 별도 태그를 선택 |
+
+homr의 Python은 이미지 내부 `/usr/local/bin/python3.11`을 사용한다. 정간보의 Python 3.8.20은 볼륨 안 `.uv-python/cpython-3.8.20-linux-x86_64-gnu/`를 가리킨다. 엔진 폴더만 떼어 다른 위치에 마운트하거나 다른 Python·OS 이미지에 붙이면 실행 파일이 있어도 불러오지 못할 수 있다. Debian bookworm 계열의 기존 model-api 이미지로 검증했으며, 다른 런타임은 다시 selftest해야 한다.
+
+### selftest의 성공 기준
+
+[scripts/engine_selftest.py](scripts/engine_selftest.py)는 다음을 검사하고 마지막 줄에 상세 JSON을 출력한다. **파일이 있다는 사실만으로 성공 처리하지 않는다.**
+
+1. amd64·non-root·`ENGINES_DIR` 절대 경로·볼륨의 실제 읽기 전용 상태 확인
+2. 두 엔진의 기존 어댑터 `probe()`: 실행 파일·VERSION 확인
+3. homr의 핵심 ONNX·OCR 모델, 정간보의 가중치·설정·tokenizer와 설치 lock의 크기·SHA-256 기록
+4. 기존 어댑터의 `warmup()`으로 작업자를 기동해 homr 전사 모델·OCR 및 정간보 CPU 모델을 실제 로딩하고 `ready: true` 확인
+5. 엔진을 하나씩 로딩·종료해 동시 메모리 사용을 줄이고, 둘 다 성공해야 종료 코드 0 반환
+
+segnet ONNX는 존재·크기·해시를 검사한다. homr warmup은 실제 인식 시 사용하는 분할 모델의 추론까지 수행하지 않는다. 사진→MusicXML/MIDI의 정확성과 새 HTTP 서비스 준비 완료는 별도 검증 대상이다. 모델 로딩 제한은 엔진별 기본 120초이며, 필요한 경우 `run --rm engine-selftest --timeout 180`처럼 지정한다(최대 600초).
+
+### 컨테이너 재생성 후 보존 확인
+
+아래 명령을 두 번 실행한다. 성공한 검사 컨테이너도 종료되므로 `Exited (0)`이 정상이다. 매번 검사 컨테이너 ID가 달라지고 같은 볼륨에서 두 엔진이 모두 성공해야 한다.
+
+```powershell
+# api/에서. proto_type과 구별되는 Compose 프로젝트명 사용
+docker compose -p klassic-api-issue25 --profile tools up --force-recreate --abort-on-container-exit --exit-code-from engine-selftest
+if ($LASTEXITCODE -ne 0) { throw '엔진 selftest 실패' }
+docker compose -p klassic-api-issue25 --profile tools ps -a
+docker compose -p klassic-api-issue25 --profile tools logs --no-color --no-log-prefix engine-selftest
+```
+
+첫 실행의 마지막 JSON을 기록하고, 다음 실행 JSON의 두 `engines[].manifest`와 비교한다. 경로별 `bytes`·`sha256`이 모두 같아야 한다. 호스트에서 마운트 상태도 확인할 수 있다.
+
+```powershell
+$containerId = docker compose -p klassic-api-issue25 --profile tools ps -aq engine-selftest
+docker inspect $containerId --format '{{.Id}} {{.State.ExitCode}} {{json .Mounts}}'
+# engines의 Name=klassic_engines, RW=false와 종료 코드 0 확인
+
+# 검사 컨테이너만 정리. 외부 엔진 볼륨은 보존한다.
+docker compose -p klassic-api-issue25 --profile tools rm -f engine-selftest
+```
+
+`docker compose down -v`·볼륨 삭제·prune은 사용하지 않는다. 두 서비스가 같은 볼륨을 읽는 동안 프로토타입 설치기를 다시 실행하거나 가중치를 갱신하지 않는다. 새 엔진 판본을 시험할 때는 별도 볼륨/이미지를 준비하고 이름을 명시해 검증한다.
+
+### 2026-10-30 실행 결과
+
+기준 main `1c4192a`를 pull한 뒤 만든 `build/25-engine-volume-yeeun`에서 실행했다. Docker Compose v5.6.0, Linux/amd64, uid 1000, 네트워크 없음, 엔진 볼륨 `RW=false` 환경이다.
+
+| 검사 | 첫 성공 실행 | 컨테이너 재생성 후 | 판정 |
+|---|---:|---:|---|
+| homr 0.7.0 모델·OCR warmup | 7.616초 | 3.939초 | 두 번 모두 준비 신호 확인 |
+| 정간보 `e95045f`·checkpoint v1.0.0 CPU warmup | 9.744초 | 6.727초 | 두 번 모두 `ready=true`, `device=cpu` |
+| 전체 selftest | 17.360초 | 10.667초 | 두 번 모두 종료 코드 0 |
+| 컨테이너 ID 앞 12자리 | `6c049ba5968e` | `a1cdc0ae03a4` | 새 컨테이너로 교체됨 |
+| 두 엔진의 가중치·VERSION·lock | SHA-256 기록 | 모든 manifest 값 동일 | 기존 설치 결과 유지 |
+| 없는 엔진 경로 | `ENGINES_DIR=/missing-engines` | 종료 코드 1·`FileNotFoundError` | 원인을 구분해 실패 |
+| 없는 외부 볼륨 | 존재하지 않는 검사 전용 이름 | Compose 종료 코드 1·볼륨 미생성 | 빈 설치를 정상으로 오인하지 않음 |
+| homr 누락 | homr 경로에 빈 테스트 폴더를 읽기 전용으로 겹쳐 마운트 | homr 설치 오류·정간보 성공·전체 종료 코드 1 | 실제 볼륨을 바꾸지 않고 엔진별 오류 구분 |
+| 쓰기 가능한 잘못된 경로 | `ENGINES_DIR=/tmp` | 종료 코드 1·읽기 전용 마운트 필요 안내 | 공유 엔진 쓰기 방지 조건 확인 |
+
+첫 성공 전에 검사 스크립트의 Python 모듈 경로 누락으로 두 엔진이 `ModuleNotFoundError`를 보고했다. 검사 서비스에 `PYTHONPATH=/app/model-api`를 명시한 뒤 위 두 번의 검증을 통과했다. 엔진이나 프로토타입을 수정해 해결한 것이 아니다.
+
+원본 증거는 제출 대상 밖의 로컬 `.scratch/issue25/before-recreate.json`, `after-recreate.json`, `after-recreate.log`, `missing-path.log`, `missing-volume.log`에 보관했다. 실제 엔진 API 호출 결과는 아래 #7 조사 기록과 구분한다. 검사 뒤에도 기존 db·web·model-api는 healthy, gateway·admin은 실행 상태였다.
+
+추가 오류 검사 증거는 같은 폴더의 `missing-homr.log`, `writable-path.log`다. 전체 `api/compose.yaml`의 기본 설정·tools 프로필과 서비스 단독 compose 설정 검사, `git diff --check`를 통과했다. API 경로·요청·응답·DB 변경은 없으며 새 HTTP 서비스 빌드는 이번 범위에 해당하지 않는다.
+
+### 장애·복구와 완료 범위
+
+| 증상 | 확인 근거 | 조치 |
+|---|---|---|
+| `external volume ... not found` | `docker volume inspect`에 실제 이름 없음 | 설치 완료 볼륨의 이름으로 `ENGINES_VOLUME_NAME` 수정. 새 설치는 별도 빈 볼륨에서 프로젝트 설치 절차로 수행 |
+| 이미지 없음·아키텍처 불일치 | `docker image inspect`의 ID·OS·Architecture | 검증된 로컬 amd64 런타임 선택/빌드 후 재검사 |
+| `probe` 실패·가중치 누락/빈 파일·Python 없음 | JSON의 엔진별 `error`·`probe`, venv의 절대 링크 | 설치가 완료된 이전 볼륨/이미지로 되돌림. 공유 중인 볼륨을 즉석에서 덮어쓰지 않음 |
+| 모델 로딩 실패·시간 초과 | JSON 엔진별 `error`, 제한 시간 | 캐시/의존성/가중치·Docker 가용 메모리 확인. 엔진은 순차 로딩하며 제한 시간을 감으로 늘려 성공 처리하지 않음 |
+| 읽기 전용 검사 실패 | JSON `read_only`, Docker `Mounts[].RW` | Compose 마운트의 `read_only: true` 확인 후 검사 컨테이너 재생성 |
+
+롤백 시 설치 결과는 수정하지 않고 이전 `ENGINES_VOLUME_NAME`·`ENGINE_CHECK_IMAGE`를 다시 선택해 selftest한다. 최초 재사용 시점의 볼륨은 보존한다. 이후 엔진 포함 이미지를 배포하면 원본 볼륨을 유지한 채 마운트 제거 여부를 별도 검증한다.
+
+| #25 요구사항 | 결과 |
+|---|---|
+| 제공 방식 결정 | 기존 볼륨 read-only 재사용, 새 볼륨 설치 대안과 최종 이미지 배포 방향 기록 |
+| 경로 환경변수·amd64 | Compose 공통 정의·설정 형식·절대 경로 호환 조건 명시 |
+| 엔진별 selftest 문서화 | 실행·성공 판단·오류·복구·정리 절차 제공 |
+| 재생성 시 엔진 유지·homr/정간보 selftest | 동일 model-api 런타임을 쓰는 검사 컨테이너를 두 번 생성해 성공·해시 일치 확인. HTTP용 새 model-api 서비스 연결과 재생성 확인은 #24에서 이어서 수행 |
+
+변경은 담당 폴더의 Compose·README·설정 형식·검사 스크립트에 한정한다. 새 API 계약·인증·DB·렌더링을 변경하지 않았으며, add·커밋·푸시 전 예은님이 결과를 확인하는 단계다.
+
 ## 엔진 · 외부 의존성 Linux 전환 조사 — 이슈 #7
 
-조사일: **2026-10-30 KST**. [이슈 #7](https://github.com/K-lassic/Klassic/issues/7)의 조사 결과이며, 새 서비스 구현 완료 보고가 아니다.
+조사일: **2026-10-30 KST**. 아래는 [이슈 #7](https://github.com/K-lassic/Klassic/issues/7) 당시의 조사 기록이다. 현재 #25의 볼륨 구성·실행 결과는 위 절을 기준으로 한다. 이 조사 자체는 새 서비스 구현 완료 보고가 아니다.
 작업 브랜치는 `main` (`1b28998`)을 pull한 뒤 만든 `docs/7-engine-linux-analysis-yeeun`이다. 문서 골격은 해당 main의 README를 유지했으며, 제출 전 `main`의 추가 진행 사항(`3de62c7`)을 pull해 반영했다.
 
 실행 근거는 프로젝트 수행 전에 별도 폴더에서 검증한 `v0.1.1` (`1c943a4`) 프로토타입이다. **새 프로젝트의 `api/`는 현재 서비스 골격이며, 이 브랜치에서 새 model-api 서버를 구현하거나 실행한 것이 아니다.** 프로토타입 소스와 실행 환경은 그대로 둔다.
@@ -151,7 +292,7 @@ Audiveris가 11/5 이전에 기술적으로 불가능하다는 결론은 아니�
 | 4 | 버전별 배포 및 빈 환경 검증 | 새 태그와 digest 기록, 엔진 볼륨 없는 환경에서 pull/up, 인증 설정 후 두 인식·PDF·MP3·추천 확인. 검증 후 별도 승인 범위에서 게시 |
 | P3 | Audiveris Linux 설치·어댑터·대체 엔진 통합 | 별도 브랜치/환경에서 공식 런처 연동, 샘플 인식 및 headless·메모리·실패 전환·재시작 검사 |
 
-현재 새 프로젝트 `api/services/model-api/compose.yaml`은 `services: {}`인 골격이다. 이슈 #7에서 실행 서비스를 추가하는 것은 요구되지 않는다. 이미지 제작이나 CPU 전용 교체를 조사 완료의 근거로 대신 기록하지 않는다.
+이슈 #7 조사 당시 새 프로젝트 `api/services/model-api/compose.yaml`은 `services: {}`인 골격이었다. 이슈 #7에서 실행 서비스를 추가하는 것은 요구되지 않았다. 이미지 제작이나 CPU 전용 교체를 조사 완료의 근거로 대신 기록하지 않는다.
 
 ### 7. 재확인 방법과 검토 상태
 
