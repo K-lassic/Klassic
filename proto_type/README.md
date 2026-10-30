@@ -1,9 +1,9 @@
-# K-lassic proto_type — v0.1.0
+# K-lassic proto_type — v0.1.1
 
 국악보(오선보·정간보) 사진을 올리면 악보로 인식하고, 국악기로 연주(MP3)하고, 편집해서 PDF·MIDI·MusicXML 로 내려받는 서비스.
 기존에 만든 API(`src/`)를 **코드 수정 없이** Docker Compose 로 실행하도록 묶은 기준판이며, 이후 재구성의 출발점이다.
 
-- 버전: [`VERSION`](VERSION) = `0.1.0` · Git 태그 `v0.1.0` · 이미지 태그 `APP_TAG=0.1.0`
+- 버전: [`VERSION`](VERSION) = `0.1.1` · Git 태그 `v0.1.1` · 이미지 태그 `APP_TAG=0.1.1`
 - 원본 코드 출처: [`SOURCE.md`](SOURCE.md)
 
 ## 구성
@@ -44,7 +44,7 @@ web · admin · model-api ─▶ db (MariaDB 12, 내부 네트워크 전용)
 git lfs install
 git clone git@github.com:K-lassic/Klassic.git
 cd Klassic
-git checkout v0.1.0
+git checkout v0.1.1
 cd proto_type
 ```
 
@@ -123,7 +123,7 @@ docker compose ps
 
 원본은 macOS(Apple silicon) · pm2 · Homebrew 기준이었다. 코드는 그대로 두고 실행 구성만 바꿨다.
 
-| 항목 | 원본 | v0.1.0 |
+| 항목 | 원본 | v0.1.x |
 |---|---|---|
 | 실행 | pm2 · 직접 설치 | Docker Compose |
 | 서로 부르는 주소 | 모두 `127.0.0.1` | 코드를 고치지 않으려고 admin · model-api · gateway 가 web 의 네트워크를 함께 쓴다 (`network_mode: service:web`) |
@@ -137,3 +137,11 @@ docker compose ps
 - **LLM 추천**(Ollama · gemma3)은 꺼져 있다. 악기 추천은 규칙(rules) 기반으로 동작한다.
 - jeongganbo 는 원저자 잠금 파일대로 설치해서 CPU 로 실행하는데도 CUDA 꾸러미까지 받는다 (약 4GB).
 - 계정 · 악보 데이터는 PC 마다 따로이며 공유되지 않는다.
+- 인식 엔진(약 4.5GB)은 Git 에 없고 PC 마다 처음 한 번 설치한다 (4단계, 약 6분). `docker compose down -v` 로 볼륨을 지우면 다시 설치해야 한다.
+
+## 변경 내역
+
+| 버전 | 날짜 | 내용 |
+|---|---|---|
+| v0.1.1 | 2026-10-30 | 실행 안내 5단계 수정 — 서비스 키를 넣은 뒤 `restart` 대신 `up -d --force-recreate` 로 web 을 먼저 띄운다 (새로 받기 시험에서 발견). 코드 · 이미지 구성 변경 없음 |
+| v0.1.0 | 2026-10-30 | 기존 API(project2610@67bc7f2)를 Docker Compose 로 실행하는 첫 기준판 |

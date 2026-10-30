@@ -17,7 +17,7 @@
 name: klassic
 
 x-app-common: &app-common
-  image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-app:${APP_TAG:-0.1.0}
+  image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-app:${APP_TAG:-0.1.1}
   pull_policy: never
   restart: unless-stopped
   volumes:
@@ -106,7 +106,7 @@ services:
   # model-api — 인식 · 추천 · 렌더링(MP3) · 연주 API
   # ---------------------------------------------------------------------------
   model-api:
-    image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-model-api:${APP_TAG:-0.1.0}
+    image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-model-api:${APP_TAG:-0.1.1}
     build:
       context: ./src/app
       dockerfile: ../../docker/model-api.Dockerfile
@@ -147,7 +147,7 @@ services:
   #   설치 뒤: docker compose restart model-api
   engines-installer:
     profiles: [tools]
-    image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-engines-installer:${APP_TAG:-0.1.0}
+    image: ${DOCKERHUB_NAMESPACE:-klassic}/klassic-engines-installer:${APP_TAG:-0.1.1}
     build:
       context: ./docker
       dockerfile: engines-installer.Dockerfile
