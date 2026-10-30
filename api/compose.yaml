@@ -1,0 +1,12 @@
+# =============================================================================
+# K-lassic api — 전체 서비스 묶음 (담당: 팀장)
+#   서비스 정의는 각 폴더의 compose.yaml 에 두고, 여기서는 include 만 한다.
+#   병합 결과 확인: docker compose config
+# =============================================================================
+name: klassic-api
+
+include:
+  - services/backend/compose.yaml
+  - services/model-api/compose.yaml
+  - services/frontend/compose.yaml
+  - deploy/compose.yaml

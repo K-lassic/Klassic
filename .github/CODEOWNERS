@@ -1,0 +1,16 @@
+# 폴더별 담당자 — 이 폴더의 파일이 바뀐 PR 에 담당자가 자동으로 리뷰어로 지정된다.
+# 아래쪽 줄이 우선한다.
+
+# 기본: 팀장
+*                                   @majoongcheon
+
+# model-api — 예은
+/api/services/model-api/            @yeeun5364
+/api/contracts/model-api.yaml       @yeeun5364 @majoongcheon
+/.github/workflows/model-api.yml    @yeeun5364
+
+# frontend — 황송해
+/api/services/frontend/             @SonghaeHwang
+/api/contracts/web-api.yaml         @majoongcheon @SonghaeHwang
+/api/packages/score-core/           @majoongcheon @SonghaeHwang
+/.github/workflows/frontend.yml     @SonghaeHwang

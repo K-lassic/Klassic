@@ -1,0 +1,8 @@
+# 화면(frontend) ↔ backend 계약 — 담당: 팀장 · 리뷰: 황송해
+# 1차 내용은 proto_type v0.1.1 백엔드(/api/*, /admin/*)와 같게 채운다.
+openapi: 3.1.0
+info:
+  title: K-lassic Web API
+  version: 0.0.0
+  description: 사용자 API(/api/*)와 관리자 API(/admin/*, 외부 비공개)
+paths: {}

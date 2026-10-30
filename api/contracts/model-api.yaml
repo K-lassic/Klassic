@@ -1,0 +1,8 @@
+# backend · 외부 사용자 ↔ model-api 계약 — 담당: 예은 · 리뷰: 팀장
+# 1차 내용은 proto_type v0.1.1 model-api(/v1/*)와 같게 채운다.
+openapi: 3.1.0
+info:
+  title: K-lassic Model API
+  version: 0.0.0
+  description: 인식 · 렌더링 · 추천 · 외부 API (X-API-Key)
+paths: {}
