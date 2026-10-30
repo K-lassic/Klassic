@@ -45,7 +45,7 @@
 
 ## 작업 규칙
 
-- 코드 작성 규칙: 팀에 공유한 「API 재구성 작성규칙」을 따른다 (`0.0.0.0` 수신 · 서비스 이름으로 호출 · `/health` 는 준비 완료 기준 · 로그는 stdout · 비밀값은 실행 시 주입 · non-root · `latest` 미사용).
+- 코드 작성 규칙: [docs/API_재구성_작성규칙.md](../docs/API_재구성_작성규칙.md) 를 따른다 (`0.0.0.0` 수신 · 서비스 이름으로 호출 · `/health` 는 준비 완료 기준 · 로그는 stdout · 비밀값은 실행 시 주입 · non-root · `latest` 미사용).
 - 작업 흐름: 이슈 → 브랜치(`<type>/<이슈번호>-<짧은 설명>`, 예: `feat/12-auth-session`) → PR(`Closes #12`) → 리뷰 → 병합.
 - 커밋 메시지: Conventional Commits (`feat(backend): ...`, `build(model-api): ...`).
 - 비밀값(`.env`, 키, 토큰)은 저장소·이미지·로그에 넣지 않는다. 형식은 `.env.example` 로만 공유한다.
