@@ -93,11 +93,13 @@ docker compose exec -it web node backend/dist/admin/createOperator.js --login ad
 
 1. http://localhost:26101 에 로그인 → **키 관리** → **서비스 전용 키** → 발급 (키는 한 번만 보인다)
 2. 받은 키를 `.env` 의 `SERVICE_API_KEY=` 뒤에 넣는다
-3. web 과 web 의 네트워크를 함께 쓰는 서비스를 같이 다시 시작한다
+3. web 과 web 의 네트워크를 함께 쓰는 서비스를 순서대로 다시 만든다
 
 ```bash
-docker compose restart web gateway admin model-api
+docker compose up -d --force-recreate web gateway admin model-api
 ```
+
+> `docker compose restart web gateway admin model-api` 는 쓰지 않는다. 넷을 한꺼번에 다시 시작하면 gateway · admin 이 아직 꺼져 있는 web 의 네트워크에 붙지 못해 멈춘다 (`cannot join network namespace of a non running container`). `up --force-recreate` 는 web 을 먼저 띄운 뒤 나머지를 붙인다.
 
 ### 6. 확인
 
