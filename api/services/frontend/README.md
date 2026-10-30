@@ -106,6 +106,75 @@
 - 내려받기는 `<a download>` 로 같은 출처 쿠키를 그대로 쓴다 → 프론트(Nginx)와 백엔드를 다른 출처로 나누면 깨진다. Nginx 에서 `/api` · `/admin` · `/soundfonts` 를 백엔드로 넘기는 구성이 맞다
 - S4A · S4C 는 예시 주소를 `window.location.origin + /api/v1` 로 만든다 → gateway 가 `/api/v1` 을 model-api 로 넘겨야 예시가 맞음
 
-## 이 폴더에 둘 파일
+## 이 폴더의 파일 (#21 골격)
 
-`src/` · `tests/` · `package.json` · `package-lock.json` · `nginx.conf` · `Dockerfile` · `.dockerignore` · `compose.yaml` · `.env.example` · 이 README(Runbook)
+`src/` · `tests/` · `public/` · `index.html` · `admin.html` · `package.json` · `package-lock.json` · `vite.config.ts` · `nginx/default.conf` · `Dockerfile` · `.dockerignore` · `compose.yaml` · 이 README(Runbook)
+
+- 화면은 아직 모두 빈 화면(`pages/Placeholder.vue`)이다. 경로는 v0.1.1 `router.ts` 와 같고, 화면 이슈(#39 · #40 · #41 · #43)에서 component 만 바꾼다.
+- 의존성은 지금 쓰는 것만 넣었다 (vue · vue-router · pinia). score-core · 연주기(spessasynth) · 악보 그리기(OSMD) · idb 는 쓰는 이슈에서 넣는다. 판은 v0.1.1 lock 과 같게 고정한다.
+- 스타일 · 문구(`i18n/`)는 #38 에서 옮긴다. v0.1.1 의 `i18n/` 은 라이브러리가 아니라 `shared/error-codes.json` 을 읽는 문구 모듈이라 #19(shared 이전) 뒤에 옮긴다.
+
+## Runbook
+
+### 무엇
+
+| 항목 | 값 |
+|---|---|
+| 이미지 | `${DOCKERHUB_NAMESPACE:-klassic}/frontend:${APP_TAG:-dev}` — 빌드 `node:22.21.1-bookworm-slim` → 실행 `nginxinc/nginx-unprivileged:1.28.0-bookworm` |
+| 실행 사용자 | uid 101 (nginx, non-root) · `read_only` · `/tmp` 만 tmpfs · `cap_drop: ALL` |
+| 포트 (컨테이너 → 호스트) | 사용자 `8080` → `127.0.0.1:${API_PUBLIC_PORT}`(9603) · 관리자 `8081` → `127.0.0.1:${API_ADMIN_PORT}`(26201) |
+| 환경변수 키 | 실행 시 없음 (화면은 같은 출처로 `/api` 를 부른다). 개발 서버만 `DEV_PUBLIC_TARGET` · `DEV_ADMIN_TARGET` |
+| 붙이는 볼륨 | `api/deploy/nginx` → `/etc/nginx/klassic:ro` (팀장 경로 나누기 · #22) |
+| 메모리 | 대기 상태 약 5MiB (2026-10-30 `docker stats`). 한도는 부하 측정 뒤 정한다 (#47) |
+
+### Nginx 설정 — 두 server 와 include 지점
+
+| server | 내주는 것 | 404 | include |
+|---|---|---|---|
+| 사용자 `8080` | `index.html` · `/assets/*` · `public/` 파일. 없는 경로는 `index.html` (history 라우터 새로고침 유지) | `/admin.html` · 없는 `/assets/*` | `/etc/nginx/klassic/*.conf` — `/api` · `/api/v1` · `/soundfonts` 등 |
+| 관리자 `8081` | `/` → `admin.html` · `/assets/*` · `public/` 파일 | `/index.html` · 그 밖의 경로 | `/etc/nginx/klassic/admin/*.conf` — `/admin/*` → backend(admin) |
+
+- 캐시: `index.html` · `admin.html` 은 `no-cache`(새 배포가 바로 보이게), `/assets/*` 는 파일 이름에 해시가 있어 1년 `immutable`.
+- `deploy/nginx` 가 비어 있으면 include 할 파일이 없어 화면만 내준다 (glob 은 맞는 파일이 없어도 오류가 아니다).
+- 볼륨 경로가 호스트에 없으면 Docker 가 빈 `api/deploy/nginx/` 폴더를 만든다 — 빈 폴더라 Git 에는 올라가지 않는다.
+
+### 어떻게 — 빌드 · 시험 · 기동
+
+```bash
+# 코드 시험 (이 PC 에 Node 가 없으면 node:22-bookworm-slim 컨테이너 안에서)
+cd api/services/frontend
+npm ci
+npm run lint
+npm test          # vitest — 라우터 10개
+npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
+
+# 이미지로 기동 (api/ 에서)
+cd api
+docker compose config --quiet
+docker compose up -d --build frontend
+docker compose ps frontend            # (healthy) — 이미지 HEALTHCHECK 가 8080/index.html 을 부른다
+docker compose exec frontend id       # uid=101(nginx)
+```
+
+확인 (2026-10-30 결과):
+
+| 요청 | 기대 |
+|---|---|
+| `127.0.0.1:9603/` · `/r/12/listen` · `/api-guide/examples` | 200 `index.html` (새로고침 유지) |
+| `127.0.0.1:9603/admin.html` | 404 |
+| `127.0.0.1:26201/` · `/admin.html` | 200 `admin.html` |
+| `127.0.0.1:26201/index.html` · `/r/12/listen` | 404 |
+| LAN 주소(`192.168.x.x`)로 9603 · 26201 | 연결 안 됨 (127.0.0.1 에만 공개 — 외부는 Funnel 로만) |
+
+개발 서버는 `npm run dev`(5173). `/api` · `/soundfonts` · `/admin/` 은 v0.1.1 대역(9503 · 26101)으로 넘긴다. api/ 로 붙이려면 `DEV_PUBLIC_TARGET=http://127.0.0.1:9603 DEV_ADMIN_TARGET=http://127.0.0.1:26201 npm run dev`.
+
+### 만약에
+
+| 증상 | 근거 | 조치 |
+|---|---|---|
+| 새로고침하면 404 | `default.conf` 의 `try_files … /index.html` 이 빠졌거나 다른 `location` 이 가로챔 | `docker compose exec frontend nginx -T` 로 합쳐진 설정 확인 |
+| 컨테이너가 바로 종료 · `emerg` 로그 | `deploy/nginx/*.conf` 문법 오류 또는 upstream 이름(backend 등)을 못 찾음 | `docker compose logs frontend` → 해당 conf 담당(팀장)에게. 화면만 확인하려면 conf 를 잠시 빼고 기동 |
+| 9603 `address already in use` | 다른 프로세스가 포트 사용 | `api/.env` 의 `API_PUBLIC_PORT` 확인 · `docker ps` 의 PORTS |
+| 화면이 옛날 판 | 브라우저가 `index.html` 을 캐시 | 응답 헤더 `Cache-Control: no-cache` 확인 |
+
+롤백: compose 의 `APP_TAG` 를 이전 태그로 바꾸고 `docker compose up -d frontend`. 이전 태그 이미지는 지우지 않는다.
