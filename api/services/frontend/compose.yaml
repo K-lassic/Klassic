@@ -5,6 +5,10 @@ services:
   frontend:
     build:
       context: .
+      # 자기 폴더 밖의 공용 파일은 별명으로 넘겨 이미지에 굽는다 (#19 — api/shared/README.md 「이미지에 넣는 방법」)
+      additional_contexts:
+        shared: ../../shared
+        score-core: ../../packages/score-core
     image: ${DOCKERHUB_NAMESPACE:-klassic}/frontend:${APP_TAG:-dev}
     ports:
       - "127.0.0.1:${API_PUBLIC_PORT:-9603}:8080"

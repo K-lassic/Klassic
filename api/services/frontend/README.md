@@ -124,8 +124,15 @@
 | `src/composables/useLeaveGuard.ts` | 지금은 클라이언트가 쓰는 부분(만료 이동 · 한 번 건너뛰기 · 같은 흐름 판정)만. `useLeaveGuard()` 는 편집 기록 저장소와 함께 #40 · #41 에서 더한다 |
 | `src/composables/useNow.ts` · `src/lib/time.ts` | 지금 시각 · 남은 시간 표시 |
 
-- **#19 뒤로 미룬 것**: `C2GateBlock`(반려 안내) · `i18n/gateMessages` · `i18n/fallbackReasons` — v0.1.1 `shared/error-codes.json` 을 읽는데, #19 에서 `shared/errors/*.json` 으로 나뉘므로 그 모양이 정해진 뒤 옮긴다.
+- **오류 문구 (#19 뒤 옮김)**: `C2GateBlock`(반려 안내) · `i18n/gateMessages` · `i18n/fallbackReasons` 는 v0.1.1 그대로. 원본이던 `error-codes.json` 은 #19 에서 `api/shared/errors/common.json` · `web.json` · `model.json` 으로 나뉘었고, `i18n/errorCodes.ts` 가 세 파일의 `gate_codes` · `fallback_reasons` · `status_codes` 를 합쳐 v0.1.1 과 같은 모양으로 내준다. 빌드할 때 번들에 들어간다.
 - 화면마다 쓰는 부품(C3 결과 띠 · C4 악기 고르기 · C5 연주 막대 · C6 내려받기 카드 · 악보 보기)은 그 화면 이슈에서 옮긴다.
+
+### 로그인 · 가입 · 머리 메뉴 (#39)
+
+- `stores/auth.ts` · `App.vue`(머리 메뉴 "○○ 님 · [로그아웃]" · 알림 · 바닥글) · `pages/S0Login.vue` 를 v0.1.1 그대로 옮겼다.
+- 로그인 가드(`router.ts` 의 `loginGuard`): S1~S3 은 `GET /api/auth/me` 로 확인해 로그인 안 했으면 `/login?next=<주소>`, 로그인한 채 `/login` · `/signup` 은 `/` + "이미 로그인되어 있습니다." 알림. 시험에서 메모리 라우터에 붙이려고 함수로 따로 내보낸다.
+- 로그인 실패 · 잠금은 `C2GateBlock` 으로 보인다 (사유는 서버 `message`, 제목 · 해제 주체 · 다음 행동은 공용 오류 코드). 잠금은 `retry_after` 가 지나면 버튼을 다시 연다.
+- 확인 (2026-10-30): 이 판 이미지를 v0.1.1 백엔드(9503)에 붙여 브라우저(Playwright)로 가입 → 로그아웃 → 틀린 비밀번호 → 로그인 → 새로고침 유지 → 로그아웃까지 통과.
 
 ## Runbook
 
@@ -134,6 +141,7 @@
 | 항목 | 값 |
 |---|---|
 | 이미지 | `${DOCKERHUB_NAMESPACE:-klassic}/frontend:${APP_TAG:-dev}` — 빌드 `node:22.21.1-bookworm-slim` → 실행 `nginxinc/nginx-unprivileged:1.28.0-bookworm` |
+| 빌드에 넘기는 바깥 폴더 | compose `additional_contexts` — `shared` → `api/shared`(오류 코드 · 번들에 들어감), `score-core` → `api/packages/score-core`(#41 부터 사용). 이미지 안에서도 `/app/shared` · `/app/services/frontend` 로 저장소와 같은 상대 위치 |
 | 실행 사용자 | uid 101 (nginx, non-root) · `read_only` · `/tmp` 만 tmpfs · `cap_drop: ALL` |
 | 포트 (컨테이너 → 호스트) | 사용자 `8080` → `127.0.0.1:${API_PUBLIC_PORT}`(9603) · 관리자 `8081` → `127.0.0.1:${API_ADMIN_PORT}`(26201) |
 | 환경변수 키 | 실행 시 없음 (화면은 같은 출처로 `/api` 를 부른다). 개발 서버만 `DEV_PUBLIC_TARGET` · `DEV_ADMIN_TARGET` |
@@ -156,18 +164,19 @@
 ### 어떻게 — 빌드 · 시험 · 기동
 
 ```bash
-# 코드 시험 (이 PC 에 Node 가 없으면 node:22-bookworm-slim 컨테이너 안에서)
+# 코드 시험 — api/shared 를 읽으므로 api/ 전체가 보여야 한다. 이 PC 에 Node 가 없으면 컨테이너에 api/ 를 붙여서:
+#   docker run --rm -v "$PWD/api:/api" -w /api/services/frontend node:22.21.1-bookworm-slim sh -c "npm ci && npm test"
 cd api/services/frontend
 npm ci
 npm run lint
-npm test          # vitest — 라우터 10 · 클라이언트 오류 처리 10 · 공통 부품 8
+npm test          # vitest — 54개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구)
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
 cd api
 cp .env.example .env              # 처음 한 번 — DB_* 값을 채운다 (#20 이후 compose 가 요구, Git 제외)
 docker compose config --quiet
-docker compose up -d --build frontend
+docker compose up -d --build frontend   # additional_contexts 때문에 이미지는 compose 로 빌드한다 (docker build 단독이면 --build-context shared=../../shared)
 docker compose ps frontend            # (healthy) — 이미지 HEALTHCHECK 가 8080/index.html 을 부른다
 docker compose exec frontend id       # uid=101(nginx)
 ```

@@ -5,7 +5,8 @@
 # =============================================================================
 
 FROM node:22.21.1-bookworm-slim AS builder
-WORKDIR /app
+# 저장소와 같은 상대 위치로 둔다 — src/i18n/errorCodes.ts 의 ../../../../shared/… 가 그대로 풀린다 (#19 공유 방식)
+WORKDIR /app/services/frontend
 
 # 의존성 먼저 — 코드만 바뀌면 npm ci 캐시를 다시 쓴다
 COPY package.json package-lock.json ./
@@ -14,13 +15,15 @@ RUN npm ci --no-audit --no-fund
 COPY tsconfig.json vite.config.ts index.html admin.html ./
 COPY public ./public
 COPY src ./src
+# api/shared 는 compose 의 additional_contexts(shared)로 받는다. score-core 는 쓰기 시작하는 #41 에서 같은 방식으로 더한다
+COPY --from=shared . /app/shared
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.28.0-bookworm
 
 # 기본 설정을 프로젝트 설정으로 바꾼다 (사용자 8080 · 관리자 8081)
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/services/frontend/dist /usr/share/nginx/html
 
 # 베이스 이미지가 이미 USER 101(nginx) 이다 — 명시해 둔다
 USER 101
