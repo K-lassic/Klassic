@@ -1,5 +1,7 @@
 # score-core (담당: 황송해 @SonghaeHwang · 리뷰: 팀장 @majoongcheon)
 
+> 2026-10-30 조정안 A 로 팀장 → 황송해. 이전 작업: #18
+
 악보 문서(ScoreDoc) 파싱 · 편집 연산(`applyOps`) · MIDI/MusicXML 내보내기. 백엔드(내보내기)와 프론트(편집 · 연주)가 함께 쓴다.
 
 - 참고 코드: `proto_type/src/app/packages/score-core` (약 1,400줄 · 시험 7개 파일) — v0.1.1 소스를 그대로 옮겼다 (#18)
