@@ -1,0 +1,57 @@
+{
+  "$comment": "#19 model-api 오류 코드 — model-api 만 쓰는 코드. 담당: 예은. 새 코드는 MODEL_ 접두어 권장(v0.1.1 코드 이름은 유지).",
+  "gate_codes": {
+    "AUTH_KEY_MISSING": {
+      "http": 401,
+      "gate": "G2",
+      "message": "접근 키가 없습니다.",
+      "fix": "X-API-Key 머리글에 발급받은 키를 넣어 주십시오."
+    },
+    "AUTH_KEY_INVALID": {
+      "http": 401,
+      "gate": "G2",
+      "message": "접근 키가 맞지 않습니다.",
+      "fix": "키를 다시 확인하거나 'API활용' 메뉴에서 새로 신청해 주십시오."
+    },
+    "AUTH_KEY_REVOKED": {
+      "http": 403,
+      "gate": "G2",
+      "message": "폐기된 접근 키입니다.",
+      "fix": "'API활용' 메뉴에서 새 키를 신청해 주십시오."
+    },
+    "AUTH_SERVICE_KEY_REQUIRED": {
+      "http": 403,
+      "gate": "G2",
+      "message": "서비스 전용 키만 쓸 수 있는 내부 기능입니다.",
+      "fix": "외부 키로는 부를 수 없습니다. 공개된 엔드포인트를 써 주십시오."
+    },
+    "RATE_LIMIT_EXCEEDED": {
+      "http": 429,
+      "gate": "G3",
+      "message": "호출 한도를 넘었습니다.",
+      "fix": "안내된 시각 뒤에 다시 시도해 주십시오."
+    },
+    "SERVER_BUSY": {
+      "http": 429,
+      "gate": "G3",
+      "message": "지금 처리할 수 있는 한도를 넘었습니다.",
+      "fix": "안내된 시각 뒤에 다시 시도해 주십시오."
+    },
+    "SERVICE_NOT_READY": {
+      "http": 503,
+      "gate": null,
+      "message": "서버가 아직 준비 중입니다.",
+      "fix": "잠시 뒤 다시 시도해 주십시오."
+    }
+  },
+  "fallback_reasons": {
+    "USER_REQUEST": {
+      "db": "user_request",
+      "message": "요청하신 대로 대체 악보로 바꿨습니다."
+    }
+  },
+  "status_codes": {
+    "RENDER_TIMEOUT": "시간이 너무 오래 걸려 멈췄습니다. 다시 시도해 주십시오.",
+    "RENDERER_MISSING": "서버에 렌더러가 설치되지 않아 만들 수 없습니다. MIDI·MusicXML은 받을 수 있습니다."
+  }
+}

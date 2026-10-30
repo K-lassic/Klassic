@@ -7,6 +7,7 @@
 # model-api — 예은
 /api/services/model-api/            @yeeun5364
 /api/contracts/model-api.yaml       @yeeun5364 @majoongcheon
+/api/shared/errors/model.json       @yeeun5364 @majoongcheon
 /.github/workflows/model-api.yml    @yeeun5364
 
 # frontend — 황송해 (score-core 는 조정안 A 로 황송해, 백엔드도 쓰므로 팀장 함께 리뷰 · #18)
