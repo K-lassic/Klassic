@@ -13,7 +13,24 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
                                                └─ admin.html
 ```
 
-- 입구는 **Nginx 하나**다 (2026-10-30 2안 확정 — Node gateway 없음). 경로 나누기는 `deploy/nginx/proxy.conf`(팀장), 화면 서빙은 `services/frontend/nginx/default.conf`(황송해) → [api/README.md](../README.md) 「Nginx 설정 나누기」
+- 입구는 **Nginx 하나**다 (2026-10-30 2안 확정 — Node gateway 없음). 경로 나누기는 `deploy/nginx/proxy.conf`(사용자 server) · `deploy/nginx/admin/admin.conf`(관리자 server, 팀장), 화면 서빙은 `services/frontend/nginx/default.conf`(황송해) → [api/README.md](../README.md) 「Nginx 설정 나누기」
+
+### Nginx 경로 시험 결과 (#22, 2026-10-30)
+
+#21 의 `default.conf` + 같은 이미지(`nginx-unprivileged:1.28.0` · 읽기 전용 · `/tmp` tmpfs)에, web · model-api · admin 자리에 받은 경로 · 머리글을 돌려주는 가짜 서버를 붙여 시험했다.
+
+| 확인 | 결과 |
+|---|---|
+| 백엔드 · model-api 가 **없어도** Nginx 기동 · 화면 200 | ✅ 그 경로만 502 `WEB_UNAVAILABLE` JSON |
+| `/api/*` · `/soundfonts/*` → web (쿼리 유지) | ✅ |
+| `/api/v1` · `/api/v1/*` → model-api, 앞의 `/api` 를 떼고 `/v1/...` | ✅ |
+| `/api/v1/internal*` · 사용자 쪽 `/admin/*` · `/admin.html` | ✅ 404 |
+| 관리자 server `/admin/*` → admin · `/api/*` 는 404 | ✅ |
+| 실제 접속 주소 — `X-Forwarded-For` 를 믿을 대역에서만 받고 하나만 넘김 (앞에 가짜 주소를 붙여도 무시) · `X-Forwarded-Proto: https` 전달 | ✅ |
+| 25MB 업로드 통과 · 215MB 는 413 `UPLOAD_TOO_LARGE` JSON (상한 210m) · Nginx 메모리 5.6MB(업로드를 쌓아 두지 않음) | ✅ |
+| web 을 끄면 `/api/*` 만 502, `/api/v1/*` 는 그대로 | ✅ |
+
+남은 확인: 실제 web · model-api 로 다시 (#23 · #24 뒤), Funnel 로 외부 주소가 실제로 들어오는지 (#48).
 
 - 도메인 없이 `*.ts.net` 주소와 HTTPS 인증서를 받는다. 공유기 포트를 열지 않는다.
 - **Tailscale 은 Windows 앱(서비스)으로 돌린다** (#9 결정). 컨테이너로 돌리지 않으므로 인증 키(`TS_AUTHKEY`)가 필요 없다 — 로그인은 앱에서 사람이 한다.
