@@ -97,6 +97,6 @@
    - DB 마이그레이션은 `YYYYMMDD_HHMM_<설명>.sql` 로 **새 파일만 추가**
    - 오류 코드는 `shared/errors/{common,web,model}.json` 영역별 파일
 4. 계약(`api/contracts/`)을 바꾸려면 `contract` 라벨 PR → 상대 담당 리뷰 → 병합 후 구현.
-5. 코드 작성 규칙은 Slack 으로 공유한 「API 재구성 작성규칙」을 따른다 (`0.0.0.0` 수신 · 서비스 이름으로 호출 · `/health` 는 준비 완료 기준 · 로그는 stdout · non-root · `latest` 미사용).
+5. 코드 작성 규칙은 [API_재구성_작성규칙.md](API_재구성_작성규칙.md) 를 따른다 (`0.0.0.0` 수신 · 서비스 이름으로 호출 · `/health` 는 준비 완료 기준 · 로그는 stdout · non-root · `latest` 미사용).
 6. 비밀값(`.env` · 키 · 토큰 · Tailscale 인증 키)은 저장소 · 이미지 · 로그 · 이슈에 넣지 않는다. 형식은 `.env.example` 로만 공유한다.
 7. 막히면 `blocked` 라벨과 원인 · 필요한 도움을 이슈에 적는다. 결정 사항은 채팅에만 남기지 말고 이슈에 기록한다.
