@@ -1,8 +1,2701 @@
 # backend · 외부 사용자 ↔ model-api 계약 — 담당: 예은 · 리뷰: 팀장
-# 1차 내용은 proto_type v0.1.1 model-api(/v1/*)와 같게 채운다.
+# 기준: proto_type v0.1.1. 자동 OpenAPI + 라우터·schemas.py·errors.py·호출부 대조.
 openapi: 3.1.0
 info:
-  title: K-lassic Model API
-  version: 0.0.0
-  description: 인식 · 렌더링 · 추천 · 외부 API (X-API-Key)
-paths: {}
+  title: K-lassic model-api 계약
+  version: 0.1.1
+  description: |-
+    backend·외부 사용자와 model-api 사이의 1차 계약. proto_type v0.1.1의 동작을 기록한다.
+    실행 중인 /api/v1/openapi.json을 출발점으로 요청 스키마를 보존하고, 소스로 실제 응답·인증·오류를 보완했다.
+    API 응답의 api_version은 v1이며, 이 문서의 0.1.1은 기준 서비스 판본이다.
+
+    경로는 /v1/*, 외부 입구에서는 /api/v1/*이다. servers의 /api와 paths를 합쳐 사용한다.
+    /v1/internal/*는 backend가 model-api 내부 주소로 직접 호출하는 경로다. 재구성에서는 서비스 DNS를 사용한다.
+    기준 gateway는 /api/v1/internal/*를 404로 차단하므로 공개 입구를 통한 내부 호출은 불가능하다.
+
+    사진 업로드는 PNG·JPG(JPEG)·WEBP 여러 장(순서 유지), 또는 PDF 한 개다. PDF 여러 개·사진 혼합은 거절한다.
+    기준값: 최대 10쪽, 파일당 20MiB, 사진 짧은 변 300px 미만 거절, 650px 미만은 1000px 사본으로 인식.
+    PDF는 각 쪽을 300dpi로 처리한다. DB 처리 설정이 지정되면 용량·시간 등 설정값이 우선한다.
+    MIDI·MusicXML은 /recommend·/render/* 입력으로만 받으며 /performances·/omr/*에서는 거절한다(기준 파일당 5MiB).
+
+    공개 health·versions·models와 서명 URL 다운로드를 제외하고 X-API-Key가 필요하다.
+    오류는 error와 api_version을 가진 한 형식이며, 422도 FastAPI 기본 detail 형식이 아니다.
+    429는 재시도 시각(error.retry_after)과 대기 초(Retry-After)를 제공한다.
+    기본 role_permission에서 UC12(인식·추천·렌더링·목록)는 service/api_caller, UC13(연주)는 api_caller가 허용된다.
+    서비스 키는 모든 경로의 관리자 키가 아니다. /performances는 기본 권한표에서 서비스 키를 403으로 거절한다.
+    인식 실패·시간 초과는 HTTP 오류 대신 200 + fallback 또는 completed_fallback으로 끝날 수 있다.
+    필드명·경로·상태를 바꾸는 개선은 이 계약에 섞지 않고 별도 계약 변경으로 진행한다.
+paths:
+  /v1/health:
+    get:
+      tags:
+      - 상태
+      summary: 서버 상태 (UC11 기본흐름 1)
+      description: |-
+        200 ok · 200 degraded(DB 끊김) · 503 loading(기동 때 엔진 데우는 중) · 503 unavailable(쓸 인식 엔진 없음)
+
+        준비 완료의 정상 기준은 status=ok, db=ok, 시작 워밍업 종료, 오선보·정간보별 사용 가능한 enabled/installed 엔진 존재다. startup_done=false면 503 loading, 종료 후 missing_kinds가 있으면 503 unavailable. missing_kinds는 ready 또는 cold인 엔진을 사용 가능으로 센다. DB 실패 시 missing_kinds 검사를 생략하므로 200 degraded가 가능하다. 사운드폰트·렌더러 상태는 이 API만으로 보장하지 않는다. 기준을 강화할 경우 별도 계약 변경으로 진행한다.
+      operationId: health_v1_health_get
+      responses:
+        '200':
+          description: '상태 확인: ok 또는 degraded. DB 단절 시 200 degraded는 기준 동작이며 완전 준비를 뜻하지 않는다.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '503':
+          description: 로딩 중 또는 사용 가능한 인식 종류가 없음. 공통 ErrorResponse가 아니라 상태 필드와 error가 함께 있다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security: []
+      x-key-kinds: []
+      x-exposure: gateway
+  /v1/versions:
+    get:
+      tags:
+      - 상태
+      summary: 엔진 이름·버전과 명세 (UC11 기본흐름 2 · FR-044)
+      operationId: versions_v1_versions_get
+      responses:
+        '200':
+          description: 엔진·렌더러 버전, 설치/준비 상태, 대체 템플릿 버전과 규칙 해시
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionsResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security: []
+      x-key-kinds: []
+      x-exposure: gateway
+      description: 버전 조회 성공은 모든 모델의 준비 완료를 뜻하지 않는다. engines[].installed/state와 /health를 함께 확인한다. openapi_url은 모델
+        API 기준 /v1/openapi.json이며 외부 입구에서는 /api를 앞에 붙인다.
+  /v1/models:
+    get:
+      tags:
+      - 상태
+      summary: 모델 목록과 준비 상태
+      operationId: list_models_v1_models_get
+      responses:
+        '200':
+          description: 모델 상태 배열. 사용 중지·미설치 모델도 포함한다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelStateList'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security: []
+      x-key-kinds: []
+      x-exposure: gateway
+  /v1/internal/models/reload:
+    post:
+      tags:
+      - 내부
+      summary: 등록부 다시 읽기
+      operationId: reload_models_v1_internal_models_reload_post
+      responses:
+        '200':
+          description: DB 등록부를 다시 읽고 변경된 설치 venv 모델 워밍업 시작
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReloadModelsResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-key-kinds:
+      - service
+      x-required-use-case: UC14
+      x-exposure: internal
+      description: 서비스 키 전용. 공개 gateway는 이 경로를 404로 차단한다. backend는 내부 model-api 주소로 직접 호출한다.
+      requestBody:
+        required: false
+        description: 요청 본문은 사용하지 않는다. backend가 보내는 빈 JSON 객체도 허용한다.
+        content:
+          application/json:
+            schema: {}
+  /v1/internal/models/{name}/load:
+    post:
+      tags:
+      - 내부
+      summary: 모델 불러오기(워밍업) 시작
+      operationId: load_model_v1_internal_models__name__load_post
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      - name: operator_id
+        in: query
+        required: false
+        schema:
+          type: string
+        description: 호환 입력. JSON body.operator_id가 null/없을 때 숫자로만 된 문자열(isdigit)이면 사용한다(0 포함). 그 외 문자열은 무시한다.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/LoadBody'
+              - type: 'null'
+              title: Body
+      responses:
+        '202':
+          description: 비동기 로딩 시작 또는 기존 로딩 상태 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoadModelResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+      x-key-kinds:
+      - service
+      x-required-use-case: UC14
+      x-exposure: internal
+      description: |-
+        서비스 키 전용. 공개 gateway는 이 경로를 404로 차단한다. backend는 내부 model-api 주소로 직접 호출한다.
+
+        multipart/form-data에서 파일 배열은 같은 필드명을 반복해 전송한다. 선언되지 않은 폼 필드는 422 VALIDATION_ERROR로 거절한다.
+  /v1/internal/ollama/available:
+    get:
+      tags:
+      - 내부
+      summary: 공유 Ollama 서버에서 등록할 수 있는 모델
+      operationId: ollama_available_v1_internal_ollama_available_get
+      responses:
+        '200':
+          description: Ollama 연결·등록 가능 모델. 연결 실패도 200 + ollama=unreachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OllamaAvailableResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-key-kinds:
+      - service
+      x-required-use-case: UC14
+      x-exposure: internal
+      description: 서비스 키 전용. 공개 gateway는 이 경로를 404로 차단한다. backend는 내부 model-api 주소로 직접 호출한다.
+  /v1/internal/settings/reload:
+    post:
+      tags:
+      - 내부
+      summary: 새 처리 설정 반영
+      operationId: reload_settings_v1_internal_settings_reload_post
+      responses:
+        '200':
+          description: 최신 설정을 이후 요청에 적용. 진행 중 요청은 기존 설정 유지
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReloadSettingsResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      x-key-kinds:
+      - service
+      x-required-use-case: UC10
+      x-exposure: internal
+      description: 서비스 키 전용. 공개 gateway는 이 경로를 404로 차단한다. backend는 내부 model-api 주소로 직접 호출한다.
+      requestBody:
+        required: false
+        description: 요청 본문은 사용하지 않는다. backend가 보내는 빈 JSON 객체도 허용한다.
+        content:
+          application/json:
+            schema: {}
+  /v1/internal/upload-check:
+    post:
+      tags:
+      - 내부
+      summary: 웹 업로드 검사 위임 (사진·PDF, 2026-09-29)
+      description: |-
+        웹 서비스가 PDF 를 접수하기 전에 부른다 — 열기(손상·암호) · 쪽수(10쪽 넘으면 UPLOAD_TOO_MANY_PAGES) · 20MB ·
+        쪽마다 300dpi 로 그렸을 때의 사진 크기(300px 미만 반려, 2026-09-30 119번) · 악보 종류를 연주 API·/v1/omr 과 같은 검사기(checks/upload.py,
+        pypdfium2)로 판정한다(SC-015, UC3 A7 · E2 · E9). 그림은 그리지 않고 쪽 크기로 잰다(인식 때 다시 그린다).
+        통과면 쪽수·쪽마다 사진 크기를, 반려면 G1 사유 코드(UPLOAD_*) 오류를 돌려준다. 요청은 만들지 않는다.
+
+        서비스 키 전용. 공개 gateway는 이 경로를 404로 차단한다. backend는 내부 model-api 주소로 직접 호출한다.
+
+        multipart/form-data에서 파일 배열은 같은 필드명을 반복해 전송한다. 선언되지 않은 폼 필드는 422 VALIDATION_ERROR로 거절한다.
+      operationId: upload_check_v1_internal_upload_check_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadCheckInput'
+        required: true
+      responses:
+        '200':
+          description: 파일 검사 통과. 새 악보 요청을 만들지 않음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadCheckResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/Unsupported'
+      x-key-kinds:
+      - service
+      x-required-use-case: UC3
+      x-exposure: internal
+  /v1/omr/staff:
+    post:
+      tags:
+      - 인식
+      summary: 오선보 이미지 인식
+      operationId: recognize_staff_v1_omr_staff_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StaffRecognitionInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecognitionResult'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/Unsupported'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-key-kinds:
+      - service
+      - external
+      x-required-use-case: UC12
+      x-exposure: gateway
+      description: |-
+        multipart/form-data에서 파일 배열은 같은 필드명을 반복해 전송한다. 선언되지 않은 폼 필드는 422 VALIDATION_ERROR로 거절한다.
+
+        한 곡의 모든 쪽을 순서대로 인식한다. 서비스 키 + request_no이면 기존 웹 요청에 판정만 기록하며 대체 악보 파일은 넣지 않는다. request_no가 없으면 API 요청을 생성하고 인식 실패 시 서버 보유 템플릿을 결과로 넣을 수 있다. 인식 실패·미설치·timeout·신뢰 불가·변환 실패는 200 RecognitionResult의 fallback/fallback_reason으로 나타날 수 있다. fallback=true나 service_down=true를 인식 성공으로 처리하지 않는다. 여러 쪽 중 일부 실패는 pages와 notice로 구분한다.
+      parameters:
+      - $ref: '#/components/parameters/Deadline'
+  /v1/omr/jeongganbo:
+    post:
+      tags:
+      - 인식
+      summary: 정간보 이미지 인식
+      operationId: recognize_jeongganbo_v1_omr_jeongganbo_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JeongganboRecognitionInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecognitionResult'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/Unsupported'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-key-kinds:
+      - service
+      - external
+      x-required-use-case: UC12
+      x-exposure: gateway
+      description: |-
+        multipart/form-data에서 파일 배열은 같은 필드명을 반복해 전송한다. 선언되지 않은 폼 필드는 422 VALIDATION_ERROR로 거절한다.
+
+        한 곡의 모든 쪽을 순서대로 인식한다. 서비스 키 + request_no이면 기존 웹 요청에 판정만 기록하며 대체 악보 파일은 넣지 않는다. request_no가 없으면 API 요청을 생성하고 인식 실패 시 서버 보유 템플릿을 결과로 넣을 수 있다. 인식 실패·미설치·timeout·신뢰 불가·변환 실패는 200 RecognitionResult의 fallback/fallback_reason으로 나타날 수 있다. fallback=true나 service_down=true를 인식 성공으로 처리하지 않는다. 여러 쪽 중 일부 실패는 pages와 notice로 구분한다.
+      parameters:
+      - $ref: '#/components/parameters/Deadline'
+  /v1/recommend:
+    post:
+      tags:
+      - 추천
+      summary: 국악기 조합 추천
+      operationId: recommend_v1_recommend_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecommendationInput'
+        required: true
+      responses:
+        '200':
+          description: 추천 결과. 추천 불가도 HTTP 200 + available=false + reason=RECOMMEND_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/Unsupported'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-key-kinds:
+      - service
+      - external
+      x-required-use-case: UC12
+      x-exposure: gateway
+      description: |-
+        multipart/form-data에서 파일 배열은 같은 필드명을 반복해 전송한다. 선언되지 않은 폼 필드는 422 VALIDATION_ERROR로 거절한다.
+
+        score는 MIDI·MusicXML(MXL 포함) 입력이다. request_no를 주면 해당 요청의 추천 기록을 저장한다. 웹 요청은 서비스 키, API 요청은 생성 키 또는 서비스 키로 연결 가능하다. rules가 마지막 안전판이다.
+  /v1/render/mp3:
+    post:
+      tags:
+      - 렌더링
+      summary: MP3 렌더링
+      operationId: render_mp3_v1_render_mp3_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Mp3RenderInput'
+        required: true
+      responses:
+        '200':
+          description: 렌더링 결과 바이너리 또는 외부 키의 MP3 정책 제한 안내 JSON
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            X-Renderer:
+              $ref: '#/components/headers/Renderer'
+              description: 바이너리 오디오 응답에서만 제공. 정책 제한 JSON에는 없음.
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mp3Withheld'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/Unsupported'
+      x-key-kinds:
+      - service
+      - external
+      x-required-use-case: UC12
+      x-exposure: gateway
+      description: |-
+        multipart/form-data에서 파일 배열은 같은 필드명을 반복해 전송한다. 선언되지 않은 폼 필드는 422 VALIDATION_ERROR로 거절한다.
+
+        score는 MIDI·MusicXML(MXL 포함) 입력이다. 렌더러 미설치·실패는 502, 렌더링 제한 시간 초과는 504다. 사진·PDF를 입력하지 않는다.
+
+        외부 키이고 MP3 정책 미확인이면 오디오 대신 HTTP 200 Mp3Withheld JSON을 반환하며 X-Renderer는 없다. 서비스 키는 이 정책 분기를 우회한다. Content-Type을 확인해야 한다.
+  /v1/render/pdf:
+    post:
+      tags:
+      - 렌더링
+      summary: PDF 렌더링
+      operationId: render_pdf_v1_render_pdf_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PdfRenderInput'
+        required: true
+      responses:
+        '200':
+          description: 렌더링 결과 바이너리
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            X-Renderer:
+              $ref: '#/components/headers/Renderer'
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/Unsupported'
+      x-key-kinds:
+      - service
+      - external
+      x-required-use-case: UC12
+      x-exposure: gateway
+      description: |-
+        multipart/form-data에서 파일 배열은 같은 필드명을 반복해 전송한다. 선언되지 않은 폼 필드는 422 VALIDATION_ERROR로 거절한다.
+
+        score는 MIDI·MusicXML(MXL 포함) 입력이다. 렌더러 미설치·실패는 502, 렌더링 제한 시간 초과는 504다. 사진·PDF를 입력하지 않는다.
+  /v1/performances:
+    post:
+      tags:
+      - 연주
+      summary: 연주 요청 (UC13)
+      operationId: create_performance_v1_performances_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PerformanceInput'
+        required: true
+      responses:
+        '202':
+          description: 접수 후 비동기 처리. id로 상태/결과를 조회한다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceStatus'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/Unsupported'
+      x-key-kinds:
+      - external
+      x-required-use-case: UC13
+      x-exposure: gateway
+      description: |-
+        multipart/form-data에서 파일 배열은 같은 필드명을 반복해 전송한다. 선언되지 않은 폼 필드는 422 VALIDATION_ERROR로 거절한다.
+
+        score_type은 업무 검사상 필수다. 기본 권한표는 api_caller의 UC13만 허용하므로 외부 키로 호출한다. 서비스 키는 기본 권한표에서 403 AUTH_FORBIDDEN이다. 상태·결과는 생성한 API 키와 같은 키로만 조회한다. 처리 마감은 설정 시간 × 쪽수다. default/recommend 구성은 기존 타악 성부에만 타악기를 배치하며 새 타악 성부를 자동 생성하지 않는다.
+  /v1/performances/{request_no}:
+    get:
+      tags:
+      - 연주
+      summary: 연주 요청 상태
+      operationId: get_performance_v1_performances__request_no__get
+      parameters:
+      - name: request_no
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request No
+      responses:
+        '200':
+          description: 현재 상태. 보관 만료도 200 + status=expired. 대체 완료는 completed_fallback
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceStatus'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-key-kinds:
+      - external
+      x-required-use-case: UC13
+      x-exposure: gateway
+      description: UC13 권한 검사 후 생성 키와 다른 키 또는 웹 채널 요청 번호는 REQUEST_NOT_FOUND(404)다. 기본 권한표에서 서비스 키는 UC13 권한이 없어 먼저
+        403 AUTH_FORBIDDEN이다. API 키 인증을 생략할 수 없다.
+  /v1/performances/{request_no}/result:
+    get:
+      tags:
+      - 연주
+      summary: 연주 결과
+      operationId: get_performance_result_v1_performances__request_no__result_get
+      parameters:
+      - name: request_no
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request No
+      responses:
+        '200':
+          description: 완료 결과 및 짧은 서명 다운로드 URL. service_down도 파일이 없는 결과 상태로 응답 가능
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceResult'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '425':
+          description: 아직 처리 중. ErrorResponse가 아닌 현재 상태 객체
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceStatus'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-key-kinds:
+      - external
+      x-required-use-case: UC13
+      x-exposure: gateway
+      description: |-
+        UC13 권한 검사 후 생성 키와 다른 키 또는 웹 채널 요청 번호는 REQUEST_NOT_FOUND(404)다. 기본 권한표에서 서비스 키는 UC13 권한이 없어 먼저 403 AUTH_FORBIDDEN이다. API 키 인증을 생략할 수 없다.
+
+        대체 결과는 서버 템플릿 MusicXML/MIDI를 제공한다. 파일 생성 실패·미제공 항목은 files의 null로 구분한다. 외부 키의 MP3 정책 미확인 시 mp3_withheld=true, files.mp3=null이다. URL 유효기간은 files_expire_in_seconds(기본 900초), 요청 보관은 기본 24시간이며 설정에 따라 달라진다.
+  /v1/files/{token}:
+    get:
+      tags:
+      - 연주
+      - 연주
+      summary: 결과 파일 내려받기
+      operationId: download_file_v1_files__token__get
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Token
+      responses:
+        '200':
+          description: 서명 URL로 MusicXML·MIDI·MP3 파일 다운로드. API 키 불필요.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            Content-Disposition:
+              schema:
+                type: string
+              description: attachment; filename=<request_no>.<확장자>
+          content:
+            application/vnd.recordare.musicxml+xml:
+              schema:
+                type: string
+                format: binary
+            audio/midi:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+      security: []
+      x-key-kinds: []
+      x-exposure: gateway
+      description: URL 자체가 접근 권한이므로 비밀처럼 취급한다. 잘못된 서명/형식은 404, URL·결과 보관 기간 만료·실제 파일 없음은 410. 만료되면 결과를 재조회해 새 URL을
+        받는다. 외부 키의 MP3 정책 미확인일 때 MP3 URL 접근도 404다.
+  /v1/instruments:
+    get:
+      tags:
+      - 목록
+      summary: 악기 목록 (UC12 A10)
+      operationId: list_instruments_v1_instruments_get
+      responses:
+        '200':
+          description: 사용 가능한 악기 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentsResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+      x-key-kinds:
+      - service
+      - external
+      x-required-use-case: UC12
+      x-exposure: gateway
+  /v1/shared-scores:
+    get:
+      tags:
+      - 목록
+      summary: 공유 악보 목록 (UC12 A10 · BR-SHR-09)
+      operationId: list_shared_scores_v1_shared_scores_get
+      parameters:
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(likes|recent)$
+          default: likes
+          title: Sort
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: 공개 가능한 공유 악보 목록. 작성자·원 요청 번호는 포함하지 않음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedScoresResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+      x-key-kinds:
+      - service
+      - external
+      x-required-use-case: UC12
+      x-exposure: gateway
+  /v1/shared-scores/{share_no}/score:
+    get:
+      tags:
+      - 목록
+      summary: 공유 악보 MusicXML (UC12 A10)
+      operationId: get_shared_score_v1_shared_scores__share_no__score_get
+      parameters:
+      - name: share_no
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Share No
+      responses:
+        '200':
+          description: 공유 복사본 MusicXML 문자열과 제목·악보 종류. 바이너리 파일이 아닌 JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedScoreResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Validation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/Limited'
+      x-key-kinds:
+      - service
+      - external
+      x-required-use-case: UC12
+      x-exposure: gateway
+  /v1/openapi.json:
+    get:
+      tags:
+      - 명세
+      summary: 실행 중인 OpenAPI JSON
+      operationId: getRuntimeOpenapi
+      description: backend API 안내 화면이 읽는 키 없는 명세 경로. API의 나머지 paths는 원본 자동 명세와 같은 20경로/20연산이다.
+      security: []
+      x-key-kinds: []
+      x-exposure: gateway
+      responses:
+        '200':
+          description: OpenAPI 문서 JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+components:
+  schemas:
+    EngineInfo:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        tried:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Tried
+          default: []
+      type: object
+      title: EngineInfo
+    LoadBody:
+      properties:
+        operator_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Operator Id
+      additionalProperties: false
+      type: object
+      title: LoadBody
+    PageEngine:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      type: object
+      title: PageEngine
+    PageSummary:
+      properties:
+        page_no:
+          type: integer
+          title: Page No
+        file_no:
+          type: integer
+          title: File No
+        source:
+          type: string
+          title: Source
+        short_edge_px:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Short Edge Px
+        outcome:
+          type: string
+          enum:
+          - converted
+          - failed
+          title: Outcome
+        fallback_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fallback Reason
+        fallback_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fallback Message
+        structure_verdict:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Structure Verdict
+        validity_grade:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Validity Grade
+        engine:
+          anyOf:
+          - $ref: '#/components/schemas/PageEngine'
+          - type: 'null'
+      type: object
+      required:
+      - page_no
+      - file_no
+      - source
+      - outcome
+      title: PageSummary
+    RecognitionResult:
+      properties:
+        api_version:
+          type: string
+          title: Api Version
+        request_no:
+          type: string
+          title: Request No
+        fallback:
+          type: boolean
+          title: Fallback
+        fallback_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fallback Reason
+          description: x-fallback-catalog 코드. HTTP 오류와 별개인 처리 결과다.
+        fallback_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fallback Message
+        retry_hint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Retry Hint
+        structure_verdict:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Structure Verdict
+        type_mismatch:
+          type: boolean
+          title: Type Mismatch
+          default: false
+        detected_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detected Type
+        validity_grade:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Validity Grade
+        validity_items:
+          additionalProperties:
+            anyOf:
+            - type: number
+            - type: 'null'
+          type: object
+          title: Validity Items
+          default: {}
+        musicxml:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Musicxml
+          description: 인식 결과 MusicXML. 웹 호출에서 대체 결과이면 null일 수 있다.
+        midi_base64:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Midi Base64
+          description: MIDI 파일 바이트의 base64. 생성 실패 시 null, midi_available=false.
+        midi_available:
+          type: boolean
+          title: Midi Available
+          default: false
+        engine:
+          $ref: '#/components/schemas/EngineInfo'
+        timings_ms:
+          additionalProperties:
+            anyOf:
+            - type: integer
+            - type: 'null'
+          type: object
+          title: Timings Ms
+          default: {}
+        page_count:
+          type: integer
+          title: Page Count
+        converted_pages:
+          type: integer
+          title: Converted Pages
+        pages:
+          items:
+            $ref: '#/components/schemas/PageSummary'
+          type: array
+          title: Pages
+          default: []
+        notice:
+          anyOf:
+          - $ref: '#/components/schemas/PartialNotice'
+          - type: 'null'
+        file_kind:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File Kind
+        pdf_page_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pdf Page Count
+        short_edge_px:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Short Edge Px
+        service_down:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Service Down
+      type: object
+      required:
+      - api_version
+      - request_no
+      - fallback
+      - engine
+      - page_count
+      - converted_pages
+      title: RecognitionResult
+    ErrorDetail:
+      type: object
+      properties:
+        code:
+          type: string
+          description: 오류 코드. x-error-catalog의 api_http가 http보다 우선한다.
+        message:
+          type: string
+        fix:
+          type: string
+        gate:
+          anyOf:
+          - type: string
+          - type: 'null'
+        retry_after:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+        details:
+          type: object
+          additionalProperties: true
+      required:
+      - code
+      - message
+      - fix
+      - gate
+      - retry_after
+      - details
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        api_version:
+          type: string
+          const: v1
+      required:
+      - error
+      - api_version
+    PartialNotice:
+      type: object
+      properties:
+        code:
+          type: string
+          const: PAGES_PARTIAL
+        message:
+          type: string
+        pages:
+          type: integer
+        converted:
+          type: integer
+        failed_pages:
+          type: array
+          items:
+            type: integer
+      required:
+      - code
+      - message
+      - pages
+      - converted
+      - failed_pages
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+          - loading
+          - unavailable
+        api_version:
+          type: string
+          const: v1
+        queue:
+          type: object
+          properties:
+            recognize_running:
+              type: integer
+            recognize_waiting:
+              type: integer
+            render_running:
+              type: integer
+          required:
+          - recognize_running
+          - recognize_waiting
+          - render_running
+        settings_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        models_ready:
+          type: integer
+        models_total:
+          type: integer
+        db:
+          type: string
+          enum:
+          - ok
+          - unreachable
+        missing_kinds:
+          type: array
+          items:
+            type: string
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+      required:
+      - status
+      - api_version
+      - queue
+      - settings_version
+      - models_ready
+      - models_total
+      - db
+    ModelState:
+      type: object
+      properties:
+        name:
+          type: string
+        display_name:
+          type: string
+        kind:
+          type: string
+        provider:
+          type: string
+        provider_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+        enabled:
+          type: boolean
+        installed:
+          type: boolean
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+        state:
+          type: string
+          enum:
+          - unavailable
+          - cold
+          - loading
+          - ready
+          - failed
+        loaded_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+        last_load_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        expected_seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+        load_started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+        elapsed_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+      required:
+      - name
+      - display_name
+      - kind
+      - provider
+      - provider_ref
+      - enabled
+      - installed
+      - version
+      - state
+      - loaded_at
+      - last_load_ms
+      - expected_seconds
+      - load_started_at
+      - elapsed_seconds
+      - error
+    VersionsResponse:
+      type: object
+      properties:
+        api_version:
+          type: string
+          const: v1
+        openapi_url:
+          type: string
+        engines:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                anyOf:
+                - type: string
+                - type: 'null'
+              version:
+                anyOf:
+                - type: string
+                - type: 'null'
+              kind:
+                anyOf:
+                - type: string
+                - type: 'null'
+              provider:
+                type: string
+              installed:
+                type: boolean
+              state:
+                type: string
+            required:
+            - name
+            - version
+            - kind
+            - provider
+            - installed
+            - state
+        templates:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              version:
+                type: string
+            required:
+            - id
+            - name
+            - version
+        rules_hash:
+          type: string
+      required:
+      - api_version
+      - openapi_url
+      - engines
+      - templates
+      - rules_hash
+    ReloadModelsResponse:
+      type: object
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelState'
+        changed:
+          type: array
+          items:
+            type: string
+      required:
+      - models
+      - changed
+    LoadModelResponse:
+      type: object
+      properties:
+        load_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        expected_seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+        model:
+          $ref: '#/components/schemas/ModelState'
+      required:
+      - load_id
+      - expected_seconds
+      - model
+    OllamaAvailableResponse:
+      type: object
+      properties:
+        ollama:
+          type: string
+          enum:
+          - ok
+          - unreachable
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+        models:
+          type: array
+          items:
+            type: object
+            properties:
+              tag:
+                type: string
+              size_gb:
+                type: number
+              family:
+                anyOf:
+                - type: string
+                - type: 'null'
+              parameter_size:
+                anyOf:
+                - type: string
+                - type: 'null'
+              digest:
+                anyOf:
+                - type: string
+                - type: 'null'
+              registered:
+                type: boolean
+            required:
+            - tag
+            - size_gb
+            - family
+            - parameter_size
+            - digest
+            - registered
+        error:
+          type: string
+      required:
+      - ollama
+      - version
+      - models
+    ReloadSettingsResponse:
+      type: object
+      properties:
+        settings_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        engine_order:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      required:
+      - settings_version
+      - engine_order
+    UploadPage:
+      type: object
+      properties:
+        page_no:
+          type: integer
+        file_no:
+          type: integer
+        source:
+          type: string
+        short_edge_px:
+          anyOf:
+          - type: integer
+          - type: 'null'
+      required:
+      - page_no
+      - file_no
+      - source
+      - short_edge_px
+    UploadCheckResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          const: true
+        kind:
+          type: string
+          enum:
+          - image
+          - pdf
+        short_edge_px:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        pdf_page_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        page_count:
+          type: integer
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPage'
+      required:
+      - ok
+      - kind
+      - short_edge_px
+      - pdf_page_count
+      - page_count
+      - pages
+    PerformancePage:
+      type: object
+      properties:
+        page_no:
+          type: integer
+        file_no:
+          type: integer
+        source:
+          type: string
+        outcome:
+          type: string
+        fallback_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+        fallback_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+        structure_verdict:
+          anyOf:
+          - type: string
+          - type: 'null'
+        validity_grade:
+          anyOf:
+          - type: string
+          - type: 'null'
+        engine:
+          anyOf:
+          - type: object
+            properties:
+              name:
+                anyOf:
+                - type: string
+                - type: 'null'
+              version:
+                anyOf:
+                - type: string
+                - type: 'null'
+            required:
+            - name
+            - version
+          - type: 'null'
+      required:
+      - page_no
+      - file_no
+      - source
+      - outcome
+      - fallback_reason
+      - fallback_message
+      - structure_verdict
+      - validity_grade
+      - engine
+    PerformanceStatus:
+      type: object
+      properties:
+        api_version:
+          type: string
+          const: v1
+        id:
+          type: string
+          description: R-MMDD-XXXXXXXX 요청 번호. API 경로의 request_no에 사용한다.
+        status:
+          type: string
+          enum:
+          - received
+          - queued
+          - converting
+          - rendering
+          - completed
+          - completed_fallback
+          - service_down
+          - expired
+        status_label:
+          type: string
+        route:
+          type: string
+        file_kind:
+          type: string
+        score_type:
+          anyOf:
+          - type: string
+            enum:
+            - staff
+            - jeongganbo
+          - type: 'null'
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+        remaining_seconds:
+          type: integer
+        pdf_page_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        page_count:
+          type: integer
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PerformancePage'
+        notice:
+          anyOf:
+          - $ref: '#/components/schemas/PartialNotice'
+          - type: 'null'
+      required:
+      - api_version
+      - id
+      - status
+      - status_label
+      - route
+      - file_kind
+      - score_type
+      - created_at
+      - completed_at
+      - expires_at
+      - remaining_seconds
+      - pdf_page_count
+      - page_count
+      - pages
+      - notice
+    PerformanceResult:
+      allOf:
+      - $ref: '#/components/schemas/PerformanceStatus'
+      - type: object
+        properties:
+          fallback:
+            type: boolean
+          fallback_reason:
+            anyOf:
+            - type: string
+            - type: 'null'
+          fallback_message:
+            anyOf:
+            - type: string
+            - type: 'null'
+          retry_hint:
+            anyOf:
+            - type: string
+            - type: 'null'
+          structure_verdict:
+            anyOf:
+            - type: string
+            - type: 'null'
+          type_mismatch:
+            type: boolean
+          detected_type:
+            anyOf:
+            - type: string
+              enum:
+              - staff
+              - jeongganbo
+            - type: 'null'
+          validity_grade:
+            anyOf:
+            - type: string
+            - type: 'null'
+          validity_items:
+            anyOf:
+            - type: object
+              additionalProperties:
+                anyOf:
+                - type: number
+                - type: 'null'
+            - type: 'null'
+          files:
+            type: object
+            properties:
+              musicxml:
+                anyOf:
+                - type: string
+                  format: uri
+                - type: 'null'
+              midi:
+                anyOf:
+                - type: string
+                  format: uri
+                - type: 'null'
+              mp3:
+                anyOf:
+                - type: string
+                  format: uri
+                - type: 'null'
+            required:
+            - musicxml
+            - midi
+            - mp3
+          mp3_withheld:
+            type: boolean
+          mp3_withheld_reason:
+            anyOf:
+            - type: string
+            - type: 'null'
+          mp3_withheld_message:
+            anyOf:
+            - type: string
+            - type: 'null'
+          render_failure:
+            anyOf:
+            - type: string
+            - type: 'null'
+          renderer:
+            anyOf:
+            - type: object
+              properties:
+                name:
+                  anyOf:
+                  - type: string
+                  - type: 'null'
+                version:
+                  anyOf:
+                  - type: string
+                  - type: 'null'
+              required:
+              - name
+              - version
+            - type: 'null'
+          recommend_failed:
+            type: boolean
+          original_instruments_unavailable:
+            type: boolean
+          instrument_mode:
+            type: string
+          transpose_semitones:
+            type: integer
+          volume:
+            type: number
+          engine:
+            anyOf:
+            - type: object
+              properties:
+                name:
+                  anyOf:
+                  - type: string
+                  - type: 'null'
+                version:
+                  anyOf:
+                  - type: string
+                  - type: 'null'
+              required:
+              - name
+              - version
+            - type: 'null'
+          files_expire_in_seconds:
+            type: integer
+        required:
+        - fallback
+        - fallback_reason
+        - fallback_message
+        - retry_hint
+        - structure_verdict
+        - type_mismatch
+        - detected_type
+        - validity_grade
+        - validity_items
+        - files
+        - mp3_withheld
+        - mp3_withheld_reason
+        - mp3_withheld_message
+        - render_failure
+        - renderer
+        - recommend_failed
+        - original_instruments_unavailable
+        - instrument_mode
+        - transpose_semitones
+        - volume
+        - engine
+        - files_expire_in_seconds
+    RecommendationFeatures:
+      type: object
+      properties:
+        tempo:
+          type: string
+          enum:
+          - slow
+          - medium
+          - fast
+        tempo_label:
+          type: string
+        bpm:
+          anyOf:
+          - type: number
+          - type: 'null'
+        mode:
+          type: string
+          enum:
+          - pyeongjo
+          - gyemyeonjo
+          - unknown
+        mode_label:
+          type: string
+        range:
+          type: string
+        range_semitones:
+          type: integer
+        density:
+          type: number
+      required:
+      - tempo
+      - tempo_label
+      - bpm
+      - mode
+      - mode_label
+      - range
+      - range_semitones
+      - density
+    RecommendationResponse:
+      type: object
+      properties:
+        available:
+          type: boolean
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+        pending:
+          type: boolean
+        combinations:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              instruments:
+                type: array
+                items:
+                  type: string
+              reason:
+                type: string
+            required:
+            - label
+            - instruments
+            - reason
+        model:
+          anyOf:
+          - type: object
+            properties:
+              name:
+                type: string
+              version:
+                type: string
+              provider:
+                type: string
+            required:
+            - name
+            - version
+            - provider
+          - type: 'null'
+        features:
+          anyOf:
+          - $ref: '#/components/schemas/RecommendationFeatures'
+          - type: 'null'
+        tried:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        api_version:
+          type: string
+          const: v1
+        recommendation_id:
+          type: integer
+      required:
+      - available
+      - reason
+      - pending
+      - combinations
+      - model
+      - features
+      - tried
+      - api_version
+    Mp3Withheld:
+      type: object
+      properties:
+        api_version:
+          type: string
+          const: v1
+        mp3_withheld:
+          type: boolean
+          const: true
+        mp3_withheld_reason:
+          type: string
+          const: LICENSE_UNCONFIRMED
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+      required:
+      - api_version
+      - mp3_withheld
+      - mp3_withheld_reason
+      - message
+    InstrumentsResponse:
+      type: object
+      properties:
+        api_version:
+          type: string
+          const: v1
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              name:
+                type: string
+              is_gugak:
+                type: boolean
+              is_percussion:
+                type: boolean
+              range_low:
+                anyOf:
+                - type: integer
+                - type: 'null'
+              range_high:
+                anyOf:
+                - type: integer
+                - type: 'null'
+            required:
+            - code
+            - name
+            - is_gugak
+            - is_percussion
+            - range_low
+            - range_high
+      required:
+      - api_version
+      - items
+    SharedScoresResponse:
+      type: object
+      properties:
+        api_version:
+          type: string
+          const: v1
+        sort:
+          type: string
+          enum:
+          - likes
+          - recent
+        has_more:
+          type: boolean
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              share_no:
+                type: string
+              title:
+                type: string
+              score_type:
+                type: string
+                enum:
+                - staff
+                - jeongganbo
+              likes:
+                type: integer
+              example:
+                type: boolean
+              shared_at:
+                anyOf:
+                - type: string
+                  format: date-time
+                - type: 'null'
+            required:
+            - share_no
+            - title
+            - score_type
+            - likes
+            - example
+            - shared_at
+      required:
+      - api_version
+      - sort
+      - has_more
+      - items
+    SharedScoreResponse:
+      type: object
+      properties:
+        api_version:
+          type: string
+          const: v1
+        share_no:
+          type: string
+        title:
+          type: string
+        score_type:
+          type: string
+          enum:
+          - staff
+          - jeongganbo
+        musicxml:
+          type: string
+      required:
+      - api_version
+      - share_no
+      - title
+      - score_type
+      - musicxml
+    InstrumentAssignment:
+      description: instruments 폼 필드에 넣는 JSON 문자열의 해석 규칙. mode 생략 시 tracks가 있으면 custom, 없으면 default. explicit은 custom의
+        호환 이름. part 생략 시 tracks의 인덱스 사용. custom에는 tracks가 필요하다. sf2_ref는 gugak.sf2·gugak·FluidR3_GM.sf2·gm(대소문자
+        무시)만 허용한다. 이 스키마는 해석된 객체의 설명용이며 실제 전송 자료형은 string이다.
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - default
+          - recommend
+          - original
+          - custom
+          - explicit
+        tracks:
+          type: array
+          items:
+            type: object
+            properties:
+              part:
+                type: integer
+                minimum: 0
+              instrument:
+                type: string
+              sf2_ref:
+                anyOf:
+                - type: string
+                - type: 'null'
+            required:
+            - instrument
+      required: []
+    PerformanceInput:
+      properties:
+        score:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Score
+          description: '악보 한 곡: PDF 한 개(모든 쪽 변환) 또는 사진(PNG·JPG·WEBP) 여러 장(올린 순서) — 최대 10쪽'
+        score_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Score Type
+          description: '업무 검사상 필수: staff 또는 jeongganbo. v0.1.1은 Form(None) 선언 후 파일 검사에서 누락·잘못된 값을 UPLOAD_SCORE_TYPE_REQUIRED(422)로
+            거절한다. 자동 명세의 optional 선언은 보존한다.'
+        instruments:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instruments
+          description: InstrumentAssignment를 JSON 문자열로 전송. 생략하면 기본 국악기 구성. 사용자 음원 파일은 받지 않는다.
+          examples:
+          - '{"mode":"default"}'
+          - '{"mode":"custom","tracks":[{"part":0,"instrument":"geomungo"}]}'
+        transpose_semitones:
+          type: integer
+          maximum: 12.0
+          minimum: -12.0
+          title: Transpose Semitones
+          default: 0
+        volume:
+          type: number
+          maximum: 2.0
+          minimum: 0.0
+          title: Volume
+          description: 전체 음량 배율 0~2
+          default: 1.0
+      type: object
+      required:
+      - score
+      title: PerformanceInput
+      additionalProperties: false
+    StaffRecognitionInput:
+      properties:
+        image:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Image
+          description: '악보 한 곡: PDF 한 개(모든 쪽을 300dpi 로 바꿔 인식) 또는 사진(PNG·JPG·WEBP) 여러 장(올린 순서) — 최대 10쪽, 파일마다 20MB
+            이하, 쪽마다 사진 크기 300px 이상(650px 보다 작으면 1000px 로 키워 인식, 2026-09-30)'
+        request_no:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request No
+          description: 서비스 키로 backend가 만든 웹 요청과 연결할 때만 사용. 없으면 API 채널 요청을 생성한다.
+        request_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Id
+          description: request_no의 호환 이름. 두 값이 있으면 비어 있지 않은 request_no 우선.
+      type: object
+      required:
+      - image
+      title: StaffRecognitionInput
+      additionalProperties: false
+    JeongganboRecognitionInput:
+      properties:
+        image:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Image
+          description: '정간보 한 곡: PDF 한 개(모든 쪽을 300dpi 로 바꿔 인식) 또는 사진 여러 장(올린 순서) — 최대 10쪽'
+        request_no:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request No
+          description: 서비스 키로 backend가 만든 웹 요청과 연결할 때만 사용. 없으면 API 채널 요청을 생성한다.
+        request_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Id
+          description: request_no의 호환 이름. 두 값이 있으면 비어 있지 않은 request_no 우선.
+      type: object
+      required:
+      - image
+      title: JeongganboRecognitionInput
+      additionalProperties: false
+    RecommendationInput:
+      properties:
+        score:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Score
+          description: MIDI 또는 MusicXML
+        request_no:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request No
+          description: 요청 번호(있으면 추천 기록을 남긴다)
+      type: object
+      required:
+      - score
+      title: RecommendationInput
+      additionalProperties: false
+    Mp3RenderInput:
+      properties:
+        score:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Score
+          description: 편집 반영 MIDI 또는 MusicXML
+        instruments:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instruments
+          description: InstrumentAssignment를 JSON 문자열로 전송. 생략하면 기본 국악기 구성. 사용자 음원 파일은 받지 않는다.
+          examples:
+          - '{"mode":"default"}'
+          - '{"mode":"custom","tracks":[{"part":0,"instrument":"geomungo"}]}'
+      type: object
+      required:
+      - score
+      title: Mp3RenderInput
+      additionalProperties: false
+    PdfRenderInput:
+      properties:
+        score:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Score
+          description: MusicXML (화면 악보와 같은 내용). MIDI 도 받는다
+      type: object
+      required:
+      - score
+      title: PdfRenderInput
+      additionalProperties: false
+    UploadCheckInput:
+      properties:
+        file:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: File
+          description: 웹에 올라온 파일(지금은 PDF 한 개만 보낸다) image/pdf 검사 전용. MIDI·MusicXML은 거절한다. 통과해도 score_request를 만들지
+            않는다.
+        score_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Score Type
+          description: '업무 검사상 필수: staff 또는 jeongganbo. v0.1.1은 Form(None) 선언 후 파일 검사에서 누락·잘못된 값을 UPLOAD_SCORE_TYPE_REQUIRED(422)로
+            거절한다. 자동 명세의 optional 선언은 보존한다.'
+      type: object
+      required:
+      - file
+      title: UploadCheckInput
+      additionalProperties: false
+    ModelStateList:
+      type: array
+      items:
+        $ref: '#/components/schemas/ModelState'
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: X-API-Key 접근 키. 서버는 SHA-256을 access_key와 대조하고 active 여부 및 역할 권한을 검사한다. 없음/모름은 401, 폐기/권한 부족은
+        403. 내부 경로는 key_kind=service만 허용한다.
+  headers:
+    RequestId:
+      description: 서버가 발급한 요청 추적 번호. 로그와 동일하다.
+      schema:
+        type: string
+    RetryAfter:
+      description: 다시 시도하기까지의 초. 재시도 제한 응답에서 제공한다.
+      schema:
+        type: integer
+        minimum: 1
+    Renderer:
+      description: 실제로 사용한 렌더러 이름과 버전
+      schema:
+        type: string
+  parameters:
+    Deadline:
+      name: X-Deadline
+      in: header
+      required: false
+      schema:
+        type: string
+      description: backend의 인식 마감(ISO 8601). 유효하면 이 시각에 처리를 끊고, 없거나 파싱 실패면 timeout_seconds × 쪽수. 유효 문자열은 시간대 포함
+        권장.
+  responses:
+    BadRequest:
+      description: 요청 형식이 잘못됨
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - BAD_REQUEST
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    Unauthorized:
+      description: 접근 키 누락 또는 모르는 키
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - AUTH_KEY_MISSING
+      - AUTH_KEY_INVALID
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    Forbidden:
+      description: 폐기 키·역할 권한 부족·내부 경로에 외부 키 사용
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - AUTH_KEY_REVOKED
+      - AUTH_FORBIDDEN
+      - AUTH_SERVICE_KEY_REQUIRED
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    NotFound:
+      description: 요청·모델·공유 악보·서명 주소가 없거나 호출자가 볼 수 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - REQUEST_NOT_FOUND
+      - MODEL_NOT_FOUND
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    Gone:
+      description: 결과 보관 기간·서명 URL 만료 또는 파일 소멸
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - RESULT_EXPIRED
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    TooLarge:
+      description: 파일 크기 상한 초과
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - UPLOAD_TOO_LARGE
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    Unsupported:
+      description: 허용하지 않는 파일 종류
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - UPLOAD_UNSUPPORTED_TYPE
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    Validation:
+      description: 누락·자료형·모르는 폼 필드·파일 손상/쪽수/해상도·악보 종류 오류. error.details에 세부 내용.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - VALIDATION_ERROR
+      - UPLOAD_TOO_MANY_FILES
+      - UPLOAD_TOO_MANY_PAGES
+      - UPLOAD_CORRUPTED
+      - UPLOAD_MUSICXML_UNREADABLE
+      - UPLOAD_RESOLUTION_TOO_LOW
+      - UPLOAD_SCORE_TYPE_REQUIRED
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    Limited:
+      description: 키별 최근 1시간 한도 또는 외부 동시 처리 자리 부족. 서비스 키도 별도 한도 설정이 있으면 한도 검사를 받음.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - RATE_LIMIT_EXCEEDED
+      - SERVER_BUSY
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    InternalError:
+      description: 예상하지 못한 서버 오류
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - INTERNAL_ERROR
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    BadGateway:
+      description: 렌더러 실패·미설치 또는 Ollama 연결 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - RENDER_FAILED
+      - RENDERER_MISSING
+      - OLLAMA_UNAVAILABLE
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+    GatewayTimeout:
+      description: 렌더링 시간 초과
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      x-error-codes:
+      - RENDER_TIMEOUT
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+security:
+- ApiKey: []
+servers:
+- url: /api
+  description: 공개 gateway. /api/v1/*로 호출. internal 경로는 차단됨
+- url: http://127.0.0.1:9543
+  description: v0.1.1 내부 주소. 같은 컨테이너 네트워크 네임스페이스에서만 접근
+- url: http://model-api:{port}
+  description: 재구성 내부 서비스 DNS. 실제 포트는 compose 설정으로 주입
+  variables:
+    port:
+      default: '9543'
+x-baseline:
+  release: v0.1.1
+  commit: 1c943a42698891cf35c654decc9c5d6b61ceaa13
+  source: http://127.0.0.1:9503/api/v1/openapi.json
+  openapi_sha256: f8125bcadc58aa2116083eafeae76744ff1407ab97997ead0e16e4651aaa527d
+  review: 초안 작성·로컬 검증 후 팀장 리뷰 및 contract 라벨 PR 병합 필요
+  compatibility_notes:
+  - 기준 /health는 DB 단절 시에도 200 degraded가 가능하다. 새 readiness의 음원·DB 필수 조건은 별도 변경 대상이다.
+  - 기준 missing_kinds는 enabled·installed이며 ready 또는 cold인 인식 엔진을 사용 가능으로 계산한다.
+  - 사운드폰트·렌더러 준비 완료는 기준 /health 200만으로 보장되지 않는다.
+  - 모델 목록에는 provider_ref 등 경로가 포함되며 새 계약에서 임의로 제거하지 않았다.
+tags:
+- name: 상태
+  description: 키 없이 상태·버전·모델 목록 확인
+- name: 내부
+  description: 서비스 키 전용 관리·파일 검사
+- name: 인식
+  description: 오선보·정간보 동기 인식
+- name: 추천
+  description: 악기 조합 추천
+- name: 렌더링
+  description: MP3·PDF 바이너리 생성
+- name: 연주
+  description: 외부 비동기 연주 및 서명 파일 다운로드
+- name: 목록
+  description: 악기·공유 악보 조회
+- name: 명세
+  description: 실행 중인 OpenAPI JSON 조회
+x-error-catalog:
+  UPLOAD_TOO_MANY_FILES:
+    http: 422
+    gate: G1
+    message: PDF 한 개 또는 사진 여러 장으로 올려 주십시오.
+    fix: PDF 를 두 개 이상 올리거나 PDF 와 사진을 섞어 올릴 수 없습니다. PDF 한 개, 또는 사진(PNG·JPG(JPEG)·WEBP) 여러 장으로 다시 올려 주십시오.
+  UPLOAD_TOO_MANY_PAGES:
+    http: 422
+    gate: G1
+    message: 한 번에 10쪽까지 올릴 수 있습니다.
+    fix: 사진은 10장까지, PDF 는 10쪽까지 한 번에 올릴 수 있습니다. 나눠서 따로 올려 주십시오.
+  UPLOAD_UNSUPPORTED_TYPE:
+    http: 415
+    gate: G1
+    message: 받을 수 없는 파일 형식입니다.
+    fix: PNG·JPG(JPEG)·WEBP 악보 사진이나 PDF 한 개로 다시 올려 주십시오. MIDI·MusicXML은 받지 않습니다.
+  UPLOAD_CORRUPTED:
+    http: 422
+    gate: G1
+    message: 파일을 열 수 없습니다. 파일이 손상되었을 수 있습니다.
+    fix: 원본 파일을 다시 저장하거나 다시 찍어서 올려 주십시오. PDF는 암호를 풀어 저장한 뒤 올려 주십시오.
+  UPLOAD_MUSICXML_UNREADABLE:
+    http: 422
+    gate: G1
+    message: 악보 내용을 읽을 수 없는 MusicXML입니다.
+    fix: 악보 프로그램에서 MusicXML로 다시 내보낸 뒤 올려 주십시오.
+  UPLOAD_TOO_LARGE:
+    http: 413
+    gate: G1
+    message: 허용 용량을 넘었습니다.
+    fix: 사진·PDF를 20MB 이하로 줄여 올려 주십시오.
+  UPLOAD_RESOLUTION_TOO_LOW:
+    http: 422
+    gate: G1
+    message: 더 선명한 사진이 필요합니다.
+    fix: 사진 크기가 너무 작습니다(300픽셀 미만). 가로·세로 모두 300픽셀 이상인 사진으로 다시 찍어 올려 주십시오. 300~649픽셀 사진은 서비스가 키워서 읽습니다.
+  UPLOAD_SCORE_TYPE_REQUIRED:
+    http: 422
+    gate: G1
+    message: 악보 종류(정간보/오선보)를 골라 주십시오.
+    fix: 올리기 전에 정간보인지 오선보인지 골라 주십시오.
+  UPLOAD_CHECK_UNAVAILABLE:
+    http: 503
+    gate: G1
+    message: 지금은 PDF 를 확인할 수 없습니다. 잠시 뒤 다시 올리거나 사진으로 올려 주십시오.
+    fix: 잠시 뒤 다시 올리거나, 악보를 사진(PNG·JPG(JPEG)·WEBP)으로 찍어 올려 주십시오.
+  AUTH_KEY_MISSING:
+    http: 401
+    gate: G2
+    message: 접근 키가 없습니다.
+    fix: X-API-Key 머리글에 발급받은 키를 넣어 주십시오.
+  AUTH_KEY_INVALID:
+    http: 401
+    gate: G2
+    message: 접근 키가 맞지 않습니다.
+    fix: 키를 다시 확인하거나 'API활용' 메뉴에서 새로 신청해 주십시오.
+  AUTH_KEY_REVOKED:
+    http: 403
+    gate: G2
+    message: 폐기된 접근 키입니다.
+    fix: '''API활용'' 메뉴에서 새 키를 신청해 주십시오.'
+  AUTH_SERVICE_KEY_REQUIRED:
+    http: 403
+    gate: G2
+    message: 서비스 전용 키만 쓸 수 있는 내부 기능입니다.
+    fix: 외부 키로는 부를 수 없습니다. 공개된 엔드포인트를 써 주십시오.
+  RATE_LIMIT_EXCEEDED:
+    http: 429
+    gate: G3
+    message: 호출 한도를 넘었습니다.
+    fix: 안내된 시각 뒤에 다시 시도해 주십시오.
+  SERVER_BUSY:
+    http: 429
+    gate: G3
+    message: 지금 처리할 수 있는 한도를 넘었습니다.
+    fix: 안내된 시각 뒤에 다시 시도해 주십시오.
+  VALIDATION_ERROR:
+    http: 422
+    gate: null
+    message: 입력값이 약속한 형식과 맞지 않습니다.
+    fix: details.errors 에 적힌 항목(loc·msg)을 고쳐 다시 보내 주십시오.
+  SERVICE_NOT_READY:
+    http: 503
+    gate: null
+    message: 서버가 아직 준비 중입니다.
+    fix: 잠시 뒤 다시 시도해 주십시오.
+  RESULT_EXPIRED:
+    http: 410
+    gate: G4
+    message: 보관 기간(24시간)이 지나 결과가 지워졌습니다.
+    fix: 악보를 다시 올려 주십시오.
+  REQUEST_NOT_FOUND:
+    http: 404
+    gate: null
+    message: 요청을 찾을 수 없습니다.
+    fix: 요청 번호를 확인하거나 악보를 다시 올려 주십시오.
+  MODEL_NOT_FOUND:
+    http: 404
+    gate: null
+    message: 등록되지 않은 모델입니다.
+    fix: 모델 이름을 확인해 주십시오.
+  OLLAMA_UNAVAILABLE:
+    http: 502
+    gate: null
+    message: 공유 Ollama 서버에 연결할 수 없습니다.
+    fix: 관리자에게 Ollama 서버 확인을 요청해 주십시오(직접 ollama serve 를 실행하지 않습니다).
+  BAD_REQUEST:
+    http: 400
+    gate: null
+    message: 요청 형식이 맞지 않습니다.
+    fix: 입력값을 확인해 주십시오.
+  INTERNAL_ERROR:
+    http: 500
+    gate: null
+    message: 서버 안에서 문제가 생겼습니다.
+    fix: 잠시 뒤 다시 시도해 주십시오.
+  AUTH_FORBIDDEN:
+    http: 403
+    gate: G13
+    message: 이 기능을 쓸 권한이 없습니다.
+    fix: 이 기능을 쓸 수 있는 계정으로 로그인해 주십시오.
+  RENDER_FAILED:
+    http: 502
+    gate: null
+    message: 만들지 못했습니다. 다시 시도해 주십시오.
+    fix: 잠시 뒤 다시 시도해 주십시오.
+  RENDERER_MISSING:
+    http: 502
+    gate: null
+    message: 서버에 렌더러가 설치되지 않아 만들 수 없습니다. MIDI·MusicXML은 받을 수 있습니다.
+    fix: 잠시 뒤 다시 시도해 주십시오.
+  RENDER_TIMEOUT:
+    http: 504
+    gate: null
+    message: 시간이 너무 오래 걸려 멈췄습니다. 다시 시도해 주십시오.
+    fix: 잠시 뒤 다시 시도해 주십시오.
+x-fallback-catalog:
+  RECOGNITION_FAILED:
+    db: recognition_failed
+    message: 악보를 인식하지 못했습니다.
+  TIMEOUT:
+    db: timeout
+    message: 처리 시간이 너무 오래 걸렸습니다.
+  ENGINE_DOWN:
+    db: engine_stopped
+    message: 인식 엔진이 멈췄습니다.
+  NO_NOTES:
+    db: recognition_failed
+    message: 악보에서 음표를 찾지 못했습니다.
+  NO_SCORE_STRUCTURE:
+    db: no_structure
+    message: 악보 구조를 찾지 못했습니다.
+    retry_hint: 악보 사진을 다시 올려 보십시오.
+  UNTRUSTED_RESULT:
+    db: distrust
+    message: 인식 결과를 믿기 어렵습니다.
+  USER_REQUEST:
+    db: user_request
+    message: 요청하신 대로 대체 악보로 바꿨습니다.
+x-backend-consumers:
+  상태·API 안내:
+  - GET /v1/health
+  - GET /v1/versions
+  - GET /v1/openapi.json
+  - GET /v1/models
+  파일 검사:
+  - POST /v1/internal/upload-check
+  인식:
+  - POST /v1/omr/staff
+  - POST /v1/omr/jeongganbo
+  추천·렌더링:
+  - POST /v1/recommend
+  - POST /v1/render/mp3
+  - POST /v1/render/pdf
+  관리:
+  - POST /v1/internal/settings/reload
+  - POST /v1/internal/models/reload
+  - POST /v1/internal/models/{name}/load
+  - GET /v1/internal/ollama/available
+x-verification:
+  baseline_routes: 20
+  documented_operations_including_spec: 21
+  backend_paths_covered: 14
+  checks:
+  - OpenAPI 3.1 표준 검증, 모든 로컬 $ref 해석
+  - 원본 7개 요청 스키마의 자료형·필수 필드·기본값·범위 및 공개/인증 구분 대조
+  - RecognitionResult·PageSummary·EngineInfo·PageEngine·LoadBody 원본 구조 대조
+  - 실서버 읽기/파일 검사/거절 응답 19건 스키마 대조(키·토큰 미기록)
+  - 실제 상태·결과 함수의 주입 상태/DB 응답 7건 및 오류 팩토리 11건 스키마 대조
+  - 기존 실제 homr·정간보·추천 성공 응답 3건 스키마 대조
+  scope: 기존 서버 설정·권한·엔진을 변경하거나 신규 외부 키를 발급하지 않음. 정상 외부 연주 전체 흐름의 새 실서버 시험은 이번 문서 작업 범위에 포함하지 않음.
+  standard_validation_command: openapi-spec-validator api/contracts/model-api.yaml
+  remaining: 팀장 리뷰 및 contract 라벨 PR 병합. 이 초안에서 완료됐다고 표시하지 않는다.
