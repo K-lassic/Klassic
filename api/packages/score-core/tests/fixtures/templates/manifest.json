@@ -1,0 +1,47 @@
+{
+  "id": "gutgeori-v1",
+  "version": "v1",
+  "status": "placeholder",
+  "title": "굿거리장단 기본",
+  "note": "선율은 국악 전공 팀원이 채울 때까지 임시. 장단은 GM 타악(36 큰북·38 작은북·42 하이햇)으로 근사한 굿거리 장단(덩 기덕 쿵 더러러 쿵 기덕 쿵 더러러)",
+  "selection_rule": "always-default",
+  "time_signature": "12/8",
+  "tempo": {
+    "dotted_quarter_bpm": 66,
+    "quarter_bpm": 99
+  },
+  "key_fifths": -3,
+  "measures": 8,
+  "parts": [
+    {
+      "id": "P1",
+      "name": "가야금",
+      "instrument": "gayageum",
+      "percussion": false,
+      "notes": 35
+    },
+    {
+      "id": "P2",
+      "name": "장구",
+      "instrument": "janggu",
+      "percussion": true,
+      "notes": 120
+    }
+  ],
+  "files": {
+    "musicxml": {
+      "path": "gutgeori-v1.musicxml",
+      "sha256": "d6e7022d22d358755b67acfb1e427088704d993f6aa546b30e572e5299665f2e"
+    },
+    "midi": {
+      "path": "gutgeori-v1.mid",
+      "sha256": "ca8da28a99245dfeee3924370a97fc6ecee65e8aa466d31a763dfb10c332f92e"
+    },
+    "scoredoc": {
+      "path": "gutgeori-v1.scoredoc.json",
+      "sha256": "56babf5758226460e245335b2a02ef567f2c7fa4d8296841fb3e5a2aa89aa096"
+    }
+  },
+  "melody_author": null,
+  "generator": "app/packages/score-core/scripts/make-template.ts"
+}
