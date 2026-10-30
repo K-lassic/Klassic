@@ -19,6 +19,8 @@ info:
     - 권한: 경로 → 유스케이스(UC) → 역할 권한표(`role_permission`). 로그인 없이 쓰는 UC 는 UC11 · UC16 뿐.
       **대응표에 없는 경로는 404**(권한 존재를 드러내지 않음).
     - 요청 번호 `{no}` = `R-MMDD-XXXXXXXX`(대문자 · 숫자 8자, 0/O/1/I 제외). 이 계정 · 세션의 요청만 볼 수 있다(아니면 404 `REQUEST_NOT_FOUND`).
+    - 로그인 없이 쓰는 경로는 `/api/health` · `/api/auth/*` · `/api/session/end` · `/api/api-docs` 뿐이다. 나머지 `/api/*` 는
+      로그인 안 함 → 401 `AUTH_LOGIN_REQUIRED`(화면은 `/login?next=<지금 주소>` 로 보냄) · 역할 없음 → 403 `AUTH_FORBIDDEN` (G13).
     - 모든 오류는 `ErrorResponse` 한 모양이고, 코드 · 문구 · HTTP 상태는 `shared/error-codes.json` 에서 온다.
       `retry_after` 가 있으면 `Retry-After` 머리글도 보낸다.
 
@@ -151,7 +153,8 @@ paths:
     post:
       tags: [auth]
       summary: "[나가기] — 세션만 끝낸다"
-      x-priority: P1
+      description: v0.1.1 화면은 부르지 않는다 — 로그아웃은 `/api/auth/logout`(같은 세션 종료 처리)을 쓴다 (#8).
+      x-priority: P3
       x-uc: UC16
       responses:
         "204": { description: 종료됨 }
@@ -163,9 +166,11 @@ paths:
     get:
       tags: [requests]
       summary: 인식 · 추천 모델 준비 상태 (화면의 "모델 준비" 안내)
-      x-priority: P1
+      description: 화면은 안내 문구에만 쓰고, 실패해도 올리기는 그대로 된다 (#8).
+      x-priority: P2
       x-uc: UC1
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 모델 상태
           content: { application/json: { schema: { $ref: "#/components/schemas/ModelStatusPublic" } } }
@@ -198,6 +203,7 @@ paths:
                   items: { type: string, format: binary }
                 score_type: { $ref: "#/components/schemas/ScoreType" }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "202":
           description: 접수됨
           content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
@@ -212,8 +218,8 @@ paths:
     post:
       tags: [requests]
       summary: 예시 악보로 올리기
-      description: 서버 전용 폴더의 예시 파일로 `POST /api/requests` 와 같은 검사 · 접수. 목록 밖 id · 경로 문자는 404.
-      x-priority: P2
+      description: 서버 전용 폴더의 예시 파일로 `POST /api/requests` 와 같은 검사 · 접수. 목록 밖 id · 경로 문자는 404. 발표 시연용이라 P1.
+      x-priority: P1
       x-uc: UC1
       requestBody:
         required: true
@@ -226,6 +232,7 @@ paths:
                 example_id: { type: string }
                 score_type: { $ref: "#/components/schemas/ScoreType" }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "202":
           description: 접수됨
           content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
@@ -235,9 +242,10 @@ paths:
     get:
       tags: [requests]
       summary: 예시 악보 목록
-      x-priority: P2
+      x-priority: P1
       x-uc: UC1
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 예시 목록
           content:
@@ -260,11 +268,12 @@ paths:
     get:
       tags: [requests]
       summary: 예시 미리보기 (짧은 변 200px JPEG)
-      x-priority: P2
+      x-priority: P1
       x-uc: UC1
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200": { description: 미리보기, content: { image/jpeg: { schema: { type: string, format: binary } } } }
         "404": { $ref: "#/components/responses/Error" }
 
@@ -277,6 +286,7 @@ paths:
       x-uc: UC1
       parameters: [{ $ref: "#/components/parameters/RequestNo" }]
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 상태
           content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
@@ -286,8 +296,10 @@ paths:
     post:
       tags: [requests]
       summary: 악보 종류 확인 답 (`awaiting_type_answer` 일 때)
-      description: 오선보로 올렸는데 정간보처럼 보이면(또는 반대) 사용자에게 묻는다. `change_to=null` 이면 처음 고른 종류로 계속.
-      x-priority: P2
+      description: |
+        오선보로 올렸는데 정간보처럼 보이면(또는 반대) 사용자에게 묻는다. `change_to=null` 이면 처음 고른 종류로 계속.
+        답하지 않으면 `awaiting_type_answer` 에서 끝나지 않으므로 올리기 흐름과 같이 P1 (#8).
+      x-priority: P1
       x-uc: UC1
       parameters: [{ $ref: "#/components/parameters/RequestNo" }]
       requestBody:
@@ -300,6 +312,7 @@ paths:
               properties:
                 change_to: { oneOf: [{ $ref: "#/components/schemas/ScoreType" }, { type: "null" }] }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "202":
           description: 답을 받아 처리 계속
           content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
@@ -315,6 +328,7 @@ paths:
       x-uc: UC1
       parameters: [{ $ref: "#/components/parameters/RequestNo" }]
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 결과 악보
           content: { application/json: { schema: { $ref: "#/components/schemas/ScoreResponse" } } }
@@ -331,6 +345,7 @@ paths:
       x-uc: UC2
       parameters: [{ $ref: "#/components/parameters/RequestNo" }]
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 대체 결과로 바뀐 상태
           content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
@@ -355,6 +370,7 @@ paths:
               properties:
                 event: { enum: [result_shown, first_played] }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "204": { description: 기록됨 }
         "400": { $ref: "#/components/responses/Error" }   # BAD_REQUEST (details.field=event)
 
@@ -381,6 +397,7 @@ paths:
                 ops: { type: array, items: { $ref: "#/components/schemas/EditOp" } }
                 finished: { type: boolean, default: true }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "204": { description: 저장됨 }
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
@@ -407,6 +424,7 @@ paths:
                 edit_ops: { type: array, items: { $ref: "#/components/schemas/EditOp" } }
                 instruments: { $ref: "#/components/schemas/InstrumentChoiceBody" }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "202":
           description: 내보내기 작업
           content: { application/json: { schema: { $ref: "#/components/schemas/ExportTask" } } }
@@ -424,6 +442,7 @@ paths:
         - { $ref: "#/components/parameters/RequestNo" }
         - { $ref: "#/components/parameters/FileId" }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 내보내기 작업
           content: { application/json: { schema: { $ref: "#/components/schemas/ExportTask" } } }
@@ -439,6 +458,7 @@ paths:
         - { $ref: "#/components/parameters/RequestNo" }
         - { $ref: "#/components/parameters/FileId" }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: "파일 (`Content-Disposition: attachment`)"
           content:
@@ -460,13 +480,15 @@ paths:
         - { $ref: "#/components/parameters/RequestNo" }
         - { name: format, in: path, required: true, schema: { enum: [musicxml, midi] } }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 파일 (`{no}.musicxml` · `{no}.mid`)
           content:
             audio/midi: { schema: { type: string, format: binary } }
             application/vnd.recordare.musicxml+xml: { schema: { type: string, format: binary } }
         "400": { $ref: "#/components/responses/Error" }   # BAD_REQUEST (details.field=format)
-        "404": { $ref: "#/components/responses/Error" }   # MIDI_UNAVAILABLE 포함 (HTTP 는 error-codes.json 기준)
+        "404": { $ref: "#/components/responses/Error" }   # REQUEST_NOT_FOUND
+        "409": { $ref: "#/components/responses/Error" }   # MIDI_UNAVAILABLE (error-codes.json http 409)
         "410": { $ref: "#/components/responses/Error" }   # RESULT_EXPIRED
 
   # ===========================================================================
@@ -479,6 +501,7 @@ paths:
       x-priority: P1
       x-uc: UC5
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 악기 목록
           content: { application/json: { schema: { $ref: "#/components/schemas/InstrumentCatalog" } } }
@@ -492,6 +515,7 @@ paths:
       x-uc: UC5
       parameters: [{ $ref: "#/components/parameters/RequestNo" }]
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 추천 (추천할 수 없으면 available=false)
           content: { application/json: { schema: { $ref: "#/components/schemas/Recommendation" } } }
@@ -509,6 +533,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/InstrumentChoiceBody" } } }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "204": { description: 기록됨 }
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
@@ -524,6 +549,7 @@ paths:
       x-priority: P2
       x-uc: UC7
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 목록
           content:
@@ -543,6 +569,7 @@ paths:
       x-uc: UC7
       parameters: [{ $ref: "#/components/parameters/RequestNo" }]
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "204": { description: 지움 }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
@@ -558,6 +585,7 @@ paths:
       x-priority: P2
       x-uc: UC18
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 공유 상태
           content: { application/json: { schema: { $ref: "#/components/schemas/ShareState" } } }
@@ -578,6 +606,7 @@ paths:
               properties:
                 title: { type: string, minLength: 1, maxLength: 60 }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 공유 상태
           content: { application/json: { schema: { $ref: "#/components/schemas/ShareState" } } }
@@ -589,6 +618,7 @@ paths:
       x-priority: P2
       x-uc: UC18
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: "`{shared:false}`"
           content: { application/json: { schema: { $ref: "#/components/schemas/ShareState" } } }
@@ -605,6 +635,7 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 목록
           content: { application/json: { schema: { $ref: "#/components/schemas/SharedScoreList" } } }
@@ -617,6 +648,7 @@ paths:
       x-uc: UC18
       parameters: [{ $ref: "#/components/parameters/ShareNo" }]
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 공유 악보
           content: { application/json: { schema: { $ref: "#/components/schemas/SharedScoreBody" } } }
@@ -630,6 +662,7 @@ paths:
       x-uc: UC18
       parameters: [{ $ref: "#/components/parameters/ShareNo" }]
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "202":
           description: 새 요청 (`route=direct` · `from_shared=true`)
           content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
@@ -643,6 +676,7 @@ paths:
       x-uc: UC18
       parameters: [{ $ref: "#/components/parameters/ShareNo" }]
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "200":
           description: 좋아요 상태
           content:
@@ -692,6 +726,7 @@ paths:
                 purpose: { type: string }
                 consent: { const: true }
       responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
         "201":
           description: 발급됨
           content:
@@ -863,8 +898,18 @@ paths:
       security: [{ admin: [] }]
       x-priority: P3
       parameters: [{ $ref: "#/components/parameters/KeyId" }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
-      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [call_limit_per_hour]
+              properties:
+                call_limit_per_hour: { type: integer, minimum: 1 }
+      responses:
+        "200": { $ref: "#/components/responses/AdminObject" }
+        "400": { $ref: "#/components/responses/Error" }   # SETTINGS_INVALID_VALUE (G6)
   /admin/service-key:
     post:
       tags: [admin]
@@ -984,10 +1029,12 @@ paths:
       security: [{ admin: [] }]
       x-priority: P3
       parameters:
-        - { name: limit, in: query, schema: { type: integer } }
-        - { name: offset, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
         - { name: channel, in: query, schema: { enum: [web, api] } }
         - { name: route, in: query, schema: { enum: [recognize, direct, fallback] } }
+        - { name: reason, in: query, description: "대체 이유 (RequestStatus.fallback_reason 과 같은 대문자 코드)", schema: { type: string } }
+        - { name: missing, in: query, description: "`1` 이면 기록이 빠진 요청만 (SC-004)", schema: { const: "1" } }
       responses: { "200": { $ref: "#/components/responses/AdminObject" } }
   /admin/jobs/{no}:
     get:
@@ -1010,6 +1057,8 @@ paths:
       summary: 변경 이력 전체
       security: [{ admin: [] }]
       x-priority: P3
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 200 } }
       responses: { "200": { $ref: "#/components/responses/AdminObject" } }
   /admin/evaluation:
     get:
@@ -1110,6 +1159,12 @@ components:
         Retry-After:
           description: 다시 시도할 때까지 초
           schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    # 로그인이 필요한 /api 경로 — 로그인 안 함(G13). 화면은 /login?next=<지금 주소> 로 보낸다 (frontend/src/api/client.ts)
+    LoginRequired:
+      description: "`AUTH_LOGIN_REQUIRED` — 로그인이 필요함 (세션이 끝났을 때 포함)"
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
