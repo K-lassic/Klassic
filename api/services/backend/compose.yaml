@@ -1,3 +1,59 @@
-# backend — web(사용자 API) · admin(관리자 API) (담당: 팀장)
-# 참고: proto_type/docker-compose.yml 의 web · admin · migrate
-services: {}
+# =============================================================================
+# #23 backend — web(사용자 API) · admin(관리자 API) (담당: 팀장)
+#   같은 이미지를 --role 만 바꿔 두 컨테이너로 띄운다. 호스트 포트는 열지 않는다 — Nginx(#22)만 서비스 이름으로 부른다.
+#   서비스 이름 · 컨테이너 안 포트는 #22 와 약속한 값: web 9523 · admin 26101
+#   참고: proto_type/docker-compose.yml 의 web · admin (그쪽은 network_mode: service:web 우회 — 여기서는 쓰지 않는다)
+# =============================================================================
+x-backend: &backend
+  build:
+    context: .
+    # 이 폴더 밖의 공용 파일을 빌드에 넘겨 이미지에 굽는다 (api/shared/README.md 「이미지에 넣는 방법」)
+    additional_contexts:
+      shared: ../../shared
+      score-core: ../../packages/score-core
+  image: ${DOCKERHUB_NAMESPACE:-klassic}/backend:${APP_TAG:-dev}
+  restart: unless-stopped
+  environment:
+    DB_HOST: db
+    DB_PORT: "3306"
+    DB_NAME: ${DB_NAME:?api/.env 에 DB_NAME 이 필요합니다}
+    DB_USER: ${DB_USER:?api/.env 에 DB_USER 가 필요합니다}
+    DB_PASSWORD: ${DB_PASSWORD:?api/.env 에 DB_PASSWORD 가 필요합니다}
+    SESSION_SECRET: ${SESSION_SECRET:?api/.env 에 SESSION_SECRET(32자 이상)이 필요합니다}
+    SERVICE_API_KEY: ${SERVICE_API_KEY:-}
+    MODEL_API_URL: http://model-api:9543
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+  depends_on:
+    # DB 가 준비되고 마이그레이션이 끝난 뒤 뜬다 (작성규칙 4-2 · #20 의 migrate)
+    migrate: { condition: service_completed_successfully }
+  # 보안 옵션 (작성규칙 4-6) — 쓰는 곳이 없으므로 읽기 전용. 업로드 저장소 볼륨은 #34 에서 더한다
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+services:
+  web:
+    <<: *backend
+    command: ["node", "dist/server.js", "--role=web"]
+    healthcheck:
+      # 준비 기준 health — DB · 설정 판본을 읽을 수 있을 때만 200 (slim 이미지라 curl 대신 node fetch)
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9523/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # 자원 한도 — 2026-10-30 v0.1.1 web 측정 84MB + 여유 (인식 작업자 · 렌더링 대기열이 붙으면 다시 잰다 · #47)
+    mem_limit: 512m
+
+  admin:
+    <<: *backend
+    command: ["node", "dist/server.js", "--role=admin"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:26101/admin/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # 2026-10-30 v0.1.1 admin 측정 33MB + 여유
+    mem_limit: 256m

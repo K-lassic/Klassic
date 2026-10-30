@@ -1,0 +1,10 @@
+# #23 이미지에 넣지 않을 것 — .gitignore 와 짝을 이루는 이중 방어 (작성규칙 2-6)
+node_modules/
+dist/
+tests/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+README.md

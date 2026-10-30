@@ -13,7 +13,79 @@
 
 ## 이 폴더에 둘 파일
 
-`src/` · `tests/` · `package.json` · `package-lock.json` · `Dockerfile` · `.dockerignore` · `compose.yaml` · `.env.example` · 이 README(Runbook: 기동 · 확인 · 장애 조치)
+`src/` · `tests/` · `package.json` · `package-lock.json` · `Dockerfile` · `.dockerignore` · `compose.yaml` · 이 README(Runbook: 기동 · 확인 · 장애 조치). 설정 형식은 `api/.env.example`.
+
+---
+
+## Runbook (#23 골격)
+
+### 구조에서의 위치
+
+```
+Nginx 사용자 server ─ /api/*   ─▶ web   (node dist/server.js --role=web,   컨테이너 안 9523)
+Nginx 관리자 server ─ /admin/* ─▶ admin (node dist/server.js --role=admin, 컨테이너 안 26101)
+web · admin ─▶ MariaDB(db) — 계정 · 요청 · 결과 · 설정 판본 (파일 본체는 저장소 볼륨, DB 에는 위치만 — #34)
+web ─▶ model-api (MODEL_API_URL, 서비스 키 SERVICE_API_KEY)
+```
+
+같은 이미지(`klassic/backend`)를 실행 인자만 바꿔 띄운다. 호스트 포트는 열지 않는다 — Nginx 만 서비스 이름으로 부른다.
+
+### 파일
+
+| 파일 | 하는 일 |
+|---|---|
+| `src/server.ts` | 시작점 — 설정 검증 → 공용 설정 → DB 기다리기(5회 · 2초) → 설정 판본 확인 → 수신 · SIGTERM 정리 |
+| `src/app.ts` | Express 앱 두 개 — `createWebApp`(/api/health) · `createAdminApp`(/admin/health). 기능 라우터는 #27 부터 붙인다 |
+| `src/config/env.ts` | 환경변수 zod 검증 — 빠진 키 이름만 알리고 값은 출력하지 않음 |
+| `src/config/shared.ts` | `api/shared` 읽기 — 오류 파일 세 개를 합침 (중복이면 시작 안 함) |
+| `src/config/settings.ts` | 처리 설정 판본(DB) — 5초 캐시 |
+| `src/db/pool.ts` | mysql2 풀 · `waitForDb` 재시도 · `query` · `one` · `exec` · `tx` |
+| `src/web/errors.ts` | 공통 오류 응답 `ApiError` · `errorHandler` · `wrap` |
+| `src/lib/logger.ts` | pino JSON → stdout · DB 오류의 SQL 본문 지움 |
+| `Dockerfile` | 2단계 빌드 · score-core 먼저 빌드 · shared · score-core 를 이미지에 구움 · `node` 사용자 · exec 형식 |
+| `tests/unit/skeleton.test.ts` | DB 없이 도는 시험 8개 — score-core `file:` 설치 · 설정 검증 · 오류 합치기 · 응답 모양 · DB 없을 때 503 |
+
+### 기동 · 확인
+
+```bash
+cd api
+docker compose up -d --build web admin     # db · migrate 가 먼저 끝난 뒤 뜬다 (depends_on)
+docker compose ps                          # web · admin 이 (healthy)
+curl http://127.0.0.1:9603/api/health      # Nginx 경유 → {"status":"ok","role":"web","setting_version":1}
+curl http://127.0.0.1:26201/admin/health   # 관리자 server 경유 → {"status":"ok","role":"admin",...}
+docker compose logs -f web                 # JSON 한 줄 로그
+```
+
+- `/api/health` · `/admin/health` 는 **DB 에 닿고 처리 설정 판본을 읽을 수 있을 때만 200**, 아니면 503 `SERVICE_NOT_READY` (`details.reason` = `db` · `settings`).
+
+### 시험 (컨테이너 안에서)
+
+score-core 를 먼저 빌드해야 `file:` 로 가져올 수 있다.
+
+```bash
+docker run --rm -v "$PWD/api:/src:ro" node:22.21.1-bookworm-slim sh -c '
+  mkdir -p /w/packages /w/services && cp -r /src/packages/score-core /w/packages/ && cp -r /src/shared /w/ && cp -r /src/services/backend /w/services/
+  cd /w/packages/score-core && npm ci && npm run build
+  cd /w/services/backend && npm ci && npm run build && SHARED_DIR=/w/shared npm test'
+```
+
+### 장애 조치 (증상 → 근거 → 조치)
+
+| 증상 | 근거 | 조치 |
+|---|---|---|
+| web · admin 이 시작하자마자 꺼짐 | `docker compose logs web` 에 `설정이 빠졌거나 잘못됐습니다: <키>` | `api/.env` 에 그 키를 채운다 (`api/.env.example` 참고) |
+| 로그에 `DB 연결 실패 — 다시 시도` 5번 뒤 `시작 실패` | db 가 healthy 가 아님 | `docker compose ps db` · `logs db` 확인 → 볼륨 · 비밀번호 |
+| `처리 설정 판본이 없습니다` | 마이그레이션(초기 데이터)이 안 됨 | `docker compose run --rm migrate` |
+| `오류 코드 중복` 으로 시작 안 함 | `api/shared/errors/*.json` 에 같은 코드 | `python api/shared/check_errors.py` 로 찾아 한쪽에서 지운다 |
+| `/api/health` 503 `reason: db` | 운영 중 DB 끊김 | DB 가 돌아오면 자동 회복 (2026-10-30 시험: 다시 켠 뒤 약 6초) |
+
+### 2026-10-30 확인 결과
+
+- 이미지 빌드 · web/admin healthy · 사용자 `node`(uid 1000) · 수신 `0.0.0.0` · 메모리 각 약 25MB (한도 512m · 256m)
+- Nginx(9603) → web `/api/health` 200 · 26201 → admin 200 · 9603 의 `/admin/*` 404 — #22 경로를 실제 백엔드로 다시 확인
+- DB 정지 → 503 `SERVICE_NOT_READY` → DB 다시 켜면 약 6초 뒤 200
+- `docker compose stop web` 1초 (SIGTERM 받아 정리)
+- 남은 것: `/api/v1/*` 는 model-api(#24) 뒤 확인 · 실제 접속 주소(trust proxy)는 #37
 
 ---
 
