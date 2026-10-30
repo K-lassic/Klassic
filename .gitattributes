@@ -5,6 +5,8 @@
 *.sh        text eol=lf
 Dockerfile  text eol=lf
 *.Dockerfile text eol=lf
+# #17 SQL 은 LF — 트리거의 DELIMITER 줄 끝에 CR 이 붙으면 mariadb 클라이언트가 구분자를 못 알아본다
+*.sql       text eol=lf
 
 # 사운드폰트(최대 148MB)는 Git LFS — GitHub 일반 파일 한도(100MB)를 넘는다
 *.sf2       filter=lfs diff=lfs merge=lfs -text
