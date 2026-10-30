@@ -82,6 +82,12 @@
       "gate": "G13",
       "message": "이 기능을 쓸 권한이 없습니다.",
       "fix": "이 기능을 쓸 수 있는 계정으로 로그인해 주십시오."
+    },
+    "SERVICE_NOT_READY": {
+      "http": 503,
+      "gate": null,
+      "message": "서버가 아직 준비 중입니다.",
+      "fix": "잠시 뒤 다시 시도해 주십시오."
     }
   },
   "fallback_reasons": {

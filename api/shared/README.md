@@ -14,15 +14,16 @@ api/shared/ ── 이미지에 ┼─ model-api — 오류 응답 · 업로드 
 
 | 파일 | 내용 | 담당 | v0.1.1 |
 |---|---|---|---|
-| `errors/common.json` | 두 서비스가 함께 쓰는 오류 코드 25개 (업로드 형식 · 요청 없음 · 결과 만료 · 대체 이유 · 렌더링 실패 등) + `api_version` | 팀장 (두 서비스 담당 함께 리뷰) | `error-codes.json` 에서 나눔 |
+| `errors/common.json` | 두 서비스가 함께 쓰는 오류 코드 26개 (업로드 형식 · 요청 없음 · 결과 만료 · 준비 중 · 대체 이유 · 렌더링 실패 등) + `api_version` | 팀장 (두 서비스 담당 함께 리뷰) | `error-codes.json` 에서 나눔 |
 | `errors/web.json` | 백엔드만 쓰는 코드 35개 (가입 · 로그인 · 관리자 · 요청 한도 · 키 신청 등) | 팀장 | 〃 |
-| `errors/model.json` | model-api 만 쓰는 코드 10개 (API 키 · 호출 한도 · 서버 준비 · 렌더러 등) | 예은 | 〃 |
+| `errors/model.json` | model-api 만 쓰는 코드 9개 (API 키 · 호출 한도 · 렌더러 등) | 예은 | 〃 |
 | `upload-rules.json` | 업로드 형식 · 크기 · 쪽 수 · 사진 짧은 변 | 팀장 | 그대로 복사 |
 | `instruments.json` | 악기 목록 · 기본 편성 | 팀장 | 그대로 복사 |
 | `check_errors.py` | 세 오류 파일 점검 (중복 · 필드 · v0.1.1 비교) | 팀장 | 새로 작성 |
 
 - 오류 코드는 v0.1.1 코드에서 **실제로 쓰는 곳**을 찾아 나눴다: 둘 다 쓰면 common, 백엔드만 쓰면 web, model-api 만 쓰면 model, 아무도 안 쓰면 common.
 - 세 파일을 **합치면 v0.1.1 `error-codes.json` 과 같다** (70개 — gate_codes 51 · fallback_reasons 7 · status_codes 12). 2026-10-30 확인.
+- 2026-10-30 #23: `SERVICE_NOT_READY` 를 model → common 으로 옮김 (백엔드 `/api/health` 도 쓰게 되어 — 아래 「바꿀 때」 규칙).
 - 시험용 파일(v0.1.1 `shared/fixtures/upload/`, 27MB)은 옮기지 않았다 — 시험 이슈(#44 · #45)에서 필요한 것만 가져온다.
 
 ## 오류 파일 읽는 규칙 (backend · model-api · frontend 공통)

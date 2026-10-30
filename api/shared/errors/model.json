@@ -36,12 +36,6 @@
       "gate": "G3",
       "message": "지금 처리할 수 있는 한도를 넘었습니다.",
       "fix": "안내된 시각 뒤에 다시 시도해 주십시오."
-    },
-    "SERVICE_NOT_READY": {
-      "http": 503,
-      "gate": null,
-      "message": "서버가 아직 준비 중입니다.",
-      "fix": "잠시 뒤 다시 시도해 주십시오."
     }
   },
   "fallback_reasons": {
