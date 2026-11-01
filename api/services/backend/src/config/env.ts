@@ -32,8 +32,12 @@ const schema = z.object({
   /** 같은 접속 주소에서 한 시간에 가입할 수 있는 수 (#27 · 기능 목록 H8). 시험은 크게 둔다 */
   SIGNUP_HOURLY_CAP: z.coerce.number().int().positive().default(5),
 
-  // 프록시 뒤에서 실제 접속 주소를 읽을 범위 (Express trust proxy). Nginx 가 같은 compose 네트워크(사설 대역)에 있다 — #37 에서 확정
+  // 프록시 뒤에서 실제 접속 주소 · HTTPS 여부를 읽을 범위 (Express trust proxy, #37). Nginx 가 같은 compose 네트워크(사설 대역)에 있다.
+  //   Nginx 가 X-Forwarded-For 에 실제 주소 하나만 넘기므로(deploy/nginx/proxy.conf) req.ip = 실제 접속 주소
   TRUST_PROXY: z.string().default('loopback, uniquelocal'),
+
+  /** API 활용 안내에 보이는 외부 주소 (#37) — Funnel 주소 + /api. 쓰는 곳: API 안내(P2) */
+  PUBLIC_API_URL: z.string().url().default('http://127.0.0.1:9603/api'),
 
   // 공용 설정 파일 위치 (api/shared 를 이미지에 구운 곳 — api/shared/README.md 「이미지에 넣는 방법」)
   SHARED_DIR: z.string().min(1).default('/app/shared'),

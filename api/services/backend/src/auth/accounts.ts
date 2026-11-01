@@ -141,7 +141,7 @@ accountsRouter.post('/auth/login', wrap(async (req, res) => {
 
 // POST /api/auth/logout → 204
 accountsRouter.post('/auth/logout', wrap(async (req, res) => {
-  if (req.sessionId) await endSession(req.sessionId, res);
+  if (req.sessionId) await endSession(req, res, req.sessionId);
   res.status(204).end();
 }));
 
