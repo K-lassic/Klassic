@@ -33,7 +33,8 @@ describe('204 음원 미리 불러오기', () => {
     expect(read('src/pages/S1Result.vue')).toMatch(/<C5PlayerBar\s+ref="player"\s+preload/);
     expect(read('src/pages/S2Edit.vue')).toContain('<C5PlayerBar preload ');
     const p = read('src/player/player.ts');
-    expect(p).toMatch(/preload\(\): void \{[\s\S]*saveData\) return;[\s\S]*void this\.ensureReady\(\);/);
+    // #42: 미리 받기도 그 악보에 필요한 음원만 — preload(doc) 가 첫 음원 뒤에 ensureFonts(doc) 를 부른다
+    expect(p).toMatch(/preload\(doc\?: ScoreDoc \| null\): void \{[\s\S]*saveData\) return;[\s\S]*void this\.ensureReady\(\)\.then\([\s\S]*this\.ensureFonts\(doc\)/);
     expect(p).toContain('if (this.readyP) return this.readyP;');
   });
 });
