@@ -3,12 +3,12 @@
 // (내 음원 .sf2 올리기·지정(T130, US8)은 2026-09-29 삭제 — 연주 음원은 기본 gugak.sf2 · FluidR3_GM.sf2 만)
 // (2026-09-30 황송해) 진행 레일(C1)을 뺐다(SD_02 §5-2).
 // 원본(서버 ScoreDoc)은 그대로 두고 편집 연산 목록만 쌓는다(U6). 연산은 기기(IndexedDB)에 자동 저장.
-// #41: 연주 막대(C5PlayerBar) · 재생 빠르기 · 원래 악기로 듣기는 연주기와 함께 #42 에서 v0.1.1 그대로 더한다.
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink, onBeforeRouteLeave, useRouter } from 'vue-router';
 import C2GateBlock from '@/components/C2GateBlock.vue';
 import C9StepBar from '@/components/C9StepBar.vue';
 import C3ResultBand from '@/components/C3ResultBand.vue';
+import C5PlayerBar from '@/components/C5PlayerBar.vue';
 import GuardedButton from '@/components/GuardedButton.vue';
 import LeaveConfirm from '@/components/LeaveConfirm.vue';
 import StepNav from '@/components/StepNav.vue';
@@ -20,9 +20,9 @@ import ScoreView from '@/components/ScoreView.vue';
 import { useRequestStore } from '@/stores/request';
 import { useEditorStore } from '@/stores/editor';
 import { useInstrumentStore } from '@/stores/instruments';
-import { applyDefaultEnsemble } from '@/lib/ensemble';
+import { applyDefaultEnsemble, ensembleLabel } from '@/lib/ensemble';
 import { instrumentName } from '@/lib/instruments';
-import { applyOps, fitToRangeOps, rangeWarnings, summarizeOps, toMusicXml } from '@/lib/scoreCore';
+import { applyOps, fitToRangeOps, rangeWarnings, summarizeOps, toMusicXml, withOriginalInstruments } from '@/lib/scoreCore';
 import { formatClock } from '@/lib/time';
 import { api } from '@/api/client';
 import type { EditOp, ScoreDoc } from '@/types/score';
@@ -60,6 +60,11 @@ const applied = computed<{ doc: ScoreDoc | null; error: boolean }>(() => {
 });
 const edited = computed<ScoreDoc | null>(() => applied.value.doc);
 const applyError = computed(() => applied.value.error);
+const playDoc = computed<ScoreDoc | null>(() => {
+  if (!edited.value) return null;
+  if (ed.listenMode === 'original') { try { return withOriginalInstruments(edited.value); } catch { return edited.value; } }
+  return edited.value;
+});
 // 화면 악보도 기준 악보에서 만든다(114번) — 성부 이름이 악기 이름으로 나오고, 음표 고르기 연결도 같은 악보를 본다
 const editedXml = computed(() => {
   if (!edited.value) return null;
@@ -77,6 +82,11 @@ async function fitRange() {
   try { ops = fitToRangeOps(edited.value); } catch { ops = []; }
   if (ops.length) await push(ops);
 }
+
+const playLabel = computed(() => {
+  const names = ensembleLabel(playDoc.value, inst.catalog, { original: ed.listenMode === 'original' });
+  return ed.listenMode === 'original' ? `원래 악기 (${names})` : names;
+});
 
 // ---------- 자동 저장 · 복원 ----------
 const saveLine = computed(() => {
@@ -112,6 +122,12 @@ function onPickPart(p: number) {
   selectedNote.value = edited.value ? orderedNoteIds(edited.value, p)[0] ?? null : null;
 }
 
+// (2026-09-30 황송해 161번) 재생 빠르기 = 편집 기록의 곡 전체 빠르기(set_tempo). 1.0배면 연산을 두지 않는다 — 받기 파일도 이 빠르기로
+const tempoRate = computed<number | null>(() => (ed.requestNo === props.requestNo ? (ed.tempoBpm ?? 100) / 100 : null));
+async function onRateChange(r: number) {
+  if (expired.value || ed.requestNo !== props.requestNo) return;
+  await ed.setTempo(Math.abs(r - 1) < 0.001 ? null : Math.round(r * 100));
+}
 // (2026-09-30 115번) 악기 바꾸기는 2단계로 옮겼다 — 3단계 악기 표는 현재 악기 · 음량만
 // (2026-09-30 SD_02 ㊶) 악기 추가 · [빼기]는 화면에서 뺐다 — 편집 연산 add_instrument · remove_track 은 score-core 에 호환용으로 남는다
 
@@ -216,7 +232,7 @@ const trackInstrumentName = (i: number) => {
           </div>
 
           <div class="panel-col">
-            <!-- 연주 막대(C5PlayerBar, dock) · 재생 빠르기 — #42 에서 더한다 -->
+            <C5PlayerBar preload :doc="playDoc" :label="playLabel" :edited="ed.isEdited" :expired="expired" :can-change="false" :show-now="false" :tempo-rate="tempoRate" dock @rate-change="onRateChange" />
 
             <NoteInspector
               :doc="edited" :note-id="selectedNote" :part="selectedPart" :disabled="expired" :part-label="partLabel" :track-names="trackButtonNames"
