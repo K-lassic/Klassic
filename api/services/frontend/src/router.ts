@@ -1,5 +1,5 @@
 // 화면 경로 — v0.1.1 router.ts 와 같은 경로. 아직 옮기지 않은 화면은 빈 화면(Placeholder)을 연다.
-// 화면 이슈에서 component 만 바꾼다: S1 #40 · S2 #41 · S3 #43 · S0 #39(옮김).
+// 화면 이슈에서 component 만 바꾼다: S1 #40(옮김) · S2 #41 · S3 #43 · S0 #39(옮김).
 // 2026-09-29 RBAC(FR-068 · UC16 A2): S1~S3 은 로그인해야 연다 — 아니면 /login?next= 로 보냈다가 돌아온다. S4-A 는 누구나.
 import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from './stores/auth';
@@ -7,7 +7,7 @@ import { useAuthStore } from './stores/auth';
 const Placeholder = () => import('./pages/Placeholder.vue');
 
 export const routes: RouteRecordRaw[] = [
-  { path: '/', name: 'home', component: Placeholder, meta: { title: '악보 올리기', requiresLogin: true } },
+  { path: '/', name: 'home', component: () => import('./pages/S1Home.vue'), meta: { title: '악보 올리기', requiresLogin: true } },
   { path: '/r/:requestNo/listen', name: 'listen', component: Placeholder, props: true, meta: { title: '듣기와 편집', requiresLogin: true } },
   { path: '/r/:requestNo/download', name: 'download', component: Placeholder, props: true, meta: { title: '내려받기', requiresLogin: true } },
   // S1-T 체험하기(2026-09-30 황송해 165번 — SD_02 §4-7): 로그인 없이 누구나
