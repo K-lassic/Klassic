@@ -61,6 +61,39 @@ describe.skipIf(!HAS_DB)('세션 (H4)', () => {
   });
 });
 
+// #37 Funnel(HTTPS) → Nginx 뒤 동작 — 시험 요청은 127.0.0.1 에서 오므로 trust proxy 범위 안이다 (Nginx 와 같은 조건)
+describe.skipIf(!HAS_DB)('프록시 뒤 (#37)', () => {
+  it('X-Forwarded-Proto: https 면 쿠키에 Secure · http 면 없음', async () => {
+    const https = await request(app).get('/api/auth/me').set('X-Forwarded-Proto', 'https');
+    expect(cookieOf(https)).toMatch(/;\s*Secure/i);
+    const plain = await request(app).get('/api/auth/me');
+    expect(cookieOf(plain)).not.toMatch(/;\s*Secure/i);
+  });
+
+  it('로그아웃 때 지우는 쿠키도 같은 Secure 속성', async () => {
+    const first = await request(app).get('/api/auth/me').set('X-Forwarded-Proto', 'https');
+    const r = await request(app).post('/api/auth/logout').set('X-Forwarded-Proto', 'https')
+      .set('Cookie', cookieOf(first).split(';')[0]);
+    expect(r.status).toBe(204);
+    expect(cookieOf(r)).toMatch(/gugak_sid=;.*Secure/i);
+  });
+
+  it('접속 주소 해시는 X-Forwarded-For 의 실제 주소 기준 — 사용자마다 다르게 센다', async () => {
+    const { hashAddr } = await import('../../src/lib/ids.js');
+    const ask = (ip: string) => request(app).post('/api/auth/login').set('X-Forwarded-For', ip)
+      .send({ email: email(), password: 'whatever-123' });
+    const last = async () => (await db.one<{ subject_ref: string }>(
+      "SELECT subject_ref FROM gate_event WHERE gate_code = 'G15' AND subject_type = 'client' ORDER BY event_id DESC LIMIT 1"))!.subject_ref;
+    await ask('203.0.113.1');
+    const a = await last();
+    await ask('203.0.113.2');
+    const b = await last();
+    expect(a).toBe(hashAddr('203.0.113.1'));
+    expect(b).toBe(hashAddr('203.0.113.2'));
+    expect(a).not.toBe(b);
+  });
+});
+
 describe.skipIf(!HAS_DB)('가입 · 로그인 (UC16)', () => {
   it('가입하면 user 역할로 바로 로그인되고, 로그아웃하면 풀린다', async () => {
     const agent = request.agent(app);

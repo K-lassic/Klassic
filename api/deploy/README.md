@@ -34,7 +34,7 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 - 도메인 없이 `*.ts.net` 주소와 HTTPS 인증서를 받는다. 공유기 포트를 열지 않는다.
 - **Tailscale 은 Windows 앱(서비스)으로 돌린다** (#9 결정). 컨테이너로 돌리지 않으므로 인증 키(`TS_AUTHKEY`)가 필요 없다 — 로그인은 앱에서 사람이 한다.
-- 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(proto_type 9503 또는 api/ 9603)이고, 관리자 · 내부 포트(26101 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
+- 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(proto_type 9503 또는 api/ 9603)이고, 관리자 · 내부 포트(26101 · 26201 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
 - Funnel 은 대역폭 제한이 있으므로 시연 · 소규모 사용 기준으로 본다.
 
 ### 켜기 · 끄기 (#9)
@@ -85,12 +85,41 @@ pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 - proto_type(v0.1.1)은 9503 · 26101 을 쓴다. `api/` 는 **9603 · 26201**(`API_PUBLIC_PORT` · `API_ADMIN_PORT`)로 띄워서 둘이 같이 떠 있게 한다 (#20).
 - 발표에 쓸 쪽을 정하면 `start -Port <포트>` 로 Funnel 이 가리키는 곳만 바꾼다. 컨테이너는 끄지 않는다.
 
-## 이 PC 서버 운영 체크
+## 서버 PC 운영 (#47)
 
-- 절전 · 최대 절전 끄기, 로그인 시 Docker Desktop 자동 시작
-- 모든 서비스 `restart: unless-stopped`, Windows 업데이트 재부팅 뒤 자동 복구 확인
-- `.wslconfig` 로 WSL 메모리 상한 지정
-- DB · 업로드 파일 정기 백업과 복원 시험
+서버 PC = 팀장 노트북(Windows · Docker Desktop · WSL2). 코드 작업은 다른 PC 에서 하므로, **서버 PC 설정을 바꾸면 이 표에 남긴다.**
+
+발표 때는 `api/` 서비스를 켠 상태로 시연한다 (2026-11-01 결정) → 목표는 **켜 둔 채 꺼지지 않게** 하는 것이고, 재부팅 자동 복구는 범위 밖이다.
+
+### 변경 기록
+
+| 날짜 | 항목 | 이전 | 지금 | 되돌리기 |
+|---|---|---|---|---|
+| 2026-11-01 | 전원 연결 시 절전 | 5시간 뒤 | **안 함** | 설정 → 시스템 → 전원 → 화면 및 절전 |
+| 2026-11-01 | 덮개 닫기(전원 연결) | 절전 | **아무것도 안 함** | 제어판 → 전원 옵션 → 덮개를 닫으면 |
+| 2026-11-01 | Windows 업데이트 | 중지 안 함 | **11/05 까지 일시 중지** | 설정 → Windows 업데이트 → 업데이트 재개 |
+| ⏳ 사람이 할 일 | Tailscale Run unattended | 꺼짐 | 켜기 — 작업 표시줄 Tailscale 앱 Preferences | 같은 곳 |
+
+- 배터리 사용 시 설정은 바꾸지 않았다 (절전 2시간 · 덮개 닫으면 절전). **발표 때는 충전기를 꽂아 둔다.**
+- 그대로 둔 것: Docker Desktop 로그인 시 자동 시작(켜짐) · Docker 배정 4코어 · 16GB(`.wslconfig`) · 네트워크 Wi-Fi
+
+### 재부팅했을 때
+
+재부팅은 자동 복구하지 않는다. 다시 켜면 Windows 로그인 뒤 사람이 띄운다.
+
+```bash
+# api/ — 시연 서비스 (frontend 는 restart 정책이 없어 자동으로 안 돌아온다)
+cd api && docker compose up -d
+
+# proto_type — 예비 시연 · 코드 작업 중 필요할 때만
+cd proto_type && docker compose up -d --force-recreate web gateway admin model-api
+```
+
+proto_type 은 `network_mode: service:web` 구조라 재부팅 뒤 web 과 gateway · model-api 의 네트워크가 갈라져 9503 이 응답하지 않는다 (2026-11-01 확인). `docker compose restart` 로는 풀리지 않고 위 명령이 필요하다. 볼륨은 건드리지 않는다.
+
+### 자원 측정
+
+인식 중 `docker stats` 측정과 `api/` · proto_type 동시 실행 영향은 **#49** 에서 본다 — `api/` model-api(#24 · #29)가 있어야 잴 수 있다.
 
 ## 참고
 

@@ -24,7 +24,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # 관리자 · 내부 포트는 실수로도 공개하지 않는다 (#9 완료 기준: 관리자 외부 접속 불가)
-$BlockedPorts = @(26101, 9523, 9543, 3306)
+#   26101 proto_type 관리자 · 26201 api/ 관리자 · 9523 web · 9543 model-api · 3306 DB
+$BlockedPorts = @(26101, 26201, 9523, 9543, 3306)
 
 # Tailscale CLI 위치 — 기본 설치 경로, 없으면 PATH 에서 찾는다
 $Tailscale = 'C:\Program Files\Tailscale\tailscale.exe'
