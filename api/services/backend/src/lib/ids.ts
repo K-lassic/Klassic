@@ -2,10 +2,20 @@
 //
 //   구조에서의 위치: backend 세션(web/session.ts) · 가입 한도(auth/accounts.ts) · 요청 한도(#34 이후)가 쓴다.
 //     접속 주소는 Nginx 가 넘긴 X-Forwarded-For → Express trust proxy → req.ip (#22 · #37).
-//   요청 번호 · 공유 번호 만들기는 쓰는 이슈(#34 · 공유 P2)에서 더한다.
-import { createHmac, timingSafeEqual } from 'node:crypto';
+//   요청 번호는 #34 에서 더했다. 공유 번호는 쓰는 이슈(공유 P2)에서 더한다.
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { env } from '../config/env.js';
 import { sha256 } from './keys.js';
+
+const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 헷갈리는 0 O 1 I 제외
+
+/** #34 요청 번호 — 날짜 + 무작위 8자라 추측하기 어렵다. 그래도 소유 확인은 web/ownership.ts 가 따로 한다 */
+export function newRequestNo(now = new Date()): string {
+  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(now.getUTCDate()).padStart(2, '0');
+  const code = Array.from(randomBytes(8), (b) => ALPHA[b % ALPHA.length]).join('');
+  return `R-${mm}${dd}-${code}`;
+}
 
 /** 접속 주소는 원문으로 저장하지 않는다 — 소금 친 SHA-256 (v0.1.1 과 같은 식) */
 export function hashAddr(ip: string | undefined): string {

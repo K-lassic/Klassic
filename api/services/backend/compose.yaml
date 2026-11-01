@@ -29,9 +29,11 @@ x-backend: &backend
   depends_on:
     # DB 가 준비되고 마이그레이션이 끝난 뒤 뜬다 (작성규칙 4-2 · #20 의 migrate)
     migrate: { condition: service_completed_successfully }
-  # 보안 옵션 (작성규칙 4-6) — 쓰는 곳이 없으므로 읽기 전용. 업로드 저장소 볼륨은 #34 에서 더한다
+  # 보안 옵션 (작성규칙 4-6) — 뿌리는 읽기 전용, 쓸 수 있는 곳은 사용자 파일 볼륨(#34)과 /tmp 뿐
   read_only: true
   tmpfs: [/tmp]
+  volumes:
+    - storage:/storage
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
 
@@ -46,8 +48,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    # 자원 한도 — 2026-10-30 v0.1.1 web 측정 84MB + 여유 (인식 작업자 · 렌더링 대기열이 붙으면 다시 잰다 · #47)
-    mem_limit: 512m
+    # 자원 한도 — 업로드는 검사가 끝날 때까지 메모리에 있다. 2026-11-01 측정: 최대 크기(190MB) 3건 동시에 512m 를 다 쓰고 스왑으로 28초 (#34)
+    #   → 1g 로 올린 뒤 같은 시험 최대 677MB · 15초. 인식 작업자가 붙으면 다시 잰다 (#49)
+    mem_limit: 1g
 
   admin:
     <<: *backend
@@ -60,3 +63,7 @@ services:
       start_period: 20s
     # 2026-10-30 v0.1.1 admin 측정 33MB + 여유
     mem_limit: 256m
+
+volumes:
+  # #34 사용자 파일(원본 · 결과). 사라지면 안 되므로 이름 있는 볼륨 (작성규칙 4-7)
+  storage:

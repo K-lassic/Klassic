@@ -17,7 +17,9 @@ export interface ErrorCodes {
   fallback_reasons: Record<string, FallbackReason>;
   status_codes: Record<string, string>;
 }
-export interface UploadRules { version: string; max_files: number; max_pages?: number; user_upload_kinds: string[]; kinds: Record<string, { max_bytes: number } & Record<string, unknown>> }
+export interface UploadMagic { hex_prefix?: string; hex_at_8?: string; text_contains_any?: string[] }
+export interface UploadKindRule { extensions: string[]; magic: UploadMagic[]; max_bytes: number; min_short_edge_px?: number }
+export interface UploadRules { version: string; max_files: number; max_pages?: number; user_upload_kinds: string[]; score_types: string[]; kinds: Record<string, UploadKindRule> }
 export interface Instruments { default_ensemble: { part_role: string; instrument: string }[]; instruments: Record<string, unknown>[] }
 
 const SECTIONS = ['gate_codes', 'fallback_reasons', 'status_codes'] as const;
@@ -64,4 +66,12 @@ let cached: Shared | null = null;
 export function shared(): Shared {
   cached ??= loadShared();
   return cached;
+}
+
+/** DB 대체 이유(소문자) → 화면 · API 코드(대문자). NO_NOTES 는 마지막 엔진 시도로 가른다 (#34 · v0.1.1 config/shared.ts) */
+export function fallbackCode(dbReason: string | null, lastOutcome?: string | null): string | null {
+  if (!dbReason) return null;
+  if (dbReason === 'recognition_failed' && lastOutcome === 'no_notes') return 'NO_NOTES';
+  const found = Object.entries(shared().errorCodes.fallback_reasons).find(([code, v]) => v.db === dbReason && code !== 'NO_NOTES');
+  return found ? found[0] : null;
 }
