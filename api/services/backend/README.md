@@ -51,6 +51,16 @@ web ─▶ model-api (MODEL_API_URL, 서비스 키 SERVICE_API_KEY)
 | `src/services/requestStatus.ts` | (#34) `RequestStatus` 응답 만들기 |
 | `src/services/requestWorker.ts` | (#34 · #35) 인식 작업자 — 대기열 · 동시 상한 · 마감 두 개 · 1초 감시 · 종류 확인 · 재시작 복구 |
 | `src/web/models.ts` | (#35) `/api/models/status` |
+| `src/web/edits.ts` | (#36) `/api/requests/{no}/edits` — 편집 연산 기록 |
+| `src/web/exports.ts` | (#36) `/exports` · `/file` · `/original/{format}` — MIDI · MusicXML 은 바로, MP3 · PDF 는 대기열 |
+| `src/services/renderQueue.ts` | (#36) 렌더링 대기열 · 동시 상한 · 재시작 때 실패로 정리 |
+| `src/web/instruments.ts` | (#36) `/api/instruments` · 시작할 때 음원 확인 |
+| `src/services/placedEnsemble.ts` | (#36) 실제로 놓인 악기만 첫 선택으로 기록 (`/events`) |
+| `src/web/edits.ts` | (#36) `/api/requests/{no}/edits` — 편집 연산 기록 |
+| `src/web/exports.ts` | (#36) `/exports` · `/file` · `/original/{format}` — MIDI · MusicXML 은 바로, MP3 · PDF 는 대기열 |
+| `src/services/renderQueue.ts` | (#36) 렌더링 대기열 · 동시 상한 · 재시작 때 실패로 정리 |
+| `src/web/instruments.ts` | (#36) `/api/instruments` · 시작할 때 음원 확인 |
+| `src/services/placedEnsemble.ts` | (#36) 실제로 놓인 악기만 첫 선택으로 기록 (`/events`) |
 | `src/services/fallback.ts` | (#34) 대체 결과 — `assets/templates/` · 없으면 `service_down` |
 | `src/services/modelApiClient.ts` · `modelStatus.ts` · `uploadInspect.ts` | (#34) model-api 호출 · 모델 상태 캐시 · PDF 검사 위임 |
 | `assets/` | (#34) 이미지에 굽는 예시 악보 · 대체 악보. 출처는 `assets/examples/SOURCES.md` |
@@ -140,6 +150,10 @@ docker compose up -d web          # web 을 다시 만들어야 새 값을 읽�
 | model-api 호출이 401 | `SERVICE_API_KEY` 가 비었거나 폐기된 키 | `issueServiceKey` 로 새로 발급 → `.env` → `docker compose up -d web` |
 | web 이 `EACCES` · `EROFS` 로 `시작 실패` | 볼륨 storage 가 없거나 쓸 수 없음 (시작할 때 `/storage` 쓰기를 확인한다) | `docker compose exec web ls -ld /storage` — 소유자가 `node` 인지 |
 | PDF 만 503 `UPLOAD_CHECK_UNAVAILABLE` · 사진은 됨 | model-api 가 꺼졌거나 서비스 키 오류 (로그 `PDF 검사 불가`) | `docker compose ps model-api` · 위의 401 조치 |
+| 재생해도 소리가 안 남 · `/soundfonts/*` 404 또는 아주 작은 파일 | 로그 `음원 파일이 없거나 LFS 포인터뿐` | `git lfs pull` 후 `docker compose up -d web` — 파일은 `api/shared/soundfonts`, 읽기 전용 마운트 |
+| MP3 · PDF 만 `failed` · MIDI · MusicXML 은 됨 | model-api 렌더링 문제. `failure_reason` 이 `ENGINE_DOWN`(닿지 않음) · `RENDERER_MISSING` · `RENDER_TIMEOUT`(10분) | `docker compose logs model-api`. web 재시작으로 `RENDER_FAILED` 가 됐다면 다시 내보내면 된다 |
+| 재생해도 소리가 안 남 · `/soundfonts/*` 404 또는 아주 작은 파일 | 로그 `음원 파일이 없거나 LFS 포인터뿐` | `git lfs pull` 후 `docker compose up -d web` — 파일은 `api/shared/soundfonts`, 읽기 전용 마운트 |
+| MP3 · PDF 만 `failed` · MIDI · MusicXML 은 됨 | model-api 렌더링 문제. `failure_reason` 이 `ENGINE_DOWN`(닿지 않음) · `RENDERER_MISSING` · `RENDER_TIMEOUT`(10분) | `docker compose logs model-api`. web 재시작으로 `RENDER_FAILED` 가 됐다면 다시 내보내면 된다 |
 | 인식이 모두 `ENGINE_DOWN` 대체로 끝남 | model-api 가 꺼졌거나 500 (대체 이유가 `ENGINE_DOWN`) | `docker compose ps model-api` · `logs model-api` |
 | 인식이 모두 `RECOGNITION_FAILED` 대체로 끝남 | model-api 가 4xx — 대개 서비스 키 오류 | 위의 401 조치 |
 | 요청이 한동안 `queued` | 동시 처리 상한(`web_concurrency_share`)만큼 앞 요청을 처리 중. 마감을 넘기면 `TIMEOUT` 대체로 끝난다 | 설정 판본 확인 · `docker compose logs web` |

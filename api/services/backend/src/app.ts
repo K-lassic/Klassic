@@ -4,9 +4,9 @@
 //     Nginx 사용자 server ─ /api/*   ─▶ web   :9523  (이 파일의 createWebApp)
 //     Nginx 관리자 server ─ /admin/* ─▶ admin :26101 (이 파일의 createAdminApp)
 //     web · admin ─▶ MariaDB(db) · web ─▶ model-api(서비스 이름)
-//   v0.1.1 과 다른 점: 화면 정적 파일 · /soundfonts 는 아직 내주지 않는다 — 화면은 Nginx(#21), 음원은 #42 · #22 에서 정한다.
+//   v0.1.1 과 다른 점: 화면 정적 파일은 내주지 않는다 — 화면은 Nginx(#21). 음원 /soundfonts 는 Nginx 를 거쳐 여기서 내준다 (#36).
 //   /api 요청 순서 (#27): /api/health(세션 없이) → sessionMiddleware → authz(경로 → UC → 권한표) → 라우터 → 404 → errorHandler
-//   붙인 라우터: 세션 · 인증 · 권한 #27 · 요청 · 예시 #34 / 모델 상태 #35 / 붙일 것: 내보내기 #36 · 관리자 API (P3)
+//   붙인 라우터: 세션 · 인증 · 권한 #27 · 요청 · 예시 #34 / 모델 상태 #35 · 편집 · 내보내기 · 악기 · 음원 #36 / 붙일 것: 관리자 API (P3)
 import express, { type Express } from 'express';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
@@ -19,6 +19,9 @@ import { accountsRouter } from './auth/accounts.js';
 import { requestsRouter } from './web/requests.js';
 import { examplesRouter } from './web/examples.js';
 import { modelsRouter } from './web/models.js';
+import { editsRouter } from './web/edits.js';
+import { exportsRouter } from './web/exports.js';
+import { instrumentsRouter } from './web/instruments.js';
 
 function base(): Express {
   const app = express();
@@ -55,10 +58,12 @@ export function createWebApp(): Express {
     if (!r.ok) return sendError(res, new ApiError('SERVICE_NOT_READY', { reason: r.reason }));
     res.json({ status: 'ok', role: 'web', setting_version: r.setting_version });
   }));
+  // 음원은 로그인 없이 받는다 (세션 앞) — 브라우저가 매번 바뀌었는지 묻고(ETag) 안 바뀌면 304 로 다시 받지 않는다 (#36 · v0.1.1 과 같음)
+  app.use('/soundfonts', express.static(env().SOUNDFONTS_DIR, { maxAge: 0 }), (_req, res) => sendError(res, new ApiError('REQUEST_NOT_FOUND')));
   // 상태 확인 다음부터는 모든 /api 가 세션 → 권한 판정을 지난다 (상태 확인이 세션을 만들지 않게 순서를 둔다)
   app.use('/api', sessionMiddleware);
   app.use('/api', authz);
-  app.use('/api', accountsRouter, sessionRouter, requestsRouter, examplesRouter, modelsRouter);
+  app.use('/api', accountsRouter, sessionRouter, requestsRouter, examplesRouter, modelsRouter, editsRouter, exportsRouter, instrumentsRouter);
   // 권한표에는 있지만 아직 만들지 않은 경로(#36 이후) · 대응표에 없는 경로 → 404 (권한 존재를 드러내지 않음 — H9)
   app.use('/api', (_req, res) => sendError(res, new ApiError('REQUEST_NOT_FOUND')));
   app.use(errorHandler);

@@ -19,6 +19,7 @@ Object.assign(process.env, {
   SHARED_DIR: process.env.SHARED_DIR ?? join(here, '..', '..', '..', '..', 'shared'),
   ASSETS_DIR: join(here, '..', '..', 'assets'),
   STORAGE_DIR: mkdtempSync(join(tmpdir(), 'klassic-storage-')),
+  SOUNDFONTS_DIR: mkdtempSync(join(tmpdir(), 'klassic-soundfonts-')),
 });
 // 요청마다 서버를 여닫는 supertest 에서 끊긴 연결을 다시 쓰지 않게
 http.globalAgent = new http.Agent({ keepAlive: false });

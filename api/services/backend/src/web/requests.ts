@@ -5,11 +5,11 @@
 //   저장 위치는 upload_file.storage_uri 에 남긴다. DB 에 쓰지 못하면 방금 저장한 파일을 지워서 DB ↔ 파일이 어긋나지 않게 한다.
 //   v0.1.1 web/requests.ts 에서 달라진 점:
 //     용량 상한을 넘는 파일이 500 이 아니라 413 UPLOAD_TOO_LARGE · 한글 파일 이름이 깨지지 않음(UTF-8)
-//     · 결과 파일이 사라졌으면 500 이 아니라 RESULT_EXPIRED. 내려받기(/original)는 #36, 화면 이벤트(/events)는 P2.
+//     · 결과 파일이 사라졌으면 500 이 아니라 RESULT_EXPIRED. 내려받기(/original)는 exports.ts.
 import { Router, type RequestHandler } from 'express';
 import multer from 'multer';
 import { parseMidi, parseMusicXml } from '@gugak/score-core';
-import { one, tx } from '../db/pool.js';
+import { exec, one, tx } from '../db/pool.js';
 import { currentSettings } from '../config/settings.js';
 import { fallbackCode, shared } from '../config/shared.js';
 import { ApiError, wrap } from './errors.js';
@@ -23,6 +23,7 @@ import { readStored, removeRequestDir, saveFile } from '../services/storage.js';
 import { answerTypeQuestion, enqueueRecognition } from '../services/requestWorker.js';
 import { switchToUserFallback } from '../services/fallback.js';
 import { buildRequestStatus } from '../services/requestStatus.js';
+import { recordInitialSelection } from '../services/placedEnsemble.js';
 import { newRequestNo } from '../lib/ids.js';
 import { logger } from '../lib/logger.js';
 
@@ -120,7 +121,7 @@ const createRequest = wrap(async (req, res) => {
 });
 
 /** 결과 파일 읽기 — DB 에는 있는데 파일이 없으면(주기 정리 · 볼륨 문제) 원인을 로그에 남기고 만료로 알린다 */
-async function readResult(uri: string, requestNo: string): Promise<Buffer> {
+export async function readResult(uri: string, requestNo: string): Promise<Buffer> {
   try {
     return await readStored(uri);
   } catch (e) {
@@ -183,4 +184,16 @@ requestsRouter.post('/requests/:no/fallback', wrap(async (req, res) => {
     throw new ApiError('INTERNAL_ERROR', { reason: 'template_unavailable' });
   }
   res.json(await buildRequestStatus(r.request_id));
+}));
+
+// #36 화면 이벤트 — 결과 표시 · 첫 연주 시각. 결과 표시 = 기본 구성으로 처음 연주하므로 실제로 놓이는 악기를 첫 선택으로 남긴다
+requestsRouter.post('/requests/:no/events', wrap(async (req, res) => {
+  const r = await loadOwnedRequest(req);
+  const col = req.body?.event === 'result_shown' ? 'result_shown_at' : req.body?.event === 'first_played' ? 'first_played_at' : null;
+  if (!col) throw new ApiError('BAD_REQUEST', { field: 'event' });
+  await exec(`UPDATE score_request SET ${col} = COALESCE(${col}, CURRENT_TIMESTAMP(3)) WHERE request_id = ?`, [r.request_id]);
+  if (col === 'result_shown_at' && r.status === 'completed') {
+    await recordInitialSelection(r.request_id).catch((e) => logger.warn({ err: e, requestNo: r.request_no }, '첫 악기 기록 실패'));
+  }
+  res.status(204).end();
 }));
