@@ -88,11 +88,11 @@ docker compose logs -f web                 # JSON 한 줄 로그
 
 ### 시험 (컨테이너 안에서)
 
-score-core 를 먼저 빌드해야 `file:` 로 가져올 수 있다.
+score-core 를 먼저 빌드해야 `file:` 로 가져올 수 있다. 계약 대조에 `contracts/web-api.yaml` 도 필요하다. 음원(164MB)은 복사하지 않는다.
 
 ```bash
 docker run --rm -v "$PWD/api:/src:ro" node:22.21.1-bookworm-slim sh -c '
-  mkdir -p /w/packages /w/services && cp -r /src/packages/score-core /w/packages/ && cp -r /src/shared /w/ && cp -r /src/services/backend /w/services/
+  mkdir -p /w/packages /w/services /w/shared && cp -r /src/packages/score-core /w/packages/ && cp -r /src/contracts /w/ && cp -r /src/shared/errors /src/shared/fixtures /src/shared/*.json /w/shared/ && cp -r /src/services/backend /w/services/
   cd /w/packages/score-core && npm ci && npm run build
   cd /w/services/backend && npm ci && npm run build && SHARED_DIR=/w/shared npm test'
 ```
@@ -109,9 +109,31 @@ docker run --rm --network klassic-api-test_default \
 docker compose -p klassic-api-test down -v   # 시험용 프로젝트만 지운다 (이름 확인!)
 ```
 
+- **계약 대조 (#44):** `tests/helpers/serve.ts` 가 시험 서버 앞에 `contract.ts` 를 끼워, 통합 시험의 모든 JSON 응답을 `contracts/web-api.yaml` 과 맞춰 본다. 어긋나면 시험 파일이 실패한다 (`contractCheck.ts`). 경로 · 응답을 바꾸면 계약도 같이 고친다.
+- **경로 확인:** `CONTRACT_LOG=/tmp/routes.log` 를 주면 시험이 지나간 경로 · 상태가 남는다.
+- **공유 시험 파일:** `api/shared/fixtures/upload` — model-api 검사기(#28)도 같은 파일로 시험한다.
 - 시험 DB 첫 초기화에서 migrate 가 `1130 Host ... not allowed` 로 실패하면 시험용 프로젝트를 지우고 다시 띄운다 — WSL2 시계가 거꾸로 움직여 초기화가 끊긴 경우다 (로그 `certificate is not yet valid`, 2026-11-01).
 - `tests/integration/requests.test.ts` 는 작업자를 켜지 않고 완료 상태를 `tests/helpers/db.ts` 로 DB 에 직접 만든다. 인식까지 잇는 시험은 `worker.test.ts`. model-api 는 둘 다 `tests/helpers/fakeModelApi.ts`.
 - Windows `curl` 로 손시험할 때 명령줄에 한글을 쓰면 UTF-8 이 아닌 cp949 로 보내져 깨진 글자(`EFBFBD`)로 저장된다 — 본문을 UTF-8 파일로 만들어 `--data-binary @파일` 로 보낸다 (서버 문제 아님, 2026-10-30 확인).
+
+### 시험 결과 (#44, 2026-11-01)
+
+단위 + 통합 155개 통과 · 건너뜀 없음 · 응답 계약 대조 통과 · 마이그레이션 두 번째 실행 `이번에 적용 0 개`.
+
+| v0.1.1 시험 | 여기 시험 |
+|---|---|
+| `us1_upload_to_result` | `worker.test.ts` · `requests.test.ts` |
+| `us2_fallback` | `worker.test.ts` · `requests.test.ts` |
+| `us3_us4_upload` · `contract/upload_rules` | `requests.test.ts` · `uploadCheck.test.ts` · `uploadFixtures.test.ts` |
+| `us7_us8` · `midi_available` · `tempo_export` | `exports.test.ts` |
+| `login_single` · `rbac` | `auth.test.ts` · `requests.test.ts` · `permissions.test.ts` · `contractRoutes.test.ts` |
+| `validity_items` · `examples` | `requests.test.ts` |
+| `migrate` | `migrate.test.ts` |
+| `unit/requestDeadline` | `storage.test.ts` |
+
+옮기지 않은 것 (P2 · P3 — 그 기능을 만들 때 옮긴다): `rbac` 의 키 신청 · 관리자 로그인, `us7_us8` 의 세션 2시간 정리, `admin_accounts` · `jobs` · `my_scores` · `shared_*` · `us9_admin` · `us10_keys` · `instrument_selection`.
+
+계약의 `POST /admin/service-key`(P1)는 API 가 아니라 명령줄 도구로 대신한다 (#26). 인식 · 렌더링을 실제 엔진으로 확인한 결과는 PR #73 · #74.
 
 ### 운영 명령줄 도구 (#26)
 
