@@ -6,7 +6,7 @@
 //     web · admin ─▶ MariaDB(db) · web ─▶ model-api(서비스 이름)
 //   v0.1.1 과 다른 점: 화면 정적 파일 · /soundfonts 는 아직 내주지 않는다 — 화면은 Nginx(#21), 음원은 #42 · #22 에서 정한다.
 //   /api 요청 순서 (#27): /api/health(세션 없이) → sessionMiddleware → authz(경로 → UC → 권한표) → 라우터 → 404 → errorHandler
-//   붙인 라우터: 세션 · 인증 · 권한 #27 · 요청 · 예시 #34 / 붙일 것: 작업자 #35(라우터 없음) · 내보내기 #36 · 관리자 API (P3)
+//   붙인 라우터: 세션 · 인증 · 권한 #27 · 요청 · 예시 #34 / 모델 상태 #35 / 붙일 것: 내보내기 #36 · 관리자 API (P3)
 import express, { type Express } from 'express';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
@@ -18,6 +18,7 @@ import { authz } from './auth/authz.js';
 import { accountsRouter } from './auth/accounts.js';
 import { requestsRouter } from './web/requests.js';
 import { examplesRouter } from './web/examples.js';
+import { modelsRouter } from './web/models.js';
 
 function base(): Express {
   const app = express();
@@ -57,7 +58,7 @@ export function createWebApp(): Express {
   // 상태 확인 다음부터는 모든 /api 가 세션 → 권한 판정을 지난다 (상태 확인이 세션을 만들지 않게 순서를 둔다)
   app.use('/api', sessionMiddleware);
   app.use('/api', authz);
-  app.use('/api', accountsRouter, sessionRouter, requestsRouter, examplesRouter);
+  app.use('/api', accountsRouter, sessionRouter, requestsRouter, examplesRouter, modelsRouter);
   // 권한표에는 있지만 아직 만들지 않은 경로(#36 이후) · 대응표에 없는 경로 → 404 (권한 존재를 드러내지 않음 — H9)
   app.use('/api', (_req, res) => sendError(res, new ApiError('REQUEST_NOT_FOUND')));
   app.use(errorHandler);

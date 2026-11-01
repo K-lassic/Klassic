@@ -27,3 +27,14 @@ export async function completeRecognized(requestNo: string, musicxml: string, st
   await exec('UPDATE score_request SET status = ?, completed_at = IF(? = \'completed\', CURRENT_TIMESTAMP(3), NULL) WHERE request_id = ?', [status, status, id]);
   return id;
 }
+
+export async function waitFor<T>(fn: () => Promise<T>, ok: (v: T) => boolean, timeoutMs = 15000): Promise<T> {
+  const end = Date.now() + timeoutMs;
+  let last = await fn();
+  while (!ok(last)) {
+    if (Date.now() > end) throw new Error(`기다리다 시간 초과: ${JSON.stringify(last)}`);
+    await new Promise((r) => setTimeout(r, 100));
+    last = await fn();
+  }
+  return last;
+}

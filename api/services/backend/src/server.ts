@@ -2,7 +2,7 @@
 //
 //   구조에서의 위치: 같은 이미지를 실행 인자만 바꿔 web · admin 두 컨테이너로 띄운다 (v0.1.1 과 같음 · 조정안 B 안 함).
 //   시작 순서: 설정 검증(H1) → 공용 설정 읽기(api/shared) → DB 준비 기다리기(재시도) → 설정 판본 확인
-//     → web 만: 저장소 쓰기 · 예시 목록 확인(#34) → 수신(0.0.0.0)
+//     → web 만: 저장소 쓰기 · 예시 목록 확인(#34) · 인식 작업자 시작(#35) → 수신(0.0.0.0)
 //   종료: Docker 가 보내는 SIGTERM 을 받아 새 연결을 멈추고 DB 풀을 닫는다 (Dockerfile 은 exec 형식이라 node 가 PID 1)
 import type { Server } from 'node:http';
 import { env } from './config/env.js';
@@ -11,6 +11,7 @@ import { currentSettings } from './config/settings.js';
 import { closePool, waitForDb } from './db/pool.js';
 import { createAdminApp, createWebApp } from './app.js';
 import { checkStorage } from './services/storage.js';
+import { startWorker, stopWorker } from './services/requestWorker.js';
 import { exampleList } from './web/examples.js';
 import { logger } from './lib/logger.js';
 
@@ -43,13 +44,16 @@ async function main(): Promise<void> {
     logger.info({ storage_dir: e.STORAGE_DIR, examples: exampleList().length }, '저장소 · 예시 목록 확인');
   }
 
-  // 인식 작업자 · 렌더링 복구 · 주기 작업은 web 에서만 (#35 · #36 · 주기 작업 이슈에서 붙인다)
+  // 인식 작업자는 web 에서만 — 끝나지 않은 요청을 DB 에서 다시 줄 세운다 (#35). 렌더링 복구 · 주기 작업도 여기에 붙인다 (#36 · 주기 작업 이슈)
+  if (role === 'web') await startWorker();
+
   const server: Server = role === 'web'
     ? createWebApp().listen(e.WEB_PORT, e.WEB_HOST, () => logger.info({ host: e.WEB_HOST, port: e.WEB_PORT, setting_version: settings.setting_version_id }, 'web 수신 시작'))
     : createAdminApp().listen(e.ADMIN_PORT, e.ADMIN_HOST, () => logger.info({ host: e.ADMIN_HOST, port: e.ADMIN_PORT, setting_version: settings.setting_version_id }, 'admin 수신 시작'));
 
   const stop = (signal: string) => {
     logger.info({ signal }, '종료 신호 — 새 연결을 멈춘다');
+    stopWorker();
     server.close(() => { void closePool().finally(() => process.exit(0)); });
     // 오래 걸리는 연결이 있어도 10초 뒤에는 끝낸다 (Docker 기본 stop 대기 10초)
     setTimeout(() => process.exit(0), 9000).unref();
