@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // S1 처리 중 · 결과 (T068 · T076 · T085 · T084 · T091) — SD_02 §4-2 · §4-3 · §4-4
 // (2026-09-30 황송해) 진행 레일(C1)을 뺐다 — 처리 단계 바뀜은 화면 읽기 프로그램용 한 줄(aria-live)로만 알린다(SD_02 §13-2).
-// #40: 연주 막대(C5PlayerBar) · 재생 빠르기 · [대체 악보 듣기]는 연주기와 함께 #42 에서 v0.1.1 그대로 더한다.
 import { computed, ref, watch } from 'vue';
 import C2GateBlock from '@/components/C2GateBlock.vue';
 import C9StepBar from '@/components/C9StepBar.vue';
 import C3ResultBand from '@/components/C3ResultBand.vue';
+import C5PlayerBar from '@/components/C5PlayerBar.vue';
 import C4InstrumentPicker from '@/components/C4InstrumentPicker.vue';
 import HelpTip from '@/components/HelpTip.vue';
 import LeaveConfirm from '@/components/LeaveConfirm.vue';
@@ -16,7 +16,7 @@ import ScoreView from '@/components/ScoreView.vue';
 import { statusSentence, useRequestStore } from '@/stores/request';
 import { useInstrumentStore } from '@/stores/instruments';
 import { statusText } from '@/i18n/gateMessages';
-import { applyDefaultEnsemble, type InstrumentChoice } from '@/lib/ensemble';
+import { applyDefaultEnsemble, ensembleLabel, type InstrumentChoice } from '@/lib/ensemble';
 import { DEFAULT_MELODY, DEFAULT_PERCUSSION, instrumentName } from '@/lib/instruments';
 import { applyOps } from '@/lib/scoreCore';
 import { LIMITS } from '@/lib/uploadKind';
@@ -112,6 +112,12 @@ const playDoc = computed<ScoreDoc | null>(() => {
   try { return applyOps(baseDoc.value, ed.ops); } catch { return baseDoc.value; }
 });
 
+// (2026-09-30 황송해 161번) 재생 빠르기 = 편집 기록의 곡 전체 빠르기(set_tempo). 1.0배면 연산을 두지 않는다 — 받기 파일도 이 빠르기로
+const tempoRate = computed<number | null>(() => (ed.requestNo === s.value?.id ? (ed.tempoBpm ?? 100) / 100 : null));
+async function onRateChange(r: number) {
+  if (expired.value || ed.requestNo !== s.value?.id) return;
+  await ed.setTempo(Math.abs(r - 1) < 0.001 ? null : Math.round(r * 100));
+}
 const trackPicker = ref<number | null>(null);
 const trackChoice = computed<InstrumentChoice>(() => {
   const p = playDoc.value?.parts[trackPicker.value ?? 0];
@@ -139,6 +145,13 @@ const lowPagesText = computed(() => {
   const where = (s.value?.pages?.length ?? 0) > 1 ? `${list.map((p) => p.page_no).join(' · ')}쪽: ` : '';
   return `${where}${LIMITS.warnEdge}px 미만 사진은 부정확한 결과가 나올 수 있습니다.`;
 });
+const playLabel = computed(() => (ed.ops.some((o) => o.op === 'change_instrument') ? ensembleLabel(playDoc.value, inst.catalog) : `기본 국악기 구성 (${ensembleLabel(playDoc.value, inst.catalog)})`));
+const player = ref<InstanceType<typeof C5PlayerBar> | null>(null);
+const playerBox = ref<HTMLElement | null>(null);
+function listenFallback() {
+  playerBox.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  void player.value?.play();
+}
 
 // 결과 표시 이벤트 — 결과 악보가 보이면 한 번
 watch(() => req.score, (sc) => { if (sc && s.value?.status === 'completed') void req.sendEvent('result_shown'); }, { immediate: true });
@@ -256,6 +269,7 @@ const engineHelp = computed(() => {
           :busy="fallbackBusy"
           @request-fallback="askFallback"
           @reupload="emit('startOver')"
+          @listen="listenFallback"
         />
 
         <div v-if="noNotes" class="notice n-caution" data-test="no-notes">
@@ -306,7 +320,22 @@ const engineHelp = computed(() => {
           </div>
         </section>
 
-        <!-- (2026-09-30 111번) 연주 막대는 화면 맨 아래 고정 · (112번) 재생 빠르기도 2단계에 — #42 에서 C5PlayerBar 로 더한다 · (113번) 다운받기 카드는 4단계에만 -->
+        <!-- (2026-09-30 111번) 연주 막대는 화면 맨 아래 고정 · (112번) 재생 빠르기도 2단계에 · (113번) 다운받기 카드는 4단계에만 -->
+        <div ref="playerBox">
+          <C5PlayerBar
+            ref="player"
+            preload
+            dock
+            :show-now="false"
+            :doc="playDoc"
+            :label="playLabel"
+            :expired="expired"
+            :can-change="false"
+            :tempo-rate="tempoRate"
+            @rate-change="onRateChange"
+            @played="req.sendEvent('first_played')"
+          />
+        </div>
 
         <!-- 모두에게 공유는 2026-09-30 105번으로 4단계(S3 내려받기)로 옮겼다(UC18) -->
 
