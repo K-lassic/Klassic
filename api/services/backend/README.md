@@ -49,7 +49,8 @@ web ─▶ model-api (MODEL_API_URL, 서비스 키 SERVICE_API_KEY)
 | `src/web/examples.ts` | (#34) `/api/examples` · 미리보기 · `/api/requests/example` — 파일은 `assets/examples/` |
 | `src/services/storage.ts` | (#34) 볼륨 읽기 · 쓰기 — 저장소 · assets 밖 경로를 막는다 |
 | `src/services/requestStatus.ts` | (#34) `RequestStatus` 응답 만들기 |
-| `src/services/requestWorker.ts` | (#34) 대기 상태 · 마감 계산 · 종류 확인 답. 대기열 실행은 #35 |
+| `src/services/requestWorker.ts` | (#34 · #35) 인식 작업자 — 대기열 · 동시 상한 · 마감 두 개 · 1초 감시 · 종류 확인 · 재시작 복구 |
+| `src/web/models.ts` | (#35) `/api/models/status` |
 | `src/services/fallback.ts` | (#34) 대체 결과 — `assets/templates/` · 없으면 `service_down` |
 | `src/services/modelApiClient.ts` · `modelStatus.ts` · `uploadInspect.ts` | (#34) model-api 호출 · 모델 상태 캐시 · PDF 검사 위임 |
 | `assets/` | (#34) 이미지에 굽는 예시 악보 · 대체 악보. 출처는 `assets/examples/SOURCES.md` |
@@ -99,7 +100,7 @@ docker compose -p klassic-api-test down -v   # 시험용 프로젝트만 지운�
 ```
 
 - 시험 DB 첫 초기화에서 migrate 가 `1130 Host ... not allowed` 로 실패하면 시험용 프로젝트를 지우고 다시 띄운다 — WSL2 시계가 거꾸로 움직여 초기화가 끊긴 경우다 (로그 `certificate is not yet valid`, 2026-11-01).
-- 인식을 끝내는 일은 작업자(#35) 몫이라 `tests/integration/requests.test.ts` 는 완료 상태를 `tests/helpers/db.ts` 로 DB 에 직접 만든다. model-api 는 `tests/helpers/fakeModelApi.ts`.
+- `tests/integration/requests.test.ts` 는 작업자를 켜지 않고 완료 상태를 `tests/helpers/db.ts` 로 DB 에 직접 만든다. 인식까지 잇는 시험은 `worker.test.ts`. model-api 는 둘 다 `tests/helpers/fakeModelApi.ts`.
 - Windows `curl` 로 손시험할 때 명령줄에 한글을 쓰면 UTF-8 이 아닌 cp949 로 보내져 깨진 글자(`EFBFBD`)로 저장된다 — 본문을 UTF-8 파일로 만들어 `--data-binary @파일` 로 보낸다 (서버 문제 아님, 2026-10-30 확인).
 
 ### 운영 명령줄 도구 (#26)
@@ -139,7 +140,9 @@ docker compose up -d web          # web 을 다시 만들어야 새 값을 읽�
 | model-api 호출이 401 | `SERVICE_API_KEY` 가 비었거나 폐기된 키 | `issueServiceKey` 로 새로 발급 → `.env` → `docker compose up -d web` |
 | web 이 `EACCES` · `EROFS` 로 `시작 실패` | 볼륨 storage 가 없거나 쓸 수 없음 (시작할 때 `/storage` 쓰기를 확인한다) | `docker compose exec web ls -ld /storage` — 소유자가 `node` 인지 |
 | PDF 만 503 `UPLOAD_CHECK_UNAVAILABLE` · 사진은 됨 | model-api 가 꺼졌거나 서비스 키 오류 (로그 `PDF 검사 불가`) | `docker compose ps model-api` · 위의 401 조치 |
-| 접수한 요청이 `queued` 에 멈춤 | 인식 작업자(#35)가 아직 없음 / 그 뒤에는 작업자 로그 | #35 병합 여부 확인 |
+| 인식이 모두 `ENGINE_DOWN` 대체로 끝남 | model-api 가 꺼졌거나 500 (대체 이유가 `ENGINE_DOWN`) | `docker compose ps model-api` · `logs model-api` |
+| 인식이 모두 `RECOGNITION_FAILED` 대체로 끝남 | model-api 가 4xx — 대개 서비스 키 오류 | 위의 401 조치 |
+| 요청이 한동안 `queued` | 동시 처리 상한(`web_concurrency_share`)만큼 앞 요청을 처리 중. 마감을 넘기면 `TIMEOUT` 대체로 끝난다 | 설정 판본 확인 · `docker compose logs web` |
 | `/score` 410 인데 보관 기간 안 · 로그 `DB 에 있는 결과 파일이 저장소에 없음` | DB 와 볼륨이 어긋남 | 볼륨 `klassic-api_storage` 가 붙어 있는지 · 지워지지 않았는지 |
 | 큰 업로드가 수십 초 걸리거나 web 이 `Exited (137)` | 업로드는 검사가 끝날 때까지 메모리에 있다. 측정: 190MB 3건 동시 677MB · 15초 (`mem_limit` 1g) | `docker stats` 로 확인 후 한도 조정 (#49) |
 | 로그인 · 가입이 가끔 500, 로그에 `sqlState 23000 · errno 4025` | DB CHECK 제약 위반 (mysql2 가 코드 이름을 `AUTOEXTEND_SIZE` 로 잘못 붙임) — `chk_session_time` 이면 서버 PC 시계가 뒤로 보정된 것 | #27 에서 `ended_at = GREATEST(현재, started_at)` 로 막았다. 다른 제약이면 `SHOW CREATE TABLE` 로 확인 |

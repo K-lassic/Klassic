@@ -7,7 +7,7 @@ import { FAKE_MODEL_PORT } from './env.js';
 export type Handler = (req: express.Request, res: express.Response) => void;
 
 export interface FakeModelApi {
-  calls: { path: string; apiKey: string | undefined; fields: Record<string, unknown>; files: string[] }[];
+  calls: { path: string; apiKey: string | undefined; deadline: string | undefined; fields: Record<string, unknown>; files: string[] }[];
   on: (method: 'get' | 'post', path: string, h: Handler) => void;
   close: () => Promise<void>;
 }
@@ -18,7 +18,7 @@ export async function startFakeModelApi(): Promise<FakeModelApi> {
   const calls: FakeModelApi['calls'] = [];
   app.use(multer({ storage: multer.memoryStorage() }).any());
   app.all(/.*/, (req, res) => {
-    calls.push({ path: `${req.method} ${req.path}`, apiKey: req.header('X-API-Key'), fields: { ...(req.body ?? {}) },
+    calls.push({ path: `${req.method} ${req.path}`, apiKey: req.header('X-API-Key'), deadline: req.header('X-Deadline'), fields: { ...(req.body ?? {}) },
       files: ((req.files as Express.Multer.File[]) ?? []).map((f) => f.originalname) });
     const h = handlers.get(`${req.method.toLowerCase()} ${req.path}`);
     if (!h) { res.status(404).json({ error: { code: 'REQUEST_NOT_FOUND' } }); return; }
