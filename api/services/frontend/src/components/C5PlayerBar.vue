@@ -50,7 +50,7 @@ const off = player.on((s, detail) => {
 });
 onMounted(() => {
   if (props.dock) document.body.classList.add('has-dock');
-  if (props.preload && !props.expired) player.preload();
+  if (props.preload && !props.expired) player.preload(props.doc);
 });
 onBeforeUnmount(() => { off(); stopTick(); player.stop(); if (props.dock) document.body.classList.remove('has-dock'); });
 watch(() => props.doc, (d) => {
