@@ -25,8 +25,11 @@
 Nginx 사용자 server ─ /api/*   ─▶ web   (node dist/server.js --role=web,   컨테이너 안 9523)
 Nginx 관리자 server ─ /admin/* ─▶ admin (node dist/server.js --role=admin, 컨테이너 안 26101)
 web · admin ─▶ MariaDB(db) — 계정 · 요청 · 결과 · 설정 판본 (파일 본체는 저장소 볼륨, DB 에는 위치만 — #34)
+web ─▶ 볼륨 storage(/storage) — 원본 · 결과 파일. 뿌리 파일시스템은 읽기 전용이라 쓸 수 있는 곳은 여기뿐 (#34)
 web ─▶ model-api (MODEL_API_URL, 서비스 키 SERVICE_API_KEY)
 ```
+
+악보 올리기 흐름 (#34): 화면 → Nginx → `POST /api/requests` → 검사(사진은 web, PDF 는 model-api) → 한도 → 볼륨에 저장 → DB 에 위치 기록 → `queued` → 작업자(#35)가 인식 → 화면은 1초마다 `GET /api/requests/{no}`.
 
 같은 이미지(`klassic/backend`)를 실행 인자만 바꿔 띄운다. 호스트 포트는 열지 않는다 — Nginx 만 서비스 이름으로 부른다.
 
@@ -40,7 +43,16 @@ web ─▶ model-api (MODEL_API_URL, 서비스 키 SERVICE_API_KEY)
 | `src/auth/accounts.ts` | (#27) `/api/auth/signup` · `login` · `logout` · `me` — argon2id · 잠금 · 한 계정 한 곳 · 가입 한도 |
 | `src/auth/permissions.ts` · `authz.ts` | (#27) 경로 → UC 대응표 + DB `role_permission` → 401 · 403 · 대응표 밖 404 |
 | `src/web/ownership.ts` | (#27) 요청 번호가 이 계정 것인지 (`/api/requests/{no}/…` 라우터가 #34 부터 쓴다) |
-| `src/lib/ids.ts` · `src/services/gateEvents.ts` | (#27) 쿠키 서명 · 접속 주소 해시 / 막힌 사건 `gate_event` (G13 · G14 · G15) |
+| `src/lib/ids.ts` · `src/services/gateEvents.ts` | (#27) 쿠키 서명 · 접속 주소 해시 · 요청 번호(#34) / 막힌 사건 `gate_event` (G1 · G12 · G13 · G14 · G15) |
+| `src/web/requests.ts` | (#34) `/api/requests` 올리기 · 상태 · `/score` · `/type-confirmation` · `/fallback` |
+| `src/web/uploadCheck.ts` · `webLimit.ts` | (#34) 업로드 검사 G1 · 사용자 한도 G12 |
+| `src/web/examples.ts` | (#34) `/api/examples` · 미리보기 · `/api/requests/example` — 파일은 `assets/examples/` |
+| `src/services/storage.ts` | (#34) 볼륨 읽기 · 쓰기 — 저장소 · assets 밖 경로를 막는다 |
+| `src/services/requestStatus.ts` | (#34) `RequestStatus` 응답 만들기 |
+| `src/services/requestWorker.ts` | (#34) 대기 상태 · 마감 계산 · 종류 확인 답. 대기열 실행은 #35 |
+| `src/services/fallback.ts` | (#34) 대체 결과 — `assets/templates/` · 없으면 `service_down` |
+| `src/services/modelApiClient.ts` · `modelStatus.ts` · `uploadInspect.ts` | (#34) model-api 호출 · 모델 상태 캐시 · PDF 검사 위임 |
+| `assets/` | (#34) 이미지에 굽는 예시 악보 · 대체 악보. 출처는 `assets/examples/SOURCES.md` |
 | `src/config/env.ts` | 환경변수 zod 검증 — 빠진 키 이름만 알리고 값은 출력하지 않음 |
 | `src/config/shared.ts` | `api/shared` 읽기 — 오류 파일 세 개를 합침 (중복이면 시작 안 함) |
 | `src/config/settings.ts` | 처리 설정 판본(DB) — 5초 캐시 |
@@ -78,7 +90,7 @@ docker run --rm -v "$PWD/api:/src:ro" node:22.21.1-bookworm-slim sh -c '
 
 ```bash
 cd api
-docker compose -p klassic-api-test up -d db && docker compose -p klassic-api-test run --rm migrate
+docker compose -p klassic-api-test up -d --wait db && docker compose -p klassic-api-test run --rm migrate
 set -a; . ./.env; set +a            # DB 계정 값을 셸에만 읽는다 (화면에 출력하지 않음)
 docker run --rm --network klassic-api-test_default \
   -e TEST_DB_HOST=db -e TEST_DB_USER="$DB_USER" -e TEST_DB_PASSWORD="$DB_PASSWORD" -e TEST_DB_NAME="$DB_NAME" \
@@ -86,6 +98,8 @@ docker run --rm --network klassic-api-test_default \
 docker compose -p klassic-api-test down -v   # 시험용 프로젝트만 지운다 (이름 확인!)
 ```
 
+- 시험 DB 첫 초기화에서 migrate 가 `1130 Host ... not allowed` 로 실패하면 시험용 프로젝트를 지우고 다시 띄운다 — WSL2 시계가 거꾸로 움직여 초기화가 끊긴 경우다 (로그 `certificate is not yet valid`, 2026-11-01).
+- 인식을 끝내는 일은 작업자(#35) 몫이라 `tests/integration/requests.test.ts` 는 완료 상태를 `tests/helpers/db.ts` 로 DB 에 직접 만든다. model-api 는 `tests/helpers/fakeModelApi.ts`.
 - Windows `curl` 로 손시험할 때 명령줄에 한글을 쓰면 UTF-8 이 아닌 cp949 로 보내져 깨진 글자(`EFBFBD`)로 저장된다 — 본문을 UTF-8 파일로 만들어 `--data-binary @파일` 로 보낸다 (서버 문제 아님, 2026-10-30 확인).
 
 ### 운영 명령줄 도구 (#26)
@@ -123,6 +137,11 @@ docker compose up -d web          # web 을 다시 만들어야 새 값을 읽�
 | `/api/health` 503 `reason: db` | 운영 중 DB 끊김 | DB 가 돌아오면 자동 회복 (2026-10-30 시험: 다시 켠 뒤 약 6초) |
 | 도구가 `터미널이 없어 비밀번호를 물을 수 없습니다` | `docker compose run` 에 `-it` 가 없음 | `-it` 를 붙여 다시 실행 |
 | model-api 호출이 401 | `SERVICE_API_KEY` 가 비었거나 폐기된 키 | `issueServiceKey` 로 새로 발급 → `.env` → `docker compose up -d web` |
+| web 이 `EACCES` · `EROFS` 로 `시작 실패` | 볼륨 storage 가 없거나 쓸 수 없음 (시작할 때 `/storage` 쓰기를 확인한다) | `docker compose exec web ls -ld /storage` — 소유자가 `node` 인지 |
+| PDF 만 503 `UPLOAD_CHECK_UNAVAILABLE` · 사진은 됨 | model-api 가 꺼졌거나 서비스 키 오류 (로그 `PDF 검사 불가`) | `docker compose ps model-api` · 위의 401 조치 |
+| 접수한 요청이 `queued` 에 멈춤 | 인식 작업자(#35)가 아직 없음 / 그 뒤에는 작업자 로그 | #35 병합 여부 확인 |
+| `/score` 410 인데 보관 기간 안 · 로그 `DB 에 있는 결과 파일이 저장소에 없음` | DB 와 볼륨이 어긋남 | 볼륨 `klassic-api_storage` 가 붙어 있는지 · 지워지지 않았는지 |
+| 큰 업로드가 수십 초 걸리거나 web 이 `Exited (137)` | 업로드는 검사가 끝날 때까지 메모리에 있다. 측정: 190MB 3건 동시 677MB · 15초 (`mem_limit` 1g) | `docker stats` 로 확인 후 한도 조정 (#49) |
 | 로그인 · 가입이 가끔 500, 로그에 `sqlState 23000 · errno 4025` | DB CHECK 제약 위반 (mysql2 가 코드 이름을 `AUTOEXTEND_SIZE` 로 잘못 붙임) — `chk_session_time` 이면 서버 PC 시계가 뒤로 보정된 것 | #27 에서 `ended_at = GREATEST(현재, started_at)` 로 막았다. 다른 제약이면 `SHOW CREATE TABLE` 로 확인 |
 | 로그인하면 `LOGIN_ALREADY_ACTIVE` | 같은 계정이 다른 브라우저에서 10분 안에 활동 중 (한 계정 한 곳) | 그 브라우저에서 로그아웃하거나 10분 기다린다 |
 

@@ -45,6 +45,11 @@ WORKDIR /app/services/backend
 COPY --from=builder /app/services/backend/package.json ./
 COPY --from=builder /app/services/backend/node_modules ./node_modules
 COPY --from=builder /app/services/backend/dist ./dist
+# #34 예시 악보 · 대체 악보 — 이미지에 굽는다 (ASSETS_DIR 기본값 · 정적 공개 경로 없음)
+COPY assets ./assets
+
+# #34 볼륨을 붙일 자리 — 빈 볼륨이 처음 붙을 때 이 소유자를 물려받아 node 사용자가 쓸 수 있다
+RUN mkdir /storage && chown node:node /storage
 
 # non-root (작성규칙 2-5) — node 이미지에 들어 있는 node 사용자(uid 1000). 파일은 root 소유라 읽기만 된다
 USER node
