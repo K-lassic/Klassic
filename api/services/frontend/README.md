@@ -178,6 +178,18 @@
 - 사운드폰트 파일 이름: 아직 v0.1.1 이름(`/soundfonts/gugak.sf2` · `FluidR3_GM.sf2`) + ETag 확인. 판본 이름(`<이름>-v<판>.sf2`)으로 바꾸면 Nginx(#22)에서 1년 `immutable` 캐시 — 파일 이름은 #22 · #31 과 정하고 `SOUNDFONT_URLS` 두 줄만 바꾼다.
 - 시험: v0.1.1 `playback207` · `playerRate` · `playerSound` · `preload204` · `round17` 을 옮기고(`preload204` 는 `preload(doc)` 로 바뀐 부분만 고침), `playerFonts` 를 새로 더했다.
 
+### 내려받기 (#43)
+
+| 위치 | 내용 (v0.1.1 에서 그대로 옮김) |
+|---|---|
+| `pages/S3Download.vue` | 4단계. 기준 악보(결과 + 기본 국악기 구성 + 기기의 편집 기록)로 받는다. MP3 는 성부별 악기(`instruments: {mode:'custom', tracks}`)로 |
+| `components/C6DownloadCard.vue` | 형식(MP3 · PDF · MIDI · MusicXML)을 여러 개 골라 [악보 다운받기] 한 번. 형식끼리 서로 기다리지 않는다 |
+
+- 편집이 없으면 MIDI · MusicXML 은 `GET /original/{format}` 을 `<a download>` 로 바로, 그 밖은 `POST /exports` `{format, edit_ops, instruments?}` → **1초 폴링** `GET /exports/:id` → `ready` 면 `download_url`(없으면 `/exports/:id/file`)을 받는다.
+- MIDI 가 없는 결과(`midi_available: false`)는 MIDI 칸을 막고 사유를 보인다 (`MIDI_UNAVAILABLE`). 만들기 실패는 `failure_reason`(`RENDER_FAILED` · `RENDER_TIMEOUT` · `RENDERER_MISSING` · `ENGINE_DOWN`) 문구 + [다시 시도].
+- 옮기지 않은 것: 모두에게 공유(`SharePanel`)는 P2.
+- 시험: v0.1.1 `downloadCard` 를 옮겼다 (오류 문구는 `i18n/errorCodes` 로 읽음).
+
 ## Runbook
 
 ### 무엇
@@ -214,7 +226,7 @@ cd api/services/frontend
 (cd ../../packages/score-core && npm ci && npm run build)   # file: 의존성은 빌드하지 않으므로 먼저 (score-core README)
 npm ci
 npm run lint
-npm test          # vitest — 158개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정 · 연주기)
+npm test          # vitest — 164개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정 · 연주기 · 내려받기)
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
