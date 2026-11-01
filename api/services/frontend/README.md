@@ -147,7 +147,19 @@
 | `composables/useLeaveGuard.ts` | #38 에서 미뤄 둔 `useLeaveGuard()`(결과가 나온 뒤 나가기 확인)를 더했다 |
 
 - 옮기지 않은 것: 내가 만든 악보(`MyScoresList`) · 공유 악보 목록(`SharedScoreList`)은 P2. 연주 막대(`C5PlayerBar`) · 재생 빠르기는 연주기와 함께 #42 (`S1Result.vue` 에 자리 주석).
-- 시험: v0.1.1 `requestStore` · `s1Upload` · `saveWork` · `workSaved` · `editorStore` · `leaveGuard` · `c4Picker` · `ensemble` 8개 파일을 옮겼다. `saveWork` 의 S2Edit 확인은 #41 에서 되살린다.
+- 시험: v0.1.1 `requestStore` · `s1Upload` · `saveWork` · `workSaved` · `editorStore` · `leaveGuard` · `c4Picker` · `ensemble` 8개 파일을 옮겼다.
+
+### 듣기와 편집 (#41)
+
+| 위치 | 내용 (v0.1.1 에서 그대로 옮김) |
+|---|---|
+| `pages/S2Edit.vue` | 왼쪽 악보(편집본, 음역 벗어난 음은 빨간 머리) · 오른쪽 패널(음표 수정 · 전체 반음 옮기기 · 악기 음량). 열 때 지난 자동 저장본이 있으면 [이어서] · [처음부터]를 묻는다. [원본으로 되돌리기] · [작업 저장하기] · [다음]=편집 마치기(`PUT /edits` `{summary, ops}`) 뒤 내려받기 |
+| `components/NoteInspector.vue` | 악보에서 누른 음표의 음 높이 ▲▼, 키보드 ← → (음표 옮기기) · ↑ ↓ + − (반음) |
+
+- 편집 연산은 score-core `applyOps` 로 원본에 얹고(원본은 그대로), `rangeWarnings` · `fitToRangeOps` 로 음역을 본다. `validateOps` 는 v0.1.1 화면도 쓰지 않는다 (서버가 검사).
+- 이슈 범위 중 v0.1.1 에서 이미 정리된 것: 악기 바꾸기는 2단계(S1 결과, #40)로 옮겨졌고, 트랙 추가 · 삭제는 화면에서 뺐다(연산은 score-core 에 호환용으로 남음).
+- 옮기지 않은 것: 연주 막대(`C5PlayerBar`) · 재생 빠르기(`set_tempo`) · 원래 악기로 듣기는 #42 (`S2Edit.vue` 에 자리 주석).
+- 시험: v0.1.1 `stepsAndNotes` · `round13` 를 옮기고 `saveWork` 의 S2Edit 확인을 되살렸다. `round8` · `round14` 는 S3 · 연주 막대 · 관리자 화면도 함께 확인하므로 #46 에서 옮긴다.
 
 ## Runbook
 
@@ -185,7 +197,7 @@ cd api/services/frontend
 (cd ../../packages/score-core && npm ci && npm run build)   # file: 의존성은 빌드하지 않으므로 먼저 (score-core README)
 npm ci
 npm run lint
-npm test          # vitest — 119개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인)
+npm test          # vitest — 135개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정)
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
