@@ -46,6 +46,8 @@ const schema = z.object({
   STORAGE_DIR: z.string().min(1).default('/storage'),
   /** #34 이미지에 구운 파일(예시 악보 · 대체 악보). DB 의 assets/... 경로가 이 폴더 기준이다 */
   ASSETS_DIR: z.string().min(1).default('/app/services/backend/assets'),
+  /** #36 브라우저 연주용 음원 — api/shared/soundfonts 를 읽기 전용으로 붙이는 고정 경로. 크기가 커서 이미지에 굽지 않는다 */
+  SOUNDFONTS_DIR: z.string().min(1).default('/soundfonts'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });

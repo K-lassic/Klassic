@@ -65,3 +65,11 @@ COPY --from=score-core . /app/packages/score-core
 - 새 코드 이름은 영역 접두어 권장: `WEB_…` · `MODEL_…` (v0.1.1 코드 이름은 그대로 둔다 — 화면 · 시험이 이 이름을 쓴다).
 - 두 서비스가 함께 쓰게 된 코드는 `common.json` 으로 옮긴다 (두 담당 리뷰).
 - `upload-rules.json` 의 숫자 상한은 DB 처리 설정 판본이 있으면 그 값이 우선이다 (v0.1.1 과 같음). Nginx 업로드 상한(`deploy/nginx/proxy.conf` 210m)도 같이 본다.
+
+## 음원 (`soundfonts/`, #36)
+
+`gugak.sf2`(22MB) · `FluidR3_GM.sf2`(142MB)는 Git LFS 로 관리하고, 크기가 커서 이미지에 굽지 않는다 — backend 는 `services/backend/compose.yaml` 에서 읽기 전용으로 붙여 `/soundfonts/*` 로 내준다. 파일을 받으려면 `git lfs pull`. 출처 · 이용 조건은 `soundfonts/SOURCES.md`.
+
+## 음원 (`soundfonts/`, #36)
+
+`gugak.sf2`(22MB) · `FluidR3_GM.sf2`(142MB)는 Git LFS 로 관리하고, 크기가 커서 이미지에 굽지 않는다 — backend 는 `services/backend/compose.yaml` 에서 읽기 전용으로 붙여 `/soundfonts/*` 로 내준다. 파일을 받으려면 `git lfs pull`. 출처 · 이용 조건은 `soundfonts/SOURCES.md`.

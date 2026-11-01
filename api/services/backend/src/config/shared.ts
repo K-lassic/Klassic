@@ -20,7 +20,8 @@ export interface ErrorCodes {
 export interface UploadMagic { hex_prefix?: string; hex_at_8?: string; text_contains_any?: string[] }
 export interface UploadKindRule { extensions: string[]; magic: UploadMagic[]; max_bytes: number; min_short_edge_px?: number }
 export interface UploadRules { version: string; max_files: number; max_pages?: number; user_upload_kinds: string[]; score_types: string[]; kinds: Record<string, UploadKindRule> }
-export interface Instruments { default_ensemble: { part_role: string; instrument: string }[]; instruments: Record<string, unknown>[] }
+export interface InstrumentDef { code: string; is_percussion?: boolean; bank?: number; program?: number }
+export interface Instruments { default_ensemble: { part_role: string; instrument: string }[]; instruments: InstrumentDef[] }
 
 const SECTIONS = ['gate_codes', 'fallback_reasons', 'status_codes'] as const;
 const ERROR_FILES = ['common', 'web', 'model'] as const;

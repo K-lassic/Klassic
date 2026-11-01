@@ -204,9 +204,9 @@ describe.skipIf(!HAS_DB)('권한표 판정 (H9 · G13)', () => {
     expect(r.body.error.code).toBe('AUTH_FORBIDDEN');
   });
 
-  it('권한이 있어도 아직 만들지 않은 경로는 404 (권한 통과 뒤 · #34 이후 라우터)', async () => {
+  it('권한이 있어도 아직 만들지 않은 경로는 404 (권한 통과 뒤 · P2 라우터)', async () => {
     const a = await loggedInAgent(app, 'later');
-    expect((await a.get('/api/instruments')).status).toBe(404);
+    expect((await a.get('/api/my-scores')).status).toBe(404);
   });
 
   it('대응표에 없는 경로는 로그인 여부와 상관없이 404 (권한 존재를 드러내지 않음)', async () => {

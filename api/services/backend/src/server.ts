@@ -12,6 +12,8 @@ import { closePool, waitForDb } from './db/pool.js';
 import { createAdminApp, createWebApp } from './app.js';
 import { checkStorage } from './services/storage.js';
 import { startWorker, stopWorker } from './services/requestWorker.js';
+import { recoverRenders } from './services/renderQueue.js';
+import { checkSoundfonts } from './web/instruments.js';
 import { exampleList } from './web/examples.js';
 import { logger } from './lib/logger.js';
 
@@ -42,10 +44,14 @@ async function main(): Promise<void> {
   if (role === 'web') {
     await checkStorage();
     logger.info({ storage_dir: e.STORAGE_DIR, examples: exampleList().length }, '저장소 · 예시 목록 확인');
+    checkSoundfonts();
   }
 
-  // 인식 작업자는 web 에서만 — 끝나지 않은 요청을 DB 에서 다시 줄 세운다 (#35). 렌더링 복구 · 주기 작업도 여기에 붙인다 (#36 · 주기 작업 이슈)
-  if (role === 'web') await startWorker();
+  // 인식 작업자는 web 에서만 — 끝나지 않은 요청을 DB 에서 다시 줄 세운다 (#35). 렌더링 복구는 #36. 주기 작업도 여기에 붙인다 (주기 작업 이슈)
+  if (role === 'web') {
+    await startWorker();
+    await recoverRenders();
+  }
 
   const server: Server = role === 'web'
     ? createWebApp().listen(e.WEB_PORT, e.WEB_HOST, () => logger.info({ host: e.WEB_HOST, port: e.WEB_PORT, setting_version: settings.setting_version_id }, 'web 수신 시작'))
