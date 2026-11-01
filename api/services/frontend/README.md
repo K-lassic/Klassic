@@ -190,6 +190,35 @@
 - 옮기지 않은 것: 모두에게 공유(`SharePanel`)는 P2.
 - 시험: v0.1.1 `downloadCard` 를 옮겼다 (오류 문구는 `i18n/errorCodes` 로 읽음).
 
+### 프론트 P1 시험 (#46)
+
+v0.1.1 시험 44개(단위 시험 43개 파일 + 손으로 하는 점검표 1개) 가운데 P1 화면에 해당하는 것을 모두 옮겼다.
+
+| v0.1.1 시험 | 개수 | 이 폴더에서 |
+|---|---|---|
+| `authGuard` · `loginGuard209` | 2 | `auth.test.ts` 에 합침 (#39) |
+| `gateMessages` | 1 | 그대로 (#38) |
+| `requestStore` · `s1Upload` · `saveWork` · `workSaved` · `editorStore` · `leaveGuard` · `c4Picker` · `ensemble` | 8 | 그대로 (#40) |
+| `stepsAndNotes` · `round13` | 2 | 그대로 (#41) |
+| `playback207` · `playerRate` · `playerSound` · `preload204` · `round17` | 5 | 그대로, `preload204` 는 `preload(doc)` 부분만 고침 (#42) |
+| `downloadCard` | 1 | 그대로 (#43) |
+| `centerTitles213` · `logo203` · `round8` · `round9` · `round10` · `round11` · `round12` · `round14` · `round15` · `round18` · `round19` · `themeAndScore` | 12 | P1 부분만 (#46) — 아래 |
+| `sharedScores` · `round16` · `tour210` | 3 | 옮기지 않음 — 공유 악보 · 내가 만든 악보 · 체험하기 (P2) |
+| `apiExamples` · `s4aEndpoints` · `s4aStart` | 3 | 옮기지 않음 — API 안내 · 예시 (P2) |
+| `admin-*` 6개 | 6 | 옮기지 않음 — 관리자 화면 (P3) |
+| `e2e/us6_restore.md` | 1 | 손으로 하는 브라우저 점검표 — 백엔드가 뜬 뒤 브라우저로 (아래 「확인하지 못한 것」) |
+
+`#46` 에서 옮긴 12개 파일은 여러 화면을 한꺼번에 보는 시험이라, P2 · P3 부품을 읽는 줄만 빼고 그 자리에 `// #46:` 주석으로 무엇을 뺐는지 · 언제 되살릴지 적었다.
+
+- P2 · P3 부품(`SharedScoreList` · `MyScoresList` · `SharePanel` · `S1Tour` · `S4AApiGuide` · `C7AdminBar`)을 읽는 줄 · 블록 — 그 화면을 옮길 때 v0.1.1 에서 되살린다
+- `logo203` 스타일가이드 견본 HTML 확인 — 견본은 api/ 로 옮기지 않았다 (`proto_type/src/app/docs/reference/style-guide`)
+- `themeAndScore` 서버 전용 예시 폴더 확인 — 예시 파일은 백엔드(#34)가 가진다. 화면 쪽 확인(공개 폴더에 없음 · 원본을 받지 않음)만 남겼다
+- `round14` 파일 읽기에서 줄 끝을 LF 로 맞춘다 — Windows 에서 받으면(`core.autocrlf`) CRLF 라 `'\n'` 이 들어간 비교가 틀렸다
+
+**결과 (2026-11-01, Windows 10 · Node 22.21.1)**: `npm test` 34개 파일 239개 통과 · 건너뜀 0 · `npm run lint` 오류 0(경고 10개는 옮긴 시험 파일의 `vue/one-component-per-file`) · `npm run build` 성공.
+
+**확인하지 못한 것**: 브라우저에서 실제 흐름(올리기 → 결과 → 편집 → 연주 → 내려받기)과 `us6_restore.md` 점검표. 이 PC 에 Docker 가 없고 새 백엔드(#34 · #36) · 렌더링(#31)이 아직 없다. 그것들이 9603 에 뜨면 이 표에 결과를 더한다.
+
 ## Runbook
 
 ### 무엇
@@ -226,7 +255,7 @@ cd api/services/frontend
 (cd ../../packages/score-core && npm ci && npm run build)   # file: 의존성은 빌드하지 않으므로 먼저 (score-core README)
 npm ci
 npm run lint
-npm test          # vitest — 164개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정 · 연주기 · 내려받기)
+npm test          # vitest — 239개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정 · 연주기 · 내려받기 · 화면 다듬기 소스 확인)
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
