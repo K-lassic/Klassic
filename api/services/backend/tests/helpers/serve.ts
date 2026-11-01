@@ -1,8 +1,10 @@
 // #27 시험 도우미 — 시험 파일마다 서버를 한 번만 띄워 둔다 (v0.1.1 tests/helpers/serve.ts).
 //   supertest 가 요청마다 임시 서버를 열고 닫으면 가끔 연결이 끊긴다(socket hang up) — 계속 떠 있는 서버를 넘긴다.
-import type { Express } from 'express';
+//   #44 앱 앞에 계약 대조를 끼운다 — 이 서버를 지나는 모든 JSON 응답을 web-api.yaml 과 맞춰 본다 (결과 확인은 contractCheck.ts).
+import express, { type Express } from 'express';
 import type { Server } from 'node:http';
 import { afterAll } from 'vitest';
+import { contractRecorder } from './contract.js';
 
 const servers: Server[] = [];
 afterAll(async () => {
@@ -11,7 +13,10 @@ afterAll(async () => {
 });
 
 export function serve(app: Express): Server {
-  const s = app.listen(0, '127.0.0.1');
+  const outer = express();
+  outer.use(contractRecorder);
+  outer.use(app);
+  const s = outer.listen(0, '127.0.0.1');
   servers.push(s);
   return s;
 }

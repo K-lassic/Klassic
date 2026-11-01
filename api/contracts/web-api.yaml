@@ -430,6 +430,7 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/ExportTask" } } }
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }   # REQUEST_NOT_FOUND (details.reason=not_completed) — 완료 전
         "410": { $ref: "#/components/responses/Error" }   # RESULT_EXPIRED
 
   /api/requests/{no}/exports/{fileId}:

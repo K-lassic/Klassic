@@ -176,6 +176,15 @@ describe.skipIf(!HAS_DB)('상태 · 결과 · 소유', () => {
     expect((await other.post(`/api/requests/${up.body.id}/fallback`)).status).toBe(404);
   });
 
+  it('요청은 계정 것 — 같은 계정은 다른 브라우저에서도 본다 (v0.1.1 rbac)', async () => {
+    const a = await loggedInAgent(app, 'acct');
+    const up = await uploadPng(a);
+    expect((await a.post('/api/auth/logout')).status).toBeLessThan(300);
+    const other = request.agent(app);
+    expect((await other.post('/api/auth/login').send({ email: a.email, password: 'password-1234' })).status).toBe(200);
+    expect((await other.get(`/api/requests/${up.body.id}`)).status).toBe(200);
+  });
+
   it('완료 전 결과는 409, 완료되면 ScoreDoc + MusicXML + 대체 아님', async () => {
     const u = await loggedInAgent(app, 'score');
     const up = await uploadPng(u);

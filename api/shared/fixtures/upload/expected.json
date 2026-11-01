@@ -1,0 +1,33 @@
+{
+  "$comment": "업로드 검사 기대값(T077, SC-015). 값 = shared/error-codes.json 코드, null = 통과. 조건: 파일 1개씩, score_type='staff', require_score_type=true, 상한은 upload-rules.json 기본값, 받는 종류 = upload-rules.json user_upload_kinds(사진·PDF — 2026-09-29 황송해 결정, MIDI·MusicXML 은 형식 반려). PDF 의 손상·암호·사진 크기는 모델 API 검사기(pypdfium2)가 판정한다 — 웹(TS)은 형식·용량·악보 종류만 보고 나머지는 모델 API /v1/internal/upload-check 에 맡긴다($remote_checked). Python: app/model-api/tests/unit/test_upload.py · TS: app/backend/tests/contract/upload_rules.test.ts. 다시 만들기: tests/unit/make_upload_fixtures.py",
+  "$params": {
+    "score_type": "staff",
+    "require_score_type": true,
+    "allowed_kinds": "user_upload_kinds"
+  },
+  "$remote_checked": [
+    "broken.pdf",
+    "encrypted.pdf",
+    "small_page.pdf",
+    "tiny_page.pdf"
+  ],
+  "$pdf_pages": {
+    "ok_staff_2p.pdf": 2
+  },
+  "text.txt": "UPLOAD_UNSUPPORTED_TYPE",
+  "broken.png": "UPLOAD_CORRUPTED",
+  "small_600.png": null,
+  "tiny_250.png": "UPLOAD_RESOLUTION_TOO_LOW",
+  "big_25mb.png": "UPLOAD_TOO_LARGE",
+  "broken.musicxml": "UPLOAD_UNSUPPORTED_TYPE",
+  "empty_parts.musicxml": "UPLOAD_UNSUPPORTED_TYPE",
+  "ok_staff.png": null,
+  "ok_jeongganbo.png": null,
+  "ok.mid": "UPLOAD_UNSUPPORTED_TYPE",
+  "ok.musicxml": "UPLOAD_UNSUPPORTED_TYPE",
+  "ok_staff_2p.pdf": null,
+  "broken.pdf": "UPLOAD_CORRUPTED",
+  "encrypted.pdf": "UPLOAD_CORRUPTED",
+  "small_page.pdf": null,
+  "tiny_page.pdf": "UPLOAD_RESOLUTION_TOO_LOW"
+}
