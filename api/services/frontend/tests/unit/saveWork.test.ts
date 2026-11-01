@@ -54,9 +54,8 @@ describe('202 작업 저장하기', () => {
     expect(put).not.toHaveBeenCalled();
   });
 
-  // #40: 3단계(S2Edit.vue)는 #41 에서 옮기면 목록에 더한다
   it('2단계 · 3단계 단계 이동 줄 가운데에 둔다', () => {
-    for (const f of ['src/pages/S1Result.vue']) {
+    for (const f of ['src/pages/S1Result.vue', 'src/pages/S2Edit.vue']) {
       const t = read(f);
       const nav = t.slice(t.lastIndexOf('<StepNav'), t.indexOf('</StepNav>', t.lastIndexOf('<StepNav')));
       expect(nav).toContain('<SaveWorkButton');
