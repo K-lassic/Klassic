@@ -1,10 +1,18 @@
 # =============================================================================
 # frontend 이미지 — Vite 빌드 → Nginx 정적 서빙 (담당: 황송해 · #21)
-#   builder: node 22 slim 에서 npm ci → vue-tsc · vite build
+#   builder: node 22 slim 에서 score-core 빌드 → npm ci → vue-tsc · vite build
 #   최종:    nginx-unprivileged(uid 101, non-root) 에 dist/ 와 default.conf 만 옮긴다
 # =============================================================================
 
 FROM node:22.21.1-bookworm-slim AS builder
+
+# score-core 먼저 (#40) — 바뀌는 일이 적어서 캐시가 오래 간다. package.json 의 file:../../packages/score-core 가 가리키는 자리에 빌드해 둔다
+WORKDIR /app/packages/score-core
+COPY --from=score-core package.json package-lock.json tsconfig.json ./
+RUN npm ci --no-audit --no-fund
+COPY --from=score-core src ./src
+RUN npm run build
+
 # 저장소와 같은 상대 위치로 둔다 — src/i18n/errorCodes.ts 의 ../../../../shared/… 가 그대로 풀린다 (#19 공유 방식)
 WORKDIR /app/services/frontend
 
@@ -15,7 +23,7 @@ RUN npm ci --no-audit --no-fund
 COPY tsconfig.json vite.config.ts index.html admin.html ./
 COPY public ./public
 COPY src ./src
-# api/shared 는 compose 의 additional_contexts(shared)로 받는다. score-core 는 쓰기 시작하는 #41 에서 같은 방식으로 더한다
+# api/shared · api/packages/score-core 는 compose 의 additional_contexts(shared · score-core)로 받는다
 COPY --from=shared . /app/shared
 RUN npm run build
 
