@@ -30,7 +30,7 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 | 25MB 업로드 통과 · 215MB 는 413 `UPLOAD_TOO_LARGE` JSON (상한 210m) · Nginx 메모리 5.6MB(업로드를 쌓아 두지 않음) | ✅ |
 | web 을 끄면 `/api/*` 만 502, `/api/v1/*` 는 그대로 | ✅ |
 
-남은 확인: 실제 web · model-api 로 다시 (#23 · #24 뒤), Funnel 로 외부 주소가 실제로 들어오는지 (#48).
+남은 확인: 실제 model-api 로 `/api/v1/*` 다시 (#24 뒤). 실제 web · Funnel 외부 주소는 확인함 (#47 · #48).
 
 - 도메인 없이 `*.ts.net` 주소와 HTTPS 인증서를 받는다. 공유기 포트를 열지 않는다.
 - **Tailscale 은 Windows 앱(서비스)으로 돌린다** (#9 결정). 컨테이너로 돌리지 않으므로 인증 키(`TS_AUTHKEY`)가 필요 없다 — 로그인은 앱에서 사람이 한다.
@@ -45,6 +45,49 @@ pwsh api/deploy/funnel.ps1 start              # 예비 시연: proto_type gatewa
 pwsh api/deploy/funnel.ps1 start -Port 9603   # 재구성: api/ 입구(Nginx)로 전환 (#48)
 pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 ```
+
+### api/ 로 전환 · 되돌리기 (#48)
+
+전환은 **사람이 실행한다.** 외부 공개를 바꾸는 명령이라 Claude 는 실행하지 않는다.
+
+```powershell
+# 0. 되돌릴 곳 살리기 — 9503 이 응답하지 않으면 (재부팅 뒤 네트워크 분리)
+cd proto_type; docker compose up -d --force-recreate web gateway admin model-api; cd ..
+
+# 1. 공개 금지 포트가 거부되는지 (빨간 오류가 나와야 정상)
+pwsh api/deploy/funnel.ps1 start -Port 26201
+
+# 2. api/ 로 전환 → 외부 점검
+pwsh api/deploy/funnel.ps1 start -Port 9603
+pwsh api/deploy/check-public.ps1
+
+# 3. 되돌리기 · 다시 전환 — 시간을 잰다 (완료 기준 1분 안)
+pwsh api/deploy/funnel.ps1 start
+pwsh api/deploy/funnel.ps1 start -Port 9603
+
+# 4. 평소에는 끈다
+pwsh api/deploy/funnel.ps1 stop
+```
+
+- [check-public.ps1](check-public.ps1) 은 화면 · 상태 · 음원 · 로그인 필요 경로 · 내부 API · 관리자 · 예시 원본 · 쿠키 속성을 본다. 계정을 만들지 않고 값은 출력하지 않는다.
+- model-api 가 없으면 `/api/v1/health` 줄만 실패한다 (502).
+- 서버 PC 와 다른 네트워크(휴대폰 LTE · 다른 집 PC)에서 화면이 열리는지는 사람이 본다.
+
+### #48 시험 결과 — api/ 외부 공개 (2026-11-01)
+
+공개 주소 **https://klassic.tailafa5c2.ts.net** → 127.0.0.1:9603 (Nginx). 시험 뒤 공개를 끈다.
+
+| 확인 | 결과 |
+|---|---|
+| 공개 금지 포트 26201 | ✅ `funnel.ps1` 이 거부 |
+| 인터넷 경로로 화면 · `/api/health` · 음원 | ✅ 200 |
+| 방문자의 `/api/instruments` | ✅ 401 |
+| 내부 API · 관리자 API · 관리자 화면 | ✅ 404 |
+| 예시 원본 | ✅ 나오지 않음 |
+| 세션 쿠키 HttpOnly · SameSite=Lax · **Secure** | ✅ 외부 HTTPS 에서 확인 (#37) |
+| 다른 네트워크의 PC 에서 화면 접속 | ✅ 사용자 확인 |
+| 9603 → 9503 → 9603 전환 | ✅ 두 명령을 이어서 실행해 바로 끝남 (초 단위 계측은 안 함) |
+| `/api/v1/health` | ⏳ 502 — model-api(#24) 뒤 다시 확인 (#22 · #49) |
 
 ### 처음 한 번 (서버 PC)
 
