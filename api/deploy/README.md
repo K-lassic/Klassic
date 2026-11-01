@@ -118,10 +118,10 @@ pwsh api/deploy/funnel.ps1 stop
   호스트 포트를 `127.0.0.1` 에만 공개하므로 `172.30.0.1` 로 들어오는 것은 이 PC 안(Tailscale · 로컬 브라우저)뿐이다.
 - **재구성(api/) 반영**: Nginx `set_real_ip_from`(#22) · backend 신뢰 프록시(#37) 를 설정값으로 두고 compose 네트워크 게이트웨이 주소를 넣는다.
 
-**문제 2 — 로그아웃하면 공개가 끊김 (설정 필요)**
+**문제 2 — 로그아웃하면 공개가 끊김 (해결, 2026-11-01)**
 
 - Tailscale 서비스는 자동 시작(Automatic)이지만 **"Run unattended"** 가 꺼져 있으면 Windows 사용자가 로그아웃할 때 연결이 끊긴다.
-- 조치: 작업 표시줄 Tailscale 아이콘 → Preferences → **Run unattended** 켜기 (서버 PC 운영 설정 이슈에서 재부팅 시험).
+- 조치: 작업 표시줄 Tailscale 아이콘 → Preferences → **Run unattended** 켜기 (#47). 재부팅 시험은 하지 않았다 — 발표는 켜 둔 채 진행한다.
 
 ### 예비 시연 ↔ 재구성 전환
 
@@ -141,7 +141,7 @@ pwsh api/deploy/funnel.ps1 stop
 | 2026-11-01 | 전원 연결 시 절전 | 5시간 뒤 | **안 함** | 설정 → 시스템 → 전원 → 화면 및 절전 |
 | 2026-11-01 | 덮개 닫기(전원 연결) | 절전 | **아무것도 안 함** | 제어판 → 전원 옵션 → 덮개를 닫으면 |
 | 2026-11-01 | Windows 업데이트 | 중지 안 함 | **11/05 까지 일시 중지** | 설정 → Windows 업데이트 → 업데이트 재개 |
-| ⏳ 사람이 할 일 | Tailscale Run unattended | 꺼짐 | 켜기 — 작업 표시줄 Tailscale 앱 Preferences | 같은 곳 |
+| 2026-11-01 | Tailscale Run unattended | 꺼짐 | **켜짐** (`ForceDaemon: true` 확인) | 작업 표시줄 Tailscale 앱 Preferences |
 
 - 배터리 사용 시 설정은 바꾸지 않았다 (절전 2시간 · 덮개 닫으면 절전). **발표 때는 충전기를 꽂아 둔다.**
 - 그대로 둔 것: Docker Desktop 로그인 시 자동 시작(켜짐) · Docker 배정 4코어 · 16GB(`.wslconfig`) · 네트워크 Wi-Fi
