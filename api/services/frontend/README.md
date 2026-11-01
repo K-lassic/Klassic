@@ -111,7 +111,7 @@
 `src/` · `tests/` · `public/` · `index.html` · `admin.html` · `package.json` · `package-lock.json` · `vite.config.ts` · `nginx/default.conf` · `Dockerfile` · `.dockerignore` · `compose.yaml` · 이 README(Runbook)
 
 - 옮기지 않은 화면은 빈 화면(`pages/Placeholder.vue`)이다. 경로는 v0.1.1 `router.ts` 와 같고, 화면 이슈(#39 · #40 · #41 · #43)에서 component 만 바꾼다.
-- 의존성은 지금 쓰는 것만 넣었다. #40 에서 score-core · 악보 그리기(OSMD 1.9.9) · idb 8.0.3 을 더했고, 연주기(spessasynth)는 #42 에서 넣는다. 판은 v0.1.1 lock 과 같게 고정한다.
+- 의존성은 지금 쓰는 것만 넣었다. #40 에서 score-core · 악보 그리기(OSMD 1.9.9) · idb 8.0.3 을, #42 에서 연주기(spessasynth_lib · spessasynth_core 3.27.8 — lib 가 core 를 `latest` 로 받아서 core 판을 직접 고정)를 더했다. 판은 v0.1.1 lock 과 같게 고정한다.
 
 ### 공통 부품 · API 클라이언트 (#38)
 
@@ -158,8 +158,25 @@
 
 - 편집 연산은 score-core `applyOps` 로 원본에 얹고(원본은 그대로), `rangeWarnings` · `fitToRangeOps` 로 음역을 본다. `validateOps` 는 v0.1.1 화면도 쓰지 않는다 (서버가 검사).
 - 이슈 범위 중 v0.1.1 에서 이미 정리된 것: 악기 바꾸기는 2단계(S1 결과, #40)로 옮겨졌고, 트랙 추가 · 삭제는 화면에서 뺐다(연산은 score-core 에 호환용으로 남음).
-- 옮기지 않은 것: 연주 막대(`C5PlayerBar`) · 재생 빠르기(`set_tempo`) · 원래 악기로 듣기는 #42 (`S2Edit.vue` 에 자리 주석).
+- 연주 막대(`C5PlayerBar`) · 재생 빠르기(`set_tempo`) · 원래 악기로 듣기는 #42 에서 붙였다.
 - 시험: v0.1.1 `stepsAndNotes` · `round13` 를 옮기고 `saveWork` 의 S2Edit 확인을 되살렸다. `round8` · `round14` 는 S3 · 연주 막대 · 관리자 화면도 함께 확인하므로 #46 에서 옮긴다.
+
+### 연주기 · 사운드폰트 (#42)
+
+| 위치 | 내용 |
+|---|---|
+| `player/player.ts` | 브라우저 연주기(spessasynth_lib 3.27.8) — ScoreDoc → MIDI(score-core `toMidi`) → Web Audio. 화면 전체에 하나 |
+| `player/soundNumbers.ts` | 소리 번호(국악기 bank 1 · 장구 · 북 128/1) · **`fontsFor(doc)` — 그 악보에 필요한 음원** (`api/shared/instruments.json` 의 `soundfont` 칸) |
+| `player/tempo.ts` · `components/C5PlayerBar.vue` | 재생 빠르기(4분음표 100 BPM 기준 배율) · 연주 막대(재생 · 멈춤 · 진행 · 빠르기 · 음량) — v0.1.1 그대로 |
+
+**v0.1.1 과 다른 점 — 2026-10-30 팀장 피드백 "재생 지연" (#42 댓글)**
+
+- 필요한 음원만 받는다: `gugak.sf2`(22MB)를 먼저 싣고, 일반 악기(`piano` 등) · 원래 악기를 쓰는 악보일 때만 `FluidR3_GM.sf2`(148MB)를 늦게 받아 뒤에 얹는다. 기본 편성(가야금 · 장구)은 FluidR3 를 받지 않는다. v0.1.1 은 첫 재생 전에 두 파일(약 170MB)을 모두 받았다.
+  - 찾는 순서는 v0.1.1 과 같다 (gugak 먼저 → 국악기 번호, FluidR3 → GM 번호). `gugak.sf2` 를 못 받으면 FluidR3 만 싣고 GM 번호로 연주한다.
+  - 연주 중에 일반 악기로 바꾸면 그때 FluidR3 를 받기 시작한다 — 받는 동안 그 악기는 대체 음색으로 난다.
+- 구간별 시간: `player.timings` 에 음원 받기(`fetchGugakMs` · `fetchFluidMs`) · 싣기(`loadMs` · `loadFluidMs`) · MIDI 만들기(`midiMs`) · 첫 소리까지(`firstSoundMs`)를 남기고, 재생할 때 개발자 도구 콘솔에 `[player] timings {…}` 한 줄을 찍는다. 성능 탭 · `performance.getEntriesByType('measure')` 에서도 `klassic:player:*` 로 보인다.
+- 사운드폰트 파일 이름: 아직 v0.1.1 이름(`/soundfonts/gugak.sf2` · `FluidR3_GM.sf2`) + ETag 확인. 판본 이름(`<이름>-v<판>.sf2`)으로 바꾸면 Nginx(#22)에서 1년 `immutable` 캐시 — 파일 이름은 #22 · #31 과 정하고 `SOUNDFONT_URLS` 두 줄만 바꾼다.
+- 시험: v0.1.1 `playback207` · `playerRate` · `playerSound` · `preload204` · `round17` 을 옮기고(`preload204` 는 `preload(doc)` 로 바뀐 부분만 고침), `playerFonts` 를 새로 더했다.
 
 ## Runbook
 
@@ -197,7 +214,7 @@ cd api/services/frontend
 (cd ../../packages/score-core && npm ci && npm run build)   # file: 의존성은 빌드하지 않으므로 먼저 (score-core README)
 npm ci
 npm run lint
-npm test          # vitest — 135개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정)
+npm test          # vitest — 158개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정 · 연주기)
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
