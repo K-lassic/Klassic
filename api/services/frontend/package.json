@@ -10,6 +10,9 @@
     "lint": "eslint src tests --ext .ts,.vue"
   },
   "dependencies": {
+    "@gugak/score-core": "file:../../packages/score-core",
+    "idb": "^8.0.3",
+    "opensheetmusicdisplay": "^1.9.9",
     "pinia": "^2.2.6",
     "vue": "^3.4.38",
     "vue-router": "^4.4.5"
