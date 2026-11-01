@@ -110,8 +110,8 @@
 
 `src/` · `tests/` · `public/` · `index.html` · `admin.html` · `package.json` · `package-lock.json` · `vite.config.ts` · `nginx/default.conf` · `Dockerfile` · `.dockerignore` · `compose.yaml` · 이 README(Runbook)
 
-- 화면은 아직 모두 빈 화면(`pages/Placeholder.vue`)이다. 경로는 v0.1.1 `router.ts` 와 같고, 화면 이슈(#39 · #40 · #41 · #43)에서 component 만 바꾼다.
-- 의존성은 지금 쓰는 것만 넣었다 (vue · vue-router · pinia). score-core · 연주기(spessasynth) · 악보 그리기(OSMD) · idb 는 쓰는 이슈에서 넣는다. 판은 v0.1.1 lock 과 같게 고정한다.
+- 옮기지 않은 화면은 빈 화면(`pages/Placeholder.vue`)이다. 경로는 v0.1.1 `router.ts` 와 같고, 화면 이슈(#39 · #40 · #41 · #43)에서 component 만 바꾼다.
+- 의존성은 지금 쓰는 것만 넣었다. #40 에서 score-core · 악보 그리기(OSMD 1.9.9) · idb 8.0.3 을 더했고, 연주기(spessasynth)는 #42 에서 넣는다. 판은 v0.1.1 lock 과 같게 고정한다.
 
 ### 공통 부품 · API 클라이언트 (#38)
 
@@ -134,6 +134,21 @@
 - 로그인 실패 · 잠금은 `C2GateBlock` 으로 보인다 (사유는 서버 `message`, 제목 · 해제 주체 · 다음 행동은 공용 오류 코드). 잠금은 `retry_after` 가 지나면 버튼을 다시 연다.
 - 확인 (2026-10-30): 이 판 이미지를 v0.1.1 백엔드(9503)에 붙여 브라우저(Playwright)로 가입 → 로그아웃 → 틀린 비밀번호 → 로그인 → 새로고침 유지 → 로그아웃까지 통과.
 
+### 올리기 · 결과 (#40)
+
+| 위치 | 내용 (v0.1.1 에서 그대로 옮김) |
+|---|---|
+| `pages/S1Home.vue` · `S1Upload.vue` · `S1Result.vue` | 한 화면이 올리기 → 처리 중 → 결과로 바뀐다. 요청 번호는 주소 `?r=` 에 둬 새로 고쳐도 이어 본다 |
+| `stores/request.ts` | 올리기(사진 여러 장 · PDF · 예시) · 1초 폴링(`completed` · `service_down` · `expired` 에서 멈춤) · 종류 확인 답 · 대체 받기 |
+| `stores/editor.ts` · `autosaveBackend.ts` | 편집 기록(연산 목록) + IndexedDB 자동 저장. S1 결과의 악기 바꾸기 · [작업 저장하기]가 쓴다 (편집 화면은 #41) |
+| `stores/instruments.ts` · `lib/instruments.ts` · `lib/ensemble.ts` · `lib/gmNames.ts` | 악기 목록 `GET /api/instruments` 한 번 캐시 — 못 받으면 `api/shared/instruments.json` 으로 |
+| `components/C3ResultBand.vue` · `C4InstrumentPicker.vue` · `SaveWorkButton.vue` · `ScoreView.vue` | 결과 띠 · 악기 고르기 · [작업 저장하기](`PUT /edits` `finished:false`) · 악보 그리기(OSMD, 필요할 때 불러옴) |
+| `lib/uploadKind.ts` · `examples.ts` · `judgment.ts` · `workSaved.ts` · `scoreCheck.ts` · `noteMatch.ts` · `scoreCore.ts` | 올리기 규칙(`api/shared/upload-rules.json`) · 예시 · 결과 판별 · 저장 표시 · 그리기 전 확인 · 음표 찾기 · score-core 들여오기 |
+| `composables/useLeaveGuard.ts` | #38 에서 미뤄 둔 `useLeaveGuard()`(결과가 나온 뒤 나가기 확인)를 더했다 |
+
+- 옮기지 않은 것: 내가 만든 악보(`MyScoresList`) · 공유 악보 목록(`SharedScoreList`)은 P2. 연주 막대(`C5PlayerBar`) · 재생 빠르기는 연주기와 함께 #42 (`S1Result.vue` 에 자리 주석).
+- 시험: v0.1.1 `requestStore` · `s1Upload` · `saveWork` · `workSaved` · `editorStore` · `leaveGuard` · `c4Picker` · `ensemble` 8개 파일을 옮겼다. `saveWork` 의 S2Edit 확인은 #41 에서 되살린다.
+
 ## Runbook
 
 ### 무엇
@@ -141,7 +156,7 @@
 | 항목 | 값 |
 |---|---|
 | 이미지 | `${DOCKERHUB_NAMESPACE:-klassic}/frontend:${APP_TAG:-dev}` — 빌드 `node:22.21.1-bookworm-slim` → 실행 `nginxinc/nginx-unprivileged:1.28.0-bookworm` |
-| 빌드에 넘기는 바깥 폴더 | compose `additional_contexts` — `shared` → `api/shared`(오류 코드 · 번들에 들어감), `score-core` → `api/packages/score-core`(#41 부터 사용). 이미지 안에서도 `/app/shared` · `/app/services/frontend` 로 저장소와 같은 상대 위치 |
+| 빌드에 넘기는 바깥 폴더 | compose `additional_contexts` — `shared` → `api/shared`(오류 코드 · 번들에 들어감), `score-core` → `api/packages/score-core`(#40 부터 — 빌드 단계에서 먼저 `npm ci && npm run build`). 이미지 안에서도 `/app/shared` · `/app/services/frontend` 로 저장소와 같은 상대 위치 |
 | 실행 사용자 | uid 101 (nginx, non-root) · `read_only` · `/tmp` 만 tmpfs · `cap_drop: ALL` |
 | 포트 (컨테이너 → 호스트) | 사용자 `8080` → `127.0.0.1:${API_PUBLIC_PORT}`(9603) · 관리자 `8081` → `127.0.0.1:${API_ADMIN_PORT}`(26201) |
 | 환경변수 키 | 실행 시 없음 (화면은 같은 출처로 `/api` 를 부른다). 개발 서버만 `DEV_PUBLIC_TARGET` · `DEV_ADMIN_TARGET` |
@@ -165,11 +180,12 @@
 
 ```bash
 # 코드 시험 — api/shared 를 읽으므로 api/ 전체가 보여야 한다. 이 PC 에 Node 가 없으면 컨테이너에 api/ 를 붙여서:
-#   docker run --rm -v "$PWD/api:/api" -w /api/services/frontend node:22.21.1-bookworm-slim sh -c "npm ci && npm test"
+#   docker run --rm -v "$PWD/api:/api" -w /api/services/frontend node:22.21.1-bookworm-slim sh -c "(cd ../../packages/score-core && npm ci && npm run build) && npm ci && npm test"
 cd api/services/frontend
+(cd ../../packages/score-core && npm ci && npm run build)   # file: 의존성은 빌드하지 않으므로 먼저 (score-core README)
 npm ci
 npm run lint
-npm test          # vitest — 54개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구)
+npm test          # vitest — 119개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인)
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
