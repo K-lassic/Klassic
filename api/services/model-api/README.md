@@ -1,5 +1,110 @@
 # model-api (담당: 예은 @yeeun5364)
 
+## 기반 서비스 — #24
+
+Python 3.11·FastAPI 기반의 설정·로그·MariaDB 연결·API 키 인증과 준비 상태를 구성한다.
+업로드 검사·인식·렌더링·외부 연주 API 전체 구현은 #28~#33에서 이어진다.
+
+### 구조와 경계
+
+- Nginx가 외부 `/api/v1/*`에서 `/api`를 제거해 `model-api:9543/v1/*`로 전달한다. backend는 내부 서비스 DNS로 호출한다. 서버는 `0.0.0.0:9543`, Uvicorn `--root-path /api`로 실행한다. model-api는 호스트 포트를 공개하지 않는다.
+- `additional_contexts.shared`로 `api/shared`를 최종 이미지의 `/app/shared`에 포함한다. `SHARED_DIR`로 재정의할 수 있고 호스트 shared 마운트는 필요 없다. 세 오류 파일은 분류별로 합치며, 같은 분류의 중복 코드는 기동 실패로 처리한다. 서로 다른 분류에 같은 이름이 있는 기존 코드(예: `ENGINE_DOWN`)는 유지한다.
+- DB의 `access_key`에서 SHA-256 해시로 키를 조회하고 `role_permission`으로 권한을 판정한다. 서비스 키도 허용된 유스케이스만 통과한다. 운영 키 발급은 #26에서 수행하며 환경변수에 고정 우회 키를 두지 않는다.
+- 기존 `klassic_engines`는 읽기 전용 외부 볼륨으로 소비한다. #25의 별도 검사 도구와 목적이 다르며, #24에서는 새 HTTP 서비스의 실제 기동·재생성을 확인한다. `resources/worker.py`와 두 runner는 기준판에서 가져온 기동 로딩 기반이며, 인식 HTTP 경로와 결과 변환은 #29·#30에서 연결한다. homr runner의 AGPL 표기를 유지한다.
+- 기준 DB의 `~/gugak-engines`를 `ENGINES_DIR` 아래로 해석한다. 정간보는 DB의 macOS `mps` 설정을 바꾸지 않고 `JEONGGANBO_DEVICE=cpu`로 실행한다. Audiveris·Ollama는 이번 기동 구현에서 사용 가능으로 표시하지 않는다.
+- 11/02 팀 지시에 따라 음원은 `api/shared/soundfonts`를 `/app/shared/soundfonts`에 읽기 전용으로 마운트한다. 이미지에는 공통 오류·업로드 규칙·악기 목록만 복사하고 음원·시험 fixture는 포함하지 않는다. 기준판 파일에 빌드 의존하지 않는다. 호스트에는 Git LFS의 실제 SF2 파일을 준비해야 하며 경로 누락 시 빈 폴더를 자동 생성하지 않는다. backend의 음원 서빙 설정은 변경하지 않는다. 렌더링·필요 음원 선택은 #31에서 이어서 구현한다.
+- 서버는 UID/GID 1000, 읽기 전용 루트·엔진 볼륨, `cap_drop: ALL`, `no-new-privileges`로 실행한다. 쓰기는 `/tmp` tmpfs에 제한한다. 엔진 하위 프로세스에는 실행에 필요한 환경변수만 넘기고 DB 비밀번호·서버 API 키는 전달하지 않는다. 별도 데이터 파일 저장은 아직 없으며, 인증 호출 기록은 DB에 남긴다.
+
+### health 계약과 Docker 준비 판정
+
+기존 계약을 유지한다: `/v1/health`는 기동 로딩 중 `503 loading`, 인식 종류 누락 시 `503 unavailable`, DB 정상 시 `200 ok`, 기동 후 DB 단절 시 `200 degraded`다. 공개 응답만으로 사운드폰트·렌더러를 보장하지 않는다.
+
+Docker healthcheck는 `/health`의 `status=ok`·`db=ok`와 **실제 FluidSynth 음원 로딩 완료 표시**를 함께 확인한다. 엔진 작업자가 죽으면 `/health`도 다시 unavailable로 판정한다. 음원 실패 시 공개 계약은 유지하지만 컨테이너는 healthy가 되지 않는다. #24 본문의 "음원 준비 전 503" 요구와 현재 계약의 차이를 이렇게 분리했으며, 공개 계약 강화는 별도 계약 변경·리뷰가 필요하다.
+
+`/v1/versions`에는 DB 등록 모델의 실제 설치·상태와 활성 대체 템플릿의 버전, 기준 규칙표 해시를 반환한다. renderer 버전·처리 큐는 #31 및 후속 작업에서 연결하며 현재 큐 값은 0이다.
+
+### 설정과 기동
+
+설정 키는 [.env.example](.env.example)에 있다. 전체 Compose는 `api/.env`를 읽으므로 서비스 폴더의 예시를 자동 적용하지 않는다. 기존 `.env`를 덮어쓰지 말고 필요한 항목만 반영한다.
+
+| 키 | 기본값 / 용도 |
+|---|---|
+| `DB_HOST` · `DB_PORT` | `db` · `3306`, Compose 내부 DNS |
+| `DB_NAME` · `DB_USER` · `DB_PASSWORD` | 전체 Compose에서 필수, 실행 시 주입 |
+| `DB_CONNECT_ATTEMPTS` · `DB_RETRY_SECONDS` | 5회·2초, 소진 시 시작 실패 |
+| `SHARED_DIR` | `/app/shared` |
+| `ENGINES_DIR` · `ENGINES_VOLUME_NAME` | `/opt/gugak-engines` · `klassic_engines` (기존 venv 절대 경로 유지) |
+| `SOUNDFONTS_DIR` | `/app/shared/soundfonts` |
+| `JEONGGANBO_DEVICE` | `cpu` (현재 검증 범위) |
+| `MODEL_LOAD_TIMEOUT_SECONDS` | 엔진별 120초, 최대 600초 |
+| `MODEL_API_IMAGE` | 로컬 검증 태그 `klassic/model-api:issue24-local` |
+
+아래는 `api/`에서 실행한다. 새 프로젝트를 쓴다면 DB 초기화 대상·볼륨을 먼저 확인한다.
+
+```powershell
+docker compose config --quiet
+docker compose build model-api
+docker compose up -d --wait --wait-timeout 300 model-api
+docker compose ps -a
+docker compose exec -T model-api python -m app.healthcheck
+docker compose exec -T model-api id
+docker compose logs --tail 50 model-api
+```
+
+DB healthy와 migrate 종료 코드 0을 기다린 뒤 HTTP 서버가 시작된다. 로그는 stdout에 요청 ID·가린 경로·상태·구간별 소요 시간을 남긴다. 키·본문·쿼리·서명 파일 토큰·예외 원문은 기록하지 않는다. 응답의 `X-Request-ID`로 요청 로그를 찾는다. 모든 API 오류는 `error`·`api_version` 형식이며, 미선언 폼 필드도 공통 422로 거절한다.
+
+### 시험 방법
+
+Linux Python 3.11 환경에서 서비스 폴더에 진입해 실행한다. `uv==0.11.1`로 생성한 lock을 사용한다.
+
+```powershell
+uv sync --frozen
+uv run ruff check app tests
+uv run pytest -q
+```
+
+분리된 시험 DB 이름을 `klassic_issue24`로 지정한 경우에만 다음 실제 인증 검사를 수행할 수 있다. 임시 비활성 운영자·서비스/외부 키를 생성해 확인 후 정리한다. 키 원문은 출력하지 않는다. 일반 운영 DB에서는 실행을 거부한다.
+
+```powershell
+# 서비스 폴더에서, 프로젝트·env 파일은 자신의 별도 시험 환경을 지정
+Get-Content -Raw tests/container_smoke.py | docker compose -f ../../compose.yaml -p klassic-api-issue24 exec -T model-api python -
+```
+
+### 장애·정지·롤백
+
+| 증상 | 근거와 조치 |
+|---|---|
+| 시작 실패 | `logs`에서 `db_connect_failed`·설정 오류 확인. 비밀값을 출력하지 말고 DB DNS·설정·마이그레이션 상태 확인 후 재생성 |
+| `503 loading` 지속 | 모델별 `duration_ms`·`engine_failed`·로딩 제한 확인. 기존 엔진 볼륨 경로·amd64·Python 런타임 호환성을 점검 |
+| `503 unavailable` | DB enabled 모델과 실제 설치·작업자 상태 확인. Audiveris·Ollama 설치를 성공으로 간주하지 않음 |
+| HTTP 200인데 unhealthy | DB degraded 여부와 `soundfonts_failed`·실제 SF2/LFS 파일 확인. 공개 health와 Docker 준비 기준의 차이 |
+| 내부 경로 401/403 | 키 해시·활성 상태·종류·권한표 확인. 서비스 키로 권한을 우회하지 않음 |
+
+정지는 `docker compose stop model-api`로 한다. 엔진·DB 볼륨은 보존하며 `down -v`·prune은 실행하지 않는다. 롤백은 이전 `MODEL_API_IMAGE` 태그/digest를 선택해 `up -d --no-build model-api` 후 준비·인증을 재검사한다. 이번 이미지는 로컬 검증용이며 Docker Hub 게시·배포 완료를 의미하지 않는다.
+
+### 검증 기록
+
+**11/02 검증:** 최신 main `f7bbcce`와 병합된 #25 도구를 보존해 통합했다. 팀장 지시대로 음원을 읽기 전용 마운트로 변경한 최종 이미지를 다시 빌드·기동했다. 아래 10/30 기록과 구분한다.
+
+- 최신 shared 기준 단위·ASGI·자원 시험 20개, 정적 검사, 공통 오류 70개 검사를 재통과했다. 공개 health 계약과 AUTH_KEY_REVOKED 응답 코드는 변경하지 않았다.
+- 전체 Compose tools 프로필 설정 검사 통과. HTTP 서비스와 #25 검사 도구가 같은 읽기 전용 엔진 볼륨을 사용하고, 음원 bind 마운트도 RW=false임을 실제 컨테이너에서 확인했다. 공통 설정은 이미지에서 읽고 시험 fixture는 이미지에서 제외했다.
+- 새 음원 마운트 구성으로 컨테이너 재생성 후 DB·model-api healthy, migrate 종료 코드 0 확인. 일반 사용자 1000:1000·읽기 전용 루트·cap_drop ALL·no-new-privileges·호스트 포트 없음도 확인했다.
+- `tests/service_key_tools.ps1`로 #26의 실제 `createOperator.js`·`issueServiceKey.js`를 별도 시험 DB에서 실행했다. 첫 키 200 → 재발급 새 키 200 → 이전 키 403 AUTH_KEY_REVOKED를 확인하고 시험 운영자·계정·키·관련 이력·호출 기록을 정리했다. 키 원문은 출력하거나 파일에 저장하지 않았다.
+- **확인 완료 — 폐기 키 403:** 2026-11-02 승인된 기준에 따라, 재발급으로 폐기된 이전 키는 403 `AUTH_KEY_REVOKED`를 반환한다. #24의 이전 댓글에 적힌 401 대신 확정된 403 기준으로 실제 도구 연동 검사를 통과했다. 키 누락·잘못된 키의 401 응답은 유지한다.
+- 검사 재현: 서비스 폴더에서 `./tests/service_key_tools.ps1 -EnvFile <별도 시험 env 파일의 절대 경로>`. `klassic-api-issue24` 프로젝트·`klassic_issue24` DB 및 기존 활성 서비스 키가 없는 경우에만 실행한다. backend 이미지는 먼저 `docker compose build web`으로 준비한다.
+- 최종 로컬 이미지 ID는 `sha256:50b55feb4fdedbe1ecdd37045c91bb184e96811dfb7006c690ef8c3dde6491f1`, 크기 544,351,623 bytes다. Docker Client/Server 29.9.1에서 검증했으며 registry 게시 digest가 아니다.
+
+- 2026-10-30: 최신 main `ff815fe` 기반 `feat/24-model-api-yeeun`에서 수행. 기존 main worktree를 재사용했으며 폴더명과 브랜치명은 다르다.
+- 새 `klassic-api-issue24` 프로젝트와 별도 DB 볼륨에서 마이그레이션 종료 코드 0, model-api healthy 확인.
+- 첫 기동 로그: 정간보 21.019초·homr 15.244초·음원 8.748초. 로딩 중 HTTP 503, 완료 후 200 확인. 이 시간은 현재 PC의 한 번의 관측값이며 자원 상한의 근거로 일반화하지 않는다.
+- 단위·ASGI·자원 장애 시험 20개 통과, `ruff check app tests` 통과. TestClient의 httpx 사용에 관한 라이브러리 폐기 예정 경고 1개가 남으며 시험 실패·생략은 없다.
+- 최종 이미지를 다시 빌드하고 HTTP 컨테이너 재생성 후 healthy, 별도 DB 마이그레이션 재실행 종료 코드 0 확인.
+- 실제 DB·HTTP 인증: 키 없음/잘못된 키 401, 서비스 키 설정 갱신 200, 외부 키 내부 경로 접근 403. 임시 키·운영자 행 정리 완료.
+- 컨테이너 실제 설정: UID/GID 1000:1000, 루트 read-only, cap_drop ALL, no-new-privileges, 호스트 포트 바인딩 없음, `klassic_engines` RW=false. shared 호스트 마운트 없이 오류 항목 51·7·12개 로딩 확인. 최종 이미지에 `.env`·pytest 실행 파일 없음 확인.
+- 최종 이미지 ID `sha256:40c620c5d186da8f19ae952ea6c866ee60e204c2c92acbdcb23a9ceb42c3a612` (Linux/amd64, 검증 시 867,747,766 bytes). 이는 로컬 이미지 ID이며 배포 registry digest가 아니다. 두 모델·음원을 유지한 정상 대기 메모리 관측값은 958.3MiB다. 최대 사용량은 측정하지 않아 메모리 상한은 아직 지정하지 않았다.
+- 엔진 환경변수 제한 보강 후 이미지를 재생성하고 healthy·실제 DB 인증을 재확인했다. 최종 Compose 설정 검사·`git diff --check`·`python api/shared/check_errors.py`(70개) 통과. Docker Hub 게시, 실제 사진 인식·MP3/PDF 출력·외부 연주·처리 한도 시험은 이번 범위에서 수행하지 않았다.
+
+
 악보 인식(오선보 · 정간보) · MP3/PDF 렌더링 · 국악기 추천 · 외부 API(`/api/v1`, API 키).
 
 - 참고 코드: `proto_type/src/app/model-api` (Python 3.11 · FastAPI · uv, 약 8,800줄 · 테스트 36개 파일)
@@ -9,7 +114,7 @@
 ## 재구성 시 바꿀 점
 
 - 수신 주소 `0.0.0.0`, 경로(엔진 · 모델 · 음원 · 저장소)는 환경변수로 주입
-- `/health` 는 엔진 · 사운드폰트 로딩이 끝났을 때만 200
+- `/health` 공개 계약과 Docker의 엔진·사운드폰트 준비 판정은 위 #24 절처럼 분리한다
 - Audiveris 는 macOS 앱 구조 전제 → Linux 설치 방식으로 전환 (아래 조사 기준 발표 필수 범위에서는 제외)
 - 외부 공개: API 키별 사용량 제한 · 업로드 크기와 처리 시간 상한 (외부 요청이 엔진을 무한정 쓰지 못하게)
 
@@ -34,9 +139,9 @@
 | 검사 실행 | `engine-selftest`, `tools` 프로필의 일회성 도구. uid/gid 1000, 네트워크 차단, 호스트 포트 없음 |
 | 쓰기 위치 | 임시 캐시만 컨테이너의 `/tmp` tmpfs에 기록. 루트 파일시스템과 엔진 볼륨은 읽기 전용 |
 
-`compose.yaml`의 `x-engine-runtime`은 이후 model-api가 사용할 환경변수·아키텍처·엔진 마운트의 공통 정의다. 이번 `engine-selftest`가 그 정의를 실제로 사용한다. YAML anchor는 같은 파일에서만 사용할 수 있다. **#24에서 HTTP용 `model-api` 서비스를 추가할 때 이 정의를 병합하고 `engine-volume` 마운트를 함께 재사용한다.** 서비스에서 `environment`나 `volumes`를 새로 선언하면 해당 매핑/목록은 덮어써지므로 환경 매핑은 `<<: *engine-environment`, 엔진 마운트는 `- *engine-volume`을 명시적으로 포함해야 한다.
+`compose.yaml`의 `x-engine-runtime`은 환경변수·아키텍처·엔진 마운트의 공통 정의다. `engine-selftest`와 #24의 HTTP용 `model-api`가 같은 정의를 사용한다. YAML anchor는 같은 파일에서만 사용할 수 있다. 서비스에서 `environment`나 `volumes`를 새로 선언하면 해당 매핑/목록은 덮어써지므로 환경 매핑은 `<<: *engine-environment`, 엔진 마운트는 `- *engine-volume`을 명시적으로 포함한다.
 
-현재 `api/`에는 #24의 HTTP 서비스·Dockerfile이 아직 없다. #25는 기존 이미지의 엔진 어댑터를 사용한 **엔진 소비·영속성 검사**이며, 새 API의 인증·DB·`/health`·실인식 완료 보고가 아니다. 엔진 공통 구현과 실제 사진 인식은 #29·#30에서 검증한다. 검사 도구에는 기존 이미지의 API healthcheck를 적용하지 않는다.
+#25 수행 당시에는 새 HTTP 서비스·Dockerfile이 없었다. #25 기록은 기존 이미지의 엔진 어댑터를 사용한 **엔진 소비·영속성 검사**이며, #24에서 추가한 HTTP 서비스·인증·DB·준비 판정 결과와 구분한다. 엔진 공통 구현과 실제 사진 인식은 #29·#30에서 검증한다. 검사 도구에는 기존 이미지의 API healthcheck를 적용하지 않는다.
 
 **이미지 포함 배포는 최종 목표로 유지한다.** 다만 #25에서는 기존 볼륨 재사용으로 발표 준비 시간을 줄인다. 새 볼륨+설치 컨테이너는 기존 설치 결과가 없는 PC의 대안이며, 현재 방식에서는 빈 볼륨을 자동 생성하거나 설치를 시작하지 않는다. CPU 전용 의존성 검증·엔진 포함 이미지 빌드·Docker Hub 버전 배포는 별도 후속 작업이다. 이미지 포함 방식으로 전환할 때는 엔진 볼륨이 이미지 속 파일을 가리지 않게 해야 한다.
 
