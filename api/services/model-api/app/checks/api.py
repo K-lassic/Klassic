@@ -1,4 +1,9 @@
-"""#28: 검사만 수행한다. 작업·요청·입력 파일 저장은 하지 않는다."""
+"""#28 사진·PDF 검사 전용 내부 API.
+
+구조에서의 위치: backend uploadInspect.ts → POST /v1/internal/upload-check → checks.upload.
+서비스 키로 인증하고 shared 규칙에 따른 판정·쪽별 크기만 돌려준다.
+인식용 확대·PDF 렌더링은 하지 않으며 DB 요청·작업 행이나 입력 파일을 저장하지 않는다.
+"""
 import asyncio
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile

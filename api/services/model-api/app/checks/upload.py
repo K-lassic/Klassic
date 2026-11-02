@@ -1,4 +1,8 @@
-"""업로드 파일 검사 (T032, research R8, SC-015).
+"""#28 업로드 파일 검사 (T032, research R8, SC-015).
+
+구조에서의 위치: checks.api·인식 경로 → 이 파일 → checks.pdf·Pillow.
+shared/upload-rules.json으로 사진·PDF를 검사하고 판정·쪽 정보를 반환한다. DB·파일 저장은 하지 않는다.
+검사 API(render_pdf=False)는 인식용 확대 사본을 만들지 않는다.
 
 웹 서비스(TS)와 같은 `shared/upload-rules.json` 을 읽고, 같은 순서·같은 사유 코드로 판정한다.
 순서: count → type(확장자 + 파일 앞머리 magic) → corrupted(열어 보기 / MusicXML 구조) → size → resolution.
@@ -426,7 +430,8 @@ def _check_upload(
                              actual_short_edge_px=edge, min_short_edge_px=min_edge, **where(i))
             pages.append(PageImage(page_no=i, file_no=i, source="file", short_edge_px=edge, image=data,
                                    suffix=_ext(filename or "") or ".png"))
-            _maybe_upscale(pages[-1], spec)
+            if render_pdf:
+                _maybe_upscale(pages[-1], spec)
 
     short_edge = min((p.short_edge_px for p in pages if p.short_edge_px is not None), default=None)
 

@@ -1,4 +1,8 @@
-"""PDF 입력 — 열어 보기 · 쪽을 사진(PNG)으로 바꾸기 (2026-09-29 황송해 결정, UC3 A7 · SD_01 1.2a).
+"""#28 PDF 입력 — 열어 보기 · 쪽을 사진(PNG)으로 바꾸기 (2026-09-29 황송해 결정, UC3 A7 · SD_01 1.2a).
+
+구조에서의 위치: checks.upload → 이 파일 → pypdfium2(PDFium).
+검사 API에는 열기·쪽 수·계산한 크기를, 인식 경로에는 요청 시 쪽별 PNG 사본을 제공한다.
+입력과 결과는 메모리에서 다루며 DB·파일 저장은 하지 않는다.
 
 - 변환 도구: pypdfium2(Apache-2.0 / BSD-3, PDFium). PyMuPDF(AGPL)는 쓰지 않는다.
 - 손상됐거나 암호가 걸린 PDF → 열지 못함(UPLOAD_CORRUPTED, UC3 E2).

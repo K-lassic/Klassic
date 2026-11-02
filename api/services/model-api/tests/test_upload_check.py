@@ -77,7 +77,7 @@ def test_order_count_type_corruption_size_resolution_score_type():
     (600, True, 1000), (649, True, 1000), (650, True, None)])
 def test_image_boundary_and_original_preservation(edge, accepted, upscaled):
     original = png(edge)
-    verdict = check([("source.png", original)])
+    verdict = check([("source.png", original)], render_pdf=True)
     assert verdict.ok is accepted
     if accepted:
         assert verdict.files[0].data == original
@@ -114,6 +114,25 @@ def test_pdf_check_never_renders_pages():
         verdict = check([("score.pdf", fixture_data("ok_staff_2p.pdf"))])
     assert verdict.ok and len(verdict.pages) == 2
     assert all(p.image is None for p in verdict.pages)
+
+
+@pytest.mark.parametrize("edge", [300, 600, 649, 650])
+def test_image_inspection_never_creates_upscaled_copy(edge):
+    original = png(edge)
+    with patch("app.checks.upload._maybe_upscale", side_effect=AssertionError("검사에서 확대 금지")):
+        verdict = check([("small.png", original)], render_pdf=False)
+    assert verdict.ok and verdict.pages[0].short_edge_px == edge
+    assert verdict.pages[0].image == original and verdict.files[0].data == original
+    assert verdict.pages[0].upscaled_short_side_px is None
+
+
+def test_api_small_photo_never_creates_upscaled_copy(api):
+    client, _ = api
+    with patch("app.checks.upload._maybe_upscale", side_effect=AssertionError("검사 API에서 확대 금지")):
+        response = client.post("/v1/internal/upload-check", files={"file": ("small.png", png(600))},
+                               data={"score_type": "staff"}, headers={"X-API-Key": "service-secret"})
+    assert response.status_code == 200
+    assert response.json()["short_edge_px"] == 600
 
 
 def test_pdf_render_helper_produces_upscaled_copy_only_when_requested():
