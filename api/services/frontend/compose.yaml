@@ -10,6 +10,8 @@ services:
         shared: ../../shared
         score-core: ../../packages/score-core
     image: ${DOCKERHUB_NAMESPACE:-klassic}/frontend:${APP_TAG:-dev}
+    # #86 입구라서 재시작 뒤 꺼져 있으면 서비스 전체가 멈춘다 (2026-11-02 재부팅에서 이 컨테이너만 돌아오지 않았다)
+    restart: unless-stopped
     ports:
       - "127.0.0.1:${API_PUBLIC_PORT:-9603}:8080"
       - "127.0.0.1:${API_ADMIN_PORT:-26201}:8081"
