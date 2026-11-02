@@ -279,6 +279,7 @@ v0.1.1 시험 44개(단위 시험 43개 파일 + 손으로 하는 점검표 1개
 | 이미지 | `${DOCKERHUB_NAMESPACE:-klassic}/frontend:${APP_TAG:-dev}` — 빌드 `node:22.21.1-bookworm-slim` → 실행 `nginxinc/nginx-unprivileged:1.28.0-bookworm` |
 | 빌드에 넘기는 바깥 폴더 | compose `additional_contexts` — `shared` → `api/shared`(오류 코드 · 번들에 들어감), `score-core` → `api/packages/score-core`(#40 부터 — 빌드 단계에서 먼저 `npm ci && npm run build`). 이미지 안에서도 `/app/shared` · `/app/services/frontend` 로 저장소와 같은 상대 위치 |
 | 실행 사용자 | uid 101 (nginx, non-root) · `read_only` · `/tmp` 만 tmpfs · `cap_drop: ALL` |
+| 재시작 정책 | `restart: unless-stopped` (#86) — 이 Nginx 가 입구라 꺼져 있으면 서비스 전체가 멈춘다. 손으로 `stop` 한 경우만 재부팅 뒤에도 꺼진 채로 둔다 |
 | 포트 (컨테이너 → 호스트) | 사용자 `8080` → `127.0.0.1:${API_PUBLIC_PORT}`(9603) · 관리자 `8081` → `127.0.0.1:${API_ADMIN_PORT}`(26201) |
 | 환경변수 키 | 실행 시 없음 (화면은 같은 출처로 `/api` 를 부른다). 개발 서버만 `DEV_PUBLIC_TARGET` · `DEV_ADMIN_TARGET` |
 | 붙이는 볼륨 | `api/deploy/nginx` → `/etc/nginx/klassic:ro` (팀장 경로 나누기 · #22) |
