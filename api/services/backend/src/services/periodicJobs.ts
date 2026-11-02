@@ -8,11 +8,12 @@
 //     - 웹 요청만 지운다. API 요청 파일은 model-api 가 지우며, backend 가 purged_at 을 먼저 적으면 model-api 가 건너뛴다.
 //     - 한 요청이 실패해도 나머지를 계속 지우고, 실패한 요청은 다음 주기에 다시 처리한다.
 //     - DB ↔ 파일 일치 확인을 더했다. 고아 파일은 보고만 하고 지우지 않는다.
-//     - 공유 악보 · 키 신청 정리는 그 기능을 만들 때 더한다 (P2 · P3).
+//     - 키 신청 정리는 그 기능을 만들 때 더한다 (#91).
+//   공유 복사본(#90)은 요청 폴더 밖이라 24시간 정리에 지워지지 않고, 공유 후 3일이 지나면 여기서 지운다.
 import { exec, getPool, one, query, tx } from '../db/pool.js';
 import { env } from '../config/env.js';
 import { logger } from '../lib/logger.js';
-import { isAssetUri, listStoredFiles, removeRequestDir, storedFileExists } from './storage.js';
+import { isAssetUri, listStoredFiles, removeRequestDir, removeStored, storedFileExists } from './storage.js';
 
 const LOCK_NAME = 'klassic_periodic_jobs';
 const BATCH = 200;
@@ -23,7 +24,7 @@ const SAMPLE_LIMIT = 20;
 export interface FileCheck { missing: string[]; orphans: string[] }
 
 export interface PeriodicSummary {
-  purged: number; purge_failed: number; sessions_ended: number; identities_cleared: number; sessions_deleted: number;
+  purged: number; shares_purged: number; purge_failed: number; sessions_ended: number; identities_cleared: number; sessions_deleted: number;
   missing_files: number; orphan_files: number; failed_steps: string[];
 }
 
@@ -56,6 +57,30 @@ async function purgeDueRequests(): Promise<{ purged: number; failed: number }> {
       } catch (e) {
         failed++;
         logger.error({ err: e, request_no: r.request_no }, '요청 정리 실패 — 다음 주기에 다시 처리');
+      }
+    }
+    if (due.length < BATCH) return { purged, failed };
+  }
+}
+
+/** #90 공유 후 3일이 지난 복사본 · 좋아요를 지운다. 행은 기록으로 남긴다. 파일을 먼저 지우므로 멈춰도 다음 주기에 끝난다 */
+async function purgeDueShares(): Promise<{ purged: number; failed: number }> {
+  let purged = 0;
+  let failed = 0;
+  for (;;) {
+    const due = await query<{ share_id: number; share_no: string }>(
+      `SELECT share_id, share_no FROM v_shared_purge_due ORDER BY share_id LIMIT ${BATCH} OFFSET ${failed}`);
+    for (const s of due) {
+      try {
+        await removeStored(`shared/${s.share_no}`);
+        await tx(async (c) => {
+          await c.query('DELETE FROM score_like WHERE share_id = ?', [s.share_id]);
+          await c.query('UPDATE shared_score SET musicxml_uri = NULL, purged_at = CURRENT_TIMESTAMP(3) WHERE share_id = ?', [s.share_id]);
+        });
+        purged++;
+      } catch (e) {
+        failed++;
+        logger.error({ err: e, share_no: s.share_no }, '공유 악보 정리 실패 — 다음 주기에 다시 처리');
       }
     }
     if (due.length < BATCH) return { purged, failed };
@@ -107,7 +132,8 @@ async function knownUris(): Promise<Set<string>> {
      UNION ALL SELECT e.musicxml_uri FROM edited_score e JOIN score_request r ON r.request_id = e.request_id
       WHERE r.channel = 'web' AND e.deleted_at IS NULL AND e.musicxml_uri IS NOT NULL
      UNION ALL SELECT d.storage_uri FROM derived_file d JOIN score_request r ON r.request_id = d.request_id
-      WHERE r.channel = 'web' AND d.deleted_at IS NULL AND d.storage_uri IS NOT NULL`);
+      WHERE r.channel = 'web' AND d.deleted_at IS NULL AND d.storage_uri IS NOT NULL
+     UNION ALL SELECT musicxml_uri FROM shared_score WHERE purged_at IS NULL AND musicxml_uri IS NOT NULL`);
   return new Set(rows.map((r) => r.uri).filter((u) => !isAssetUri(u)));
 }
 
@@ -145,11 +171,12 @@ export async function runPeriodicJobs(): Promise<PeriodicSummary | null> {
       const started = performance.now();
       const failed: string[] = [];
       const purge = await step('purge', failed, { purged: 0, failed: 0 }, purgeDueRequests);
+      const shares = await step('shares', failed, { purged: 0, failed: 0 }, purgeDueShares);
       const sessionsEnded = await step('sessions', failed, 0, endIdleSessions);
       const identity = await step('identity', failed, { identities: 0, sessions: 0 }, purgeIdentity);
       const files = await step<FileCheck>('file_check', failed, { missing: [], orphans: [] }, checkFiles);
       const summary: PeriodicSummary = {
-        purged: purge.purged, purge_failed: purge.failed, sessions_ended: sessionsEnded,
+        purged: purge.purged, shares_purged: shares.purged, purge_failed: purge.failed + shares.failed, sessions_ended: sessionsEnded,
         identities_cleared: identity.identities, sessions_deleted: identity.sessions,
         missing_files: files.missing.length, orphan_files: files.orphans.length, failed_steps: failed,
       };

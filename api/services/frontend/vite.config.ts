@@ -19,7 +19,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': devPublic,
+      // (#92) '/api/' 로 끝까지 적는다 — '/api' 면 화면 경로 /api-guide 까지 백엔드로 넘어가 빈 화면이 된다 (Nginx 도 location ^~ /api/)
+      '/api/': devPublic,
       '/soundfonts': devPublic,
       '/admin/': { target: devAdmin, bypass: (req) => (req.url?.startsWith('/admin.html') ? req.url : undefined) },
     },

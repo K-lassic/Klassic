@@ -38,6 +38,11 @@ export async function removeRequestDir(requestNo: string): Promise<void> {
   await rm(inside(env().STORAGE_DIR, requestNo), { recursive: true, force: true });
 }
 
+/** #90 저장소 안의 폴더 · 파일 하나를 지운다 — 공유 복사본 shared/<공유 번호> */
+export async function removeStored(relPath: string): Promise<void> {
+  await rm(inside(env().STORAGE_DIR, relPath), { recursive: true, force: true });
+}
+
 /** #85 대체 악보처럼 이미지 안에 있는 파일인가 — 볼륨 확인 대상이 아니다 */
 export function isAssetUri(uri: string): boolean {
   return uri.startsWith(ASSETS_PREFIX);

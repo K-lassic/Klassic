@@ -12,8 +12,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import C2GateBlock from '@/components/C2GateBlock.vue';
 import C9StepBar from '@/components/C9StepBar.vue';
+import SharedScoreList from '@/components/SharedScoreList.vue';
+import MyScoresList from '@/components/MyScoresList.vue';
 import StepNav from '@/components/StepNav.vue';
 import { useRequestStore } from '@/stores/request';
+import { useAuthStore } from '@/stores/auth';
 import { gateMessage, statusText } from '@/i18n/gateMessages';
 import { ACCEPT, ACCEPT_LABEL, LIMITS, addFiles, formatSize, guessKind, kindLabel, readShortEdge } from '@/lib/uploadKind';
 import { api } from '@/api/client';
@@ -21,6 +24,8 @@ import { listExamples, exampleThumbUrl, exampleDisplayTitle, groupExamples, type
 import type { ModelStatusPublic, ScoreType } from '@/types/api';
 
 const req = useRequestStore();
+// (2026-09-30 황송해 164번) 내가 만든 악보는 로그인했을 때만 그린다(목록도 부르지 않음)
+const auth = useAuthStore();
 /** 올릴 파일 — 올린 순서(1쪽 · 2쪽 …). 사진 여러 장 또는 PDF 한 개 */
 const files = ref<File[]>([]);
 /** 사진마다 짧은 변(px) — undefined 는 재는 중, null 은 잴 수 없음 */
@@ -372,7 +377,11 @@ async function onGateAction() {
       <!-- (2026-09-30 81 · 82번) "다음 (변환 시작)" → "다음", 파일을 고르기 전 사유 글자는 화면에 보이지 않는다(읽기 이름만) -->
       <StepNav next :next-label="req.uploading ? '올리는 중…' : '다음'" :next-reason="blockReason" :quiet-reason="files.length === 0 && !chosenExample" :next-busy="req.uploading" @next="start" />
 
-      <!-- #40: [다음] 줄 아래의 내가 만든 악보(MyScoresList) · 공유 악보 목록(SharedScoreList)은 P2 라 옮기지 않았다 -->
+      <!-- 내가 만든 악보(2026-09-30 황송해 164번 — 4단계에서 옮김, SD_02 §4-3 · UC_07 A9): [다음] 줄 아래 · 악보 공유하기 위, 로그인했을 때만 -->
+      <MyScoresList v-if="auth.loggedIn" />
+
+      <!-- 공유 악보 목록(2026-09-30 황송해, UC18 · SD_02 §4-6) — 같은 곡을 다시 변환하지 않게 먼저 들어 본다 -->
+      <SharedScoreList />
     </div>
   </div>
 </template>
