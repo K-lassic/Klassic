@@ -65,7 +65,7 @@ type EpGroupId = 'read' | 'play' | 'more' | 'server' | 'other';
 const EP_GROUPS: { id: EpGroupId; name: string; lead: string }[] = [
   { id: 'read', name: '악보 읽기', lead: '악보 사진을 보내면 디지털 악보(MusicXML)와 MIDI 를 돌려받습니다.' },
   { id: 'play', name: '연주 만들기', lead: '악보 사진으로 국악기 연주를 만듭니다. 위에서 아래 순서로 부릅니다.' },
-  { id: 'more', name: '더 해 보기', lead: '추천 · 소리 파일 · PDF 만들기와 악기 · 공유 악보 목록입니다.' },
+  { id: 'more', name: '더 해 보기', lead: '소리 파일 · PDF 만들기와 악기 · 공유 악보 목록입니다.' },
   { id: 'server', name: '서버 확인', lead: '서버가 켜져 있는지, 어떤 모델이 준비됐는지 봅니다.' },
   { id: 'other', name: '그 밖', lead: '서버에 새로 생긴 기능입니다.' },
 ];
