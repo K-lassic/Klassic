@@ -27,4 +27,4 @@ COPY assets ./assets
 USER 1000:1000
 EXPOSE 9543
 HEALTHCHECK --interval=10s --timeout=8s --start-period=300s --retries=3 CMD ["python", "-m", "app.healthcheck"]
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9543", "--root-path", "/api", "--workers", "1", "--no-access-log", "--no-proxy-headers"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9543", "--root-path", "/api", "--workers", "1", "--no-access-log", "--proxy-headers", "--forwarded-allow-ips", "*"]
