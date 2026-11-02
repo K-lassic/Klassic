@@ -107,8 +107,9 @@ const createRequest = wrap(async (req, res) => {
           [id, i + 1, st.file.originalname.slice(0, 255), st.file.size, st.shortEdgePx, pdfPageCount, st.uri]);
       }
       await conn.query(
-        "INSERT INTO stage_timing (request_id, stage_code, started_at, ended_at) VALUES (?, 'check', ?, CURRENT_TIMESTAMP(3))",
-        [id, checkStart]);
+        // 시작은 Node 시계 · 끝은 DB 시계라 어긋날 수 있다 — chk_stage_time 에 걸려 접수가 실패하지 않게 한다 (#105)
+        "INSERT INTO stage_timing (request_id, stage_code, started_at, ended_at) VALUES (?, 'check', ?, GREATEST(CURRENT_TIMESTAMP(3), ?))",
+        [id, checkStart, checkStart]);
       return id;
     });
   } catch (e) {

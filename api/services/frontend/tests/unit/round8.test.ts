@@ -9,7 +9,7 @@ import StepNav from '@/components/StepNav.vue';
 import C3ResultBand from '@/components/C3ResultBand.vue';
 import C4InstrumentPicker from '@/components/C4InstrumentPicker.vue';
 import { precheck } from '@/lib/scoreCheck';
-import type { InstrumentCatalog, Recommendation } from '@/types/api';
+import type { InstrumentCatalog } from '@/types/api';
 
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
 
@@ -46,11 +46,11 @@ describe('화면 다듬기(소스 · 부품)', () => {
   it('55 C5 상태 글 줄(.status.small) 없음', () => {
     expect(read('src/components/C5PlayerBar.vue')).not.toMatch(/class="status small"/);
   });
-  it('58 · 59 C4: 준비 중 안내 · [다시 추천받기] · [기본으로 되돌리기] 없음', () => {
+  it('58 · 59 C4: 준비 중 안내 · [다시 추천받기] · [기본으로 되돌리기] 없음 — (2026-11-02) 추천 조합 칸도 없음', () => {
     const catalog = { default_set: ['gayageum'], gugak: [{ id: 'gayageum', name: '가야금', group: 'gugak', percussion: false }], others: [] } as unknown as InstrumentCatalog;
-    const rec = { available: true, pending: true, reason: null, combinations: [], model: null, features: null } as unknown as Recommendation;
-    const w = mount(C4InstrumentPicker, { props: { catalog, modelValue: { kind: 'default' } as never, recommendation: rec } });
-    expect(w.text()).not.toMatch(/다시 추천받기|AI 추천 모델을 준비 중|기본으로 되돌리기/);
+    const w = mount(C4InstrumentPicker, { props: { catalog, modelValue: { kind: 'default' } as never } });
+    expect(w.text()).not.toMatch(/다시 추천받기|AI 추천 모델을 준비 중|기본으로 되돌리기|추천/);
+    expect(w.find('input[value^="rec:"]').exists()).toBe(false);
     expect(w.find('.chip.s-waiting').exists()).toBe(false);
   });
   it('61 "완료" 칩 · 단계 숫자는 갈색', () => {

@@ -195,7 +195,8 @@ describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
     const u = await loggedInAgent(app, 't2');
     const no = await upload(u);
     const before = await asking(u, no);
-    await new Promise((r) => setTimeout(r, 50));
+    // 서버 PC 시계가 수십 ms 뒤로 밀려도 비교가 틀리지 않을 만큼 기다린다 (#105 — 60ms 밀린 것을 봤다)
+    await new Promise((r) => setTimeout(r, 300));
     const r = await u.post(`/api/requests/${no}/type-confirmation`).send({ change_to: 'jeongganbo' });
     expect(r.status).toBe(202);
     expect(new Date(r.body.deadline_at).getTime()).toBeGreaterThan(new Date(before.deadline_at).getTime());
@@ -212,6 +213,19 @@ describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
     await asking(u, no);
     await db.exec("UPDATE stage_timing SET ended_at = CURRENT_TIMESTAMP(3) - INTERVAL 1 MINUTE, started_at = CURRENT_TIMESTAMP(3) - INTERVAL 2 MINUTE WHERE request_id = ? AND stage_code = 'queue'", [await h.requestIdOf(no)]);
     expect(await finished(u, no)).toMatchObject({ status: 'completed', fallback: false });
+  });
+});
+
+describe.skipIf(!HAS_DB)('시계가 뒤로 밀릴 때 (#105)', () => {
+  it('처리 시작 시각이 대기 시작보다 앞서도 대체로 빠지지 않고 인식을 끝낸다', async () => {
+    fake.on('post', '/v1/omr/staff', ok);
+    worker.stopWorker();
+    const u = await loggedInAgent(app, 'clock');
+    const no = await upload(u);
+    // 대기 시작이 현재보다 뒤에 찍힌 상태 = 그 사이 시계가 뒤로 밀렸다
+    await db.exec("UPDATE stage_timing SET started_at = CURRENT_TIMESTAMP(3) + INTERVAL 5 SECOND WHERE request_id = ? AND stage_code = 'queue'", [await h.requestIdOf(no)]);
+    await worker.startWorker();
+    expect(await finished(u, no)).toMatchObject({ status: 'completed', route: 'recognize', fallback: false });
   });
 });
 

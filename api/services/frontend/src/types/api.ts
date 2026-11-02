@@ -79,16 +79,6 @@ export interface ScoreResponse {
   retry_hint: string | null;
 }
 
-export interface RecommendationCombination { label: string; instruments: string[]; reason?: string }
-export interface Recommendation {
-  available: boolean;
-  reason: string | null;
-  pending: boolean;
-  combinations: RecommendationCombination[];
-  model: { name: string; version: string; provider: string } | null;
-  features: { tempo: string; bpm: number | null; mode: string; range: string; density: number | null } | null;
-}
-
 export interface Instrument {
   id: string;
   name: string;
@@ -121,10 +111,10 @@ export interface ExportTask {
   renderer: string | null;
 }
 
-export type InstrumentMode = 'default' | 'recommend' | 'original' | 'custom';
+/** 계약(web-api.yaml)에는 recommend · recommendation_index 도 있지만 화면은 보내지 않는다 (2026-11-02 추천 화면 뺌) */
+export type InstrumentMode = 'default' | 'original' | 'custom';
 export interface InstrumentChoiceBody {
   mode: InstrumentMode;
-  recommendation_index?: number;
   tracks?: { part: number; instrument: string }[];
 }
 
