@@ -10,15 +10,17 @@ from app.services.safe_midi import close_safe_midi
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="오선보 엔진 설치·인식 확인")
+    parser = argparse.ArgumentParser(description="오선보·정간보 엔진 설치·인식 확인")
+    parser.add_argument("--engine", choices=("homr", "jeongganbo"), default="homr")
     parser.add_argument("--image")
     parser.add_argument("--timeout", type=float, default=180)
     args = parser.parse_args()
     cfg = load_config()
-    engine = build_adapter({"model_name": "homr", "provider": "venv", "config_json": '{"adapter":"homr"}'},
+    name = "homr" if args.engine == "homr" else "jeongganbo-omr"
+    engine = build_adapter({"model_name": name, "provider": "venv", "config_json": json.dumps({"adapter": args.engine})},
                            engines_dir=cfg.engines_dir)
     probe = engine.probe()
-    report = {"name": "homr", **probe}
+    report = {"name": name, **probe}
     try:
         if args.image and probe["installed"]:
             result = await engine.recognize(args.image, time.monotonic() + args.timeout)

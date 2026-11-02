@@ -1,5 +1,38 @@
 # model-api (담당: 예은 @yeeun5364)
 
+## 정간보 인식·변환 — #30
+
+구조에서의 위치: backend·API 호출자 → `POST /v1/omr/jeongganbo` → 공통 검사·인식 처리 → 기존 정간보 작업자 → 별도 변환 작업자 → MusicXML/MIDI다. `omr_common`으로 #29의 인증·업로드·쪽별 처리·DB 기록·웹/외부 저장 경계를 재사용한다. 오선보 주소와 요청 필드는 유지한다.
+
+- `image` 반복 필드, `request_no`와 호환 필드 `request_id`, `X-Deadline`을 받는다. 서비스·외부 키는 DB UC12 권한에 따르며 키 누락·잘못된 키 401, 폐기 키 403을 유지한다. 두 인식 경로의 OpenAPI에도 키 필요 여부를 명시했다.
+- DB의 `jeongganbo` 어댑터를 기존 읽기 전용 설치 경로로 연결하고 #24의 상주 작업자를 재사용한다. DB에 남은 macOS `mps` 설정과 관계없이 현재 검증 환경은 CPU로 실행한다. 작업자가 바쁘면 마감 안에서 기다리며 추가 모델을 중복 실행하지 않는다.
+- 기준판의 자체 작성 `jeongganbo_convert`를 옮겨 율명·옥타브·정간 안 자리·쉼표·이음·여러 성부를 MusicXML/MIDI로 변환한다. `OR` 후보는 첫 후보만 사용하고 범위 밖 자리 번호는 변환 실패로 처리한다. SejongMusic 코드는 가져오지 않는다.
+- 변환은 별도 프로세스로 실행한다. 기한 초과·취소 시 변환 프로세스도 종료할 수 있으며, 서버 종료 시 모델 등록부가 사용한 어댑터·변환 작업자를 정리한다. 서버 DB 비밀번호·API 키는 작업자 환경에 넘기지 않는다.
+- 오선보·정간보 점수를 함께 검사해 잘못 고른 종류를 `type_mismatch`·`detected_type`으로 반환한다. 구조 불통과 시 엔진을 호출하지 않으며 웹 대체 응답에는 파일을 넣거나 저장하지 않는다.
+- `request_page`, `engine_attempt`, `processing_job`, `validity_check_item`, `stage_timing`에 판정과 처리 시간을 남긴다. 정간보의 율명 인식 비율과 `jg_convert` 단계 시간도 포함한다. 여러 쪽 병합·부분 실패·원본 보존·방향/색상 사본 처리는 #29와 같은 흐름을 쓴다.
+
+### 검증 결과 — 2026-11-02
+
+Linux/amd64·Debian 12·Python 3.11 컨테이너에서 **139개 테스트 통과**, 건너뜀 0개, Ruff 통과다. 율명·길이·박자·성부·OR 후보·잘못된 인코딩, 실제 별도 변환 프로세스, 중복 모델 실행 방지, 변환 시간 초과, 인증·종류 불일치와 #24·#28·#29 회귀를 포함한다. Starlette TestClient의 httpx 사용 중단 예고 경고 1건은 유지된다. 새 의존성이나 lock 변경은 없다.
+
+공개 `taryeong-gayageum-jeongganbo.pdf`로 실제 엔진을 검증했다. 사진은 이 PDF 첫 쪽을 300dpi PNG로 만든 입력이다.
+
+| 입력 | 실인식 결과 | 인식 시간 | 변환 시간 | DB 기록 |
+|---|---|---:|---:|---|
+| 정간보 사진 1장 | fallback=false · trust · 율명 비율 1.0 · MusicXML/MIDI 생성 | 약 19.5초 | 약 1.7초 | 쪽 1 · 엔진 시도 1 · 작업 1 · 타당성 5 · 단계 시간 5행 |
+| 정간보 PDF 2쪽 | fallback=false · trust · 율명 비율 1.0 · MusicXML/MIDI 생성 | 약 24.6초 | 약 0.6초 | 쪽 2 · 엔진 시도 2 · 작업 1 · 타당성 5 · 단계 시간 8행 |
+
+오선보를 정간보로, 정간보를 오선보로 보낸 실제 입력 모두 종류 불일치를 감지했다. 웹 응답의 결과 파일 없음·엔진 시도 없음, 기한 초과 `TIMEOUT`, 키 없음 401, 저장 파일과 DB 위치 일치, 정간보 설치·누락 진단을 확인했다. 격리된 `klassic_issue24` DB에서 생성한 시험 키·운영자·요청·파일만 정리했다. 일반 사용자·읽기 전용 루트/엔진/음원·권한 제거 상태와 healthy도 확인했다.
+
+```powershell
+# 서비스 폴더, Linux Python 3.11
+uv run ruff check app tests
+uv run pytest -q
+python -m app.engines.selftest --engine jeongganbo
+```
+
+실제 HTTP 검사는 `tests/container_jeongganbo_smoke.py`에 공개 예제의 base64를 넣어 시험 컨테이너의 `python -`로 전달한다. 운영 DB에서는 실행을 거부한다. 위 수치는 Windows Docker Desktop의 Linux 컨테이너 실측이며 별도 Linux 서버·브라우저 전체 흐름·실제 사진 촬영 조건별 정확도 검증은 #49·#45에서 이어간다. 시작 시 #29 브랜치의 커밋 `bf0ce5a`를 포함했으며 제출 전 선행 PR 병합 상태와 최신 main을 다시 확인한다.
+
 ## 오선보 인식·모델 상태 — #29
 
 구조에서의 위치: backend → `model-api:9543/v1/omr/staff` → 업로드·구조 검사 → 기존 homr 작업자 → 타당성 검사 → MusicXML/MIDI 응답이다. 모델·가중치는 #25의 읽기 전용 엔진 볼륨을 쓰며, #24에서 올린 작업자를 재사용한다. `GET /v1/models`는 키 없이 설치·준비 상태와 예상 로딩 시간을 반환한다. 정간보 인식 경로는 #30, MP3/PDF 렌더링은 #31에서 연결한다.

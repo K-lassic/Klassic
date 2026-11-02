@@ -78,6 +78,9 @@ class Registry:
     def begin_request_use(self, name):
         return False
 
+    async def close(self):
+        pass
+
 
 def input_pages(tmp_path, count=1):
     return [PageInput(i, i, "file", b"image", tmp_path / f"page{i}.png", 700) for i in range(1, count + 1)]

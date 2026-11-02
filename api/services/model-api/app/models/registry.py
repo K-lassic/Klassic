@@ -1,4 +1,4 @@
-"""#29 모델 등록부: 인식·상태 라우터 → 이 파일 → DB 등록 정보·#24 공유 작업자.
+"""#29·#30 모델 등록부: 인식·상태 라우터 → 이 파일 → DB 등록 정보·#24 공유 작업자.
 
 작업자·상태는 메모리에서 재사용하고 예상 시간은 DB 로딩 이력에서 읽는다.
 """
@@ -43,7 +43,7 @@ class ModelRegistry:
             self.entries[name] = entry
         entry.enabled, entry.installed = bool(snapshot["enabled"]), bool(snapshot["installed"])
         entry.state, entry.version, entry.row = snapshot["state"], snapshot["version"], row
-        if entry.adapter is None and entry.installed and entry.kind == "omr_staff" and entry.provider == "venv":
+        if entry.adapter is None and entry.installed and entry.kind in ("omr_staff", "omr_jeongganbo") and entry.provider == "venv":
             try:
                 entry.adapter = build_adapter(row, engines_dir=self.cfg.engines_dir)
             except ValueError:
@@ -94,3 +94,8 @@ class ModelRegistry:
     async def public_models(self):
         await self.refresh_estimates()
         return [self.public_view(self.get(e["name"])) for e in self.resources.snapshot()]
+
+    async def close(self):
+        for entry in self.entries.values():
+            if entry.adapter is not None:
+                await entry.adapter.close()
