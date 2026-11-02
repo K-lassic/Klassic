@@ -1,6 +1,6 @@
 # model-api의 엔진 볼륨·설치 검사 (#25, 담당: 예은)
-# HTTP 서비스는 #24에서 추가한다. 검사 도구는 --profile tools로만 실행한다.
-# #24의 model-api에도 이 fragment를 병합하고 engine-volume 마운트를 재사용한다.
+# #24 HTTP 서비스와 #25 검사 도구가 동일한 엔진 환경·읽기 전용 마운트를 사용한다.
+# 검사 도구는 --profile tools로만 실행한다.
 x-engine-runtime: &engine-runtime
   platform: linux/amd64
   environment: &engine-environment
@@ -19,6 +19,45 @@ x-engine-runtime: &engine-runtime
         nocopy: true
 
 services:
+  model-api:
+    <<: *engine-runtime
+    image: ${MODEL_API_IMAGE:-klassic/model-api:issue24-local}
+    build:
+      context: .
+      additional_contexts:
+        shared: ../../shared
+    restart: unless-stopped
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      <<: *engine-environment
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:?api/.env 에 DB_NAME 이 필요합니다}
+      DB_USER: ${DB_USER:?api/.env 에 DB_USER 가 필요합니다}
+      DB_PASSWORD: ${DB_PASSWORD:?api/.env 에 DB_PASSWORD 가 필요합니다}
+      DB_CONNECT_ATTEMPTS: ${DB_CONNECT_ATTEMPTS:-5}
+      DB_RETRY_SECONDS: ${DB_RETRY_SECONDS:-2}
+      SHARED_DIR: ${SHARED_DIR:-/app/shared}
+      SOUNDFONTS_DIR: ${SOUNDFONTS_DIR:-/app/shared/soundfonts}
+      JEONGGANBO_DEVICE: cpu
+      MODEL_LOAD_TIMEOUT_SECONDS: ${MODEL_LOAD_TIMEOUT_SECONDS:-120}
+    depends_on:
+      db: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,mode=1777
+    volumes:
+      - *engine-volume
+      - type: bind
+        source: ../../shared/soundfonts
+        target: /app/shared/soundfonts
+        read_only: true
+        bind:
+          create_host_path: false
+
   engine-selftest:
     <<: *engine-runtime
     profiles: [tools]

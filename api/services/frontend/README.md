@@ -166,6 +166,7 @@
 | 위치 | 내용 |
 |---|---|
 | `player/player.ts` | 브라우저 연주기(spessasynth_lib 3.27.8) — ScoreDoc → MIDI(score-core `toMidi`) → Web Audio. 화면 전체에 하나 |
+| `player/fontCache.ts` | **음원을 기기 저장 공간(Cache Storage `klassic-soundfonts-v1`)에 한 번만 받기** — 저장본이 있으면 서버에 묻지 않는다 |
 | `player/soundNumbers.ts` | 소리 번호(국악기 bank 1 · 장구 · 북 128/1) · **`fontsFor(doc)` — 그 악보에 필요한 음원** (`api/shared/instruments.json` 의 `soundfont` 칸) |
 | `player/tempo.ts` · `components/C5PlayerBar.vue` | 재생 빠르기(4분음표 100 BPM 기준 배율) · 연주 막대(재생 · 멈춤 · 진행 · 빠르기 · 음량) — v0.1.1 그대로 |
 
@@ -176,7 +177,23 @@
   - 연주 중에 일반 악기로 바꾸면 그때 FluidR3 를 받기 시작한다 — 받는 동안 그 악기는 대체 음색으로 난다.
 - 구간별 시간: `player.timings` 에 음원 받기(`fetchGugakMs` · `fetchFluidMs`) · 싣기(`loadMs` · `loadFluidMs`) · MIDI 만들기(`midiMs`) · 첫 소리까지(`firstSoundMs`)를 남기고, 재생할 때 개발자 도구 콘솔에 `[player] timings {…}` 한 줄을 찍는다. 성능 탭 · `performance.getEntriesByType('measure')` 에서도 `klassic:player:*` 로 보인다.
 - 사운드폰트 파일 이름: 아직 v0.1.1 이름(`/soundfonts/gugak.sf2` · `FluidR3_GM.sf2`) + ETag 확인. 판본 이름(`<이름>-v<판>.sf2`)으로 바꾸면 Nginx(#22)에서 1년 `immutable` 캐시 — 파일 이름은 #22 · #31 과 정하고 `SOUNDFONT_URLS` 두 줄만 바꾼다.
-- 시험: v0.1.1 `playback207` · `playerRate` · `playerSound` · `preload204` · `round17` 을 옮기고(`preload204` 는 `preload(doc)` 로 바뀐 부분만 고침), `playerFonts` 를 새로 더했다.
+- 음원 저장(Cache Storage): `fetchFont` 가 저장소 `klassic-soundfonts-v1` 을 먼저 보고, 있으면 그것을 쓴다(서버 요청 없음). 없으면 받아서 연주하고 저장은 기다리지 않는다. 받은 것이 `.sf2`(RIFF · sfbk)가 아니면 저장하지 않고, 깨진 저장본은 지우고 다시 받는다.
+  - Cache Storage 가 없거나(https · localhost 가 아닌 주소) 열 수 없거나 저장에 실패해도(용량 부족) 지금처럼 받아서 연주한다.
+  - 어디서 왔는지는 `player.timings` 의 `gugakFrom` · `fluidFrom`(`cache` · `network`).
+  - 파일 이름 · `/soundfonts` 경로는 바꾸지 않았다. 저장본은 서버의 ETag 를 다시 묻지 않으므로 **음원을 바꾸면 판 번호를 올린다** (아래 Runbook 「만약에」).
+- 시험: v0.1.1 `playback207` · `playerRate` · `playerSound` · `preload204` · `round17` 을 옮기고(`preload204` 는 `preload(doc)` 로 바뀐 부분만 고침), `playerFonts` · `fontCache`(저장본 사용 · 저장 실패 · Cache Storage 없음 · 깨진 저장본 · 옛 판 지우기)를 새로 더했다.
+
+**구간별 시간 (2026-11-02, 이 PC · 헤드리스 Chromium 130 · `npm run dev` → api/ 9603 `/soundfonts`, 단위 ms)**
+
+| 경우 | 음원 받기 gugak | FluidR3 | 싣기 | FluidR3 얹기 | MIDI | 첫 소리까지 | `.sf2` 요청 |
+|---|---|---|---|---|---|---|---|
+| 첫 접속 · 기본 편성(가야금 · 장구) | 2757 (서버) | — | 294 | — | 6 | **3140** | gugak.sf2 |
+| 두 번째 접속 · 기본 편성 | 93 (저장본) | — | 254 | — | 6 | **360** | 없음 |
+| 피아노가 든 악보 · FluidR3 처음 | 78 (저장본) | 18458 (서버) | 237 | 624 | 10 | **19413** | FluidR3_GM.sf2 |
+| 그다음 접속 · 피아노가 든 악보 | 74 (저장본) | 464 (저장본) | 247 | 433 | 5 | **1235** | 없음 |
+
+- 서버에서 받는 시간은 Docker Desktop 컨테이너 → 호스트 9603 경로라 바깥 브라우저(10/30 측정 gugak 0.9초 · FluidR3 3.5초)보다 느리다. 저장본을 쓰는 줄의 차이(받기 → 거의 0)가 이번 변경의 효과다.
+- 남은 큰 구간은 첫 접속의 음원 받기다. FluidR3(148MB)는 일반 악기를 쓸 때만 받으므로 기본 편성 시연에는 영향이 없다.
 
 ### 내려받기 (#43)
 
@@ -255,7 +272,7 @@ cd api/services/frontend
 (cd ../../packages/score-core && npm ci && npm run build)   # file: 의존성은 빌드하지 않으므로 먼저 (score-core README)
 npm ci
 npm run lint
-npm test          # vitest — 239개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정 · 연주기 · 내려받기 · 화면 다듬기 소스 확인)
+npm test          # vitest — 248개 (라우터 · 클라이언트 오류 처리 · 공통 부품 · 로그인 · 머리 메뉴 · 오류 문구 · 올리기 · 결과 · 편집 기록 · 나가기 확인 · 음표 수정 · 연주기 · 내려받기 · 화면 다듬기 소스 확인)
 npm run build     # vue-tsc 타입 검사 + vite → dist/ (index.html · admin.html 두 진입점)
 
 # 이미지로 기동 (api/ 에서)
@@ -289,5 +306,7 @@ docker compose exec frontend id       # uid=101(nginx)
 | 컨테이너가 바로 종료 · `emerg` 로그 | `deploy/nginx/*.conf` 문법 오류 또는 upstream 이름(backend 등)을 못 찾음 | `docker compose logs frontend` → 해당 conf 담당(팀장)에게. 화면만 확인하려면 conf 를 잠시 빼고 기동 |
 | 9603 `address already in use` | 다른 프로세스가 포트 사용 | `api/.env` 의 `API_PUBLIC_PORT` 확인 · `docker ps` 의 PORTS |
 | 화면이 옛날 판 | 브라우저가 `index.html` 을 캐시 | 응답 헤더 `Cache-Control: no-cache` 확인 |
+| 음원(`*.sf2`)을 바꿨는데 연주 소리가 옛날 그대로 | 브라우저가 Cache Storage `klassic-soundfonts-v1` 의 저장본을 쓴다 — 서버에 다시 묻지 않는다(#42) | **음원을 바꿀 때마다 `src/player/fontCache.ts` 의 `FONT_CACHE` 판 번호를 올린다**(`-v1` → `-v2`). 새 화면이 처음 연주할 때 옛 판 저장소를 지우고 새로 받는다. 한 기기만 확인하려면 개발자 도구 → 애플리케이션 → 캐시 저장용량에서 지운다 |
+| 두 번째 접속인데도 음원을 다시 받음 | `player.timings.gugakFrom` 이 `network` — Cache Storage 를 못 씀(https · localhost 가 아닌 주소, 사생활 보호 창, 저장 공간 부족) | 연주는 그대로 된다. Funnel(https) · `127.0.0.1` 으로 열었는지 확인 |
 
 롤백: compose 의 `APP_TAG` 를 이전 태그로 바꾸고 `docker compose up -d frontend`. 이전 태그 이미지는 지우지 않는다.
