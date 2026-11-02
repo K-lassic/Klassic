@@ -2,13 +2,13 @@
 // S3 내려받기 (T127) — SD_02 §6. 네 형식은 서로 기다리지 않는 독립 행(U7).
 // (2026-09-30 황송해) 진행 레일(C1)을 뺐다(SD_02 §6-2).
 // 편집이 있으면 기기에 저장된 편집 연산을 함께 보내 편집 반영 파일을 만든다.
-// #43: 모두에게 공유(SharePanel)는 P2 라 옮기지 않았다.
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import C2GateBlock from '@/components/C2GateBlock.vue';
 import C9StepBar from '@/components/C9StepBar.vue';
 import C3ResultBand from '@/components/C3ResultBand.vue';
 import C6DownloadCard from '@/components/C6DownloadCard.vue';
+import SharePanel from '@/components/SharePanel.vue';
 import StepNav from '@/components/StepNav.vue';
 import { useRequestStore } from '@/stores/request';
 import { useEditorStore } from '@/stores/editor';
@@ -87,7 +87,8 @@ const band = computed(() => {
         />
       </section>
 
-      <!-- 모두에게 공유(2026-09-30 105번: 2단계에서 옮김, UC18 · SD_02 §4-6) — P2, #43 에서는 옮기지 않음 -->
+      <!-- 모두에게 공유(2026-09-30 105번: 2단계에서 옮김, UC18 · SD_02 §4-6) — 기본은 공유 안 함 -->
+      <SharePanel v-if="s && s.status === 'completed'" :request-no="requestNo" :expired="expired" />
 
       <!-- (2026-09-30 황송해 164번) 내가 만든 악보 목록은 1단계(S1 올리기)로 옮겼다 -->
 
