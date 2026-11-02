@@ -1,0 +1,53 @@
+# =============================================================================
+# #49 model-api 대역 — 재구성 model-api(#24 · #28~#31) 대신 v0.1.1 이미지를 붙인다 (담당: 팀장)
+#
+#   구조에서의 위치: web ─▶ model-api:9543 · Nginx /api/v1/* ─▶ model-api:9543 · model-api ─▶ db · 엔진 볼륨
+#     서비스 이름 · 포트가 재구성판과 같아서 backend · Nginx 는 고칠 것이 없다.
+#   켜기: cd api && docker compose -f compose.yaml -f deploy/compose.standin.yaml up -d
+#   끄기(재구성 model-api 로 교체): 재구성판이 준비되면 -f deploy/compose.standin.yaml 만 뺀다
+#   주의: -f 로 더한 파일의 상대 경로는 첫 파일(api/) 기준이다.
+#   왜 include 에 넣지 않나: 재구성판이 같은 서비스 이름을 쓰므로, 켤 때만 더해야 둘이 겹치지 않는다.
+#   v0.1.1 이미지 그대로 쓰며 코드는 고치지 않는다. 바꾸는 것은 실행 명령 · 환경변수뿐이다.
+# =============================================================================
+services:
+  model-api:
+    # 이 PC 에 있는 이미지만 쓴다 — 빌드 · 내려받기 없음
+    image: klassic/klassic-model-api:0.1.1
+    pull_policy: never
+    platform: linux/amd64
+    restart: unless-stopped
+    # 이미지 기본 수신 주소는 127.0.0.1 이라 web · Nginx 가 닿지 못한다 (작성규칙 1-6)
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9543",
+              "--root-path", "/api", "--workers", "1", "--no-access-log"]
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:?api/.env 에 DB_NAME 이 필요합니다}
+      DB_USER: ${DB_USER:?api/.env 에 DB_USER 가 필요합니다}
+      DB_PASSWORD: ${DB_PASSWORD:?api/.env 에 DB_PASSWORD 가 필요합니다}
+      SERVICE_API_KEY: ${SERVICE_API_KEY:?api/.env 에 SERVICE_API_KEY 가 필요합니다 — deploy/README.md 「model-api 대역」}
+      ENGINES_DIR: /opt/gugak-engines
+      STORAGE_DIR: /tmp/storage
+      XDG_CACHE_HOME: /tmp/engine-cache
+      MPLCONFIGDIR: /tmp/matplotlib
+    volumes:
+      # 설치된 엔진만 읽는다 — 원본 볼륨을 바꾸지 않는다 (services/model-api/compose.yaml 의 external 볼륨)
+      - engines:/opt/gugak-engines:ro
+      # v0.1.1 은 이 파일에 있는 키만 환경변수에서 덮어쓴다. 값은 없고 키 이름뿐이다
+      - ./deploy/model-standin.env:/app/.env:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      # 엔진 작업자가 준비되어야 200 (slim 이미지라 curl 대신 python)
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9543/v1/health', timeout=4).status==200 else 1)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
+    # 자원 한도 — 2026-11-02 측정: 오선보 · 정간보 인식 · PDF · MP3 렌더링 중 최대 2.24GiB + 여유. 발표 전 동시 사용으로 다시 잰다 (#49)
+    mem_limit: 4g
+    # 보안 옵션 (작성규칙 4-6) — 쓸 수 있는 곳은 /tmp 뿐
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
