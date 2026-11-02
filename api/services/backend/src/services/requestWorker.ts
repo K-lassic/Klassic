@@ -4,6 +4,8 @@
 //     web 컨테이너 안에서만 돈다(server.ts). 대기열은 메모리에 있고 기준은 DB 다 — web 이 다시 켜지면 startWorker 가 끝나지 않은 요청을 DB 에서 다시 줄 세운다.
 //   마감 두 개: 대기 상한(접수 + 제한 × 쪽 수) · 처리 마감(처리 시작 + 제한 × 쪽 수). 1초 감시가 넘긴 요청을 끝낸다.
 //   종류 불일치: 인식을 멈추지 않고 결과를 받아 둔 채 awaiting_type_answer 로 묻는다. 답이 없으면 마감에 고른 종류 결과로 끝낸다.
+//   끝 시각은 GREATEST(현재, started_at) 로 적는다 — 서버 PC(WSL2) 시계가 ms 단위로 뒤로 보정되면 DB 제약 chk_stage_time 에 걸려
+//     정상 요청이 오류 없이 대체 악보로 끝나기 때문이다 (#105 · session.ts 와 같은 방법).
 //   v0.1.1 services/requestWorker.ts 에서 달라진 점:
 //     처리 중 예외(파일 없음 등)는 마감까지 기다리지 않고 바로 대체 · 종류를 바꾼 재인식도 재시작 복구와 같은 대기열 경로
 //     · 재인식 때 처리 시작 시각을 다시 찍어 감시 · 화면 마감이 새 마감을 따른다 · 고른 종류를 DB 에 남긴다.
@@ -112,7 +114,7 @@ async function runJob(job: Job): Promise<void> {
     return;
   }
   await exec("UPDATE score_request SET status = 'converting' WHERE request_id = ? AND status IN ('received','queued')", [job.requestId]);
-  await exec("UPDATE stage_timing SET ended_at = CURRENT_TIMESTAMP(3) WHERE request_id = ? AND stage_code = 'queue' AND ended_at IS NULL", [job.requestId]);
+  await exec("UPDATE stage_timing SET ended_at = GREATEST(CURRENT_TIMESTAMP(3), started_at) WHERE request_id = ? AND stage_code = 'queue' AND ended_at IS NULL", [job.requestId]);
   // 처리 마감은 처리를 시작한 시각(대기열 끝)부터 — 감시 · 화면과 같은 기준
   const st = await one<{ ended_at: Date | null }>("SELECT ended_at FROM stage_timing WHERE request_id = ? AND stage_code = 'queue'", [job.requestId]);
   job.deadline = new Date((st?.ended_at ? new Date(st.ended_at).getTime() : Date.now()) + job.limitMs);
@@ -208,7 +210,7 @@ export async function answerTypeQuestion(requestId: number, changeTo: 'staff' | 
   await exec("DELETE FROM score_result WHERE request_id = ? AND origin = 'recognized'", [requestId]);
   // 고른 종류를 DB 에 남겨 재시작 · 대체 악보도 새 종류를 쓰게 하고, 처리 시작을 다시 찍어 마감도 지금부터 잰다
   await exec("UPDATE score_request SET chosen_score_type = ?, status = 'converting' WHERE request_id = ?", [changeTo, requestId]);
-  await exec("UPDATE stage_timing SET ended_at = CURRENT_TIMESTAMP(3) WHERE request_id = ? AND stage_code = 'queue'", [requestId]);
+  await exec("UPDATE stage_timing SET ended_at = GREATEST(CURRENT_TIMESTAMP(3), started_at) WHERE request_id = ? AND stage_code = 'queue'", [requestId]);
   await enqueueRecognition(requestId);
 }
 
