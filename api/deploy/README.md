@@ -164,8 +164,9 @@ docker compose -f compose.yaml -f deploy/compose.standin.yaml stop model-api # �
 ```
 
 - `web` 까지 다시 만들어야 새 서비스 키를 읽는다 — 위 `up -d` 가 함께 처리한다.
-- 켜 둔 뒤에는 `docker compose` 명령에도 같은 `-f` 두 개를 붙인다. 안 붙이면 model-api 가 목록에 없는 것처럼 보인다.
-- **재구성 model-api 로 교체:** 대역을 멈춘 뒤 `-f deploy/compose.standin.yaml` 을 뺀다. 서비스 이름 · 포트가 같아 backend · Nginx 는 고칠 것이 없다.
+- **대역을 쓰는 동안 `docker compose` 명령에는 항상 `-f` 두 개를 붙인다.** #24 병합 뒤로 `-f` 없이 `docker compose up -d` 를 하면 **재구성판 model-api 가 대역을 밀어낸다.** 재구성판은 #29 · #30 · #31 전까지 인식 · 렌더링이 없어서, 올린 악보가 모두 대체 악보로 끝난다.
+- 대역은 재구성판 서비스 정의 위에 합쳐진다. 재구성판 값이 섞이지 않게 `!reset` · `!override` 를 쓴다 (Docker Compose 2.24 이상).
+- **재구성 model-api 로 교체:** #29 · #30 · #31 이 끝난 뒤 `-f deploy/compose.standin.yaml` 을 빼고 `docker compose up -d --build model-api`. 서비스 이름 · 포트가 같아 backend · Nginx 는 고칠 것이 없다.
 
 **시험 결과 (2026-11-02, 임시 프로젝트)**
 
@@ -205,7 +206,8 @@ docker compose -f compose.yaml -f deploy/compose.standin.yaml stop model-api # �
 
 ```bash
 # api/ — 시연 서비스 (frontend 는 restart 정책이 없어 자동으로 안 돌아온다)
-cd api && docker compose up -d
+# 대역을 쓰는 동안 -f 두 개가 필요하다 — 없으면 인식이 없는 재구성판 model-api 가 뜬다 (「model-api 대역」)
+cd api && docker compose -f compose.yaml -f deploy/compose.standin.yaml up -d
 
 # proto_type — 예비 시연 · 코드 작업 중 필요할 때만
 cd proto_type && docker compose up -d --force-recreate web gateway admin model-api

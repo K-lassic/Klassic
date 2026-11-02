@@ -6,13 +6,15 @@
 #   켜기: cd api && docker compose -f compose.yaml -f deploy/compose.standin.yaml up -d
 #   끄기(재구성 model-api 로 교체): 재구성판이 준비되면 -f deploy/compose.standin.yaml 만 뺀다
 #   주의: -f 로 더한 파일의 상대 경로는 첫 파일(api/) 기준이다.
-#   왜 include 에 넣지 않나: 재구성판이 같은 서비스 이름을 쓰므로, 켤 때만 더해야 둘이 겹치지 않는다.
+#   재구성판(services/model-api/compose.yaml)도 같은 이름이라 이 파일이 그 위에 합쳐진다.
+#     그대로 합치면 빌드 · tmpfs · 볼륨이 섞이므로 !reset · !override 로 재구성판 값을 지우고 교체한다.
 #   v0.1.1 이미지 그대로 쓰며 코드는 고치지 않는다. 바꾸는 것은 실행 명령 · 환경변수뿐이다.
 # =============================================================================
 services:
   model-api:
     # 이 PC 에 있는 이미지만 쓴다 — 빌드 · 내려받기 없음
     image: klassic/klassic-model-api:0.1.1
+    build: !reset null
     pull_policy: never
     platform: linux/amd64
     restart: unless-stopped
@@ -30,7 +32,7 @@ services:
       STORAGE_DIR: /tmp/storage
       XDG_CACHE_HOME: /tmp/engine-cache
       MPLCONFIGDIR: /tmp/matplotlib
-    volumes:
+    volumes: !override
       # 설치된 엔진만 읽는다 — 원본 볼륨을 바꾸지 않는다 (services/model-api/compose.yaml 의 external 볼륨)
       - engines:/opt/gugak-engines:ro
       # v0.1.1 은 이 파일에 있는 키만 환경변수에서 덮어쓴다. 값은 없고 키 이름뿐이다
@@ -48,6 +50,6 @@ services:
     mem_limit: 4g
     # 보안 옵션 (작성규칙 4-6) — 쓸 수 있는 곳은 /tmp 뿐
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs: !override [/tmp]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
