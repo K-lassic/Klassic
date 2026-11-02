@@ -180,6 +180,7 @@ docker compose up -d web          # web 을 다시 만들어야 새 값을 읽�
 | 인식이 모두 `RECOGNITION_FAILED` 대체로 끝남 | model-api 가 4xx — 대개 서비스 키 오류 | 위의 401 조치 |
 | 요청이 한동안 `queued` | 동시 처리 상한(`web_concurrency_share`)만큼 앞 요청을 처리 중. 마감을 넘기면 `TIMEOUT` 대체로 끝난다 | 설정 판본 확인 · `docker compose logs web` |
 | `/score` 410 인데 보관 기간 안 · 로그 `DB 에 있는 결과 파일이 저장소에 없음` | DB 와 볼륨이 어긋남 | 볼륨 `klassic-api_storage` 가 붙어 있는지 · 지워지지 않았는지 |
+| 로그 `주기 정리 — 확인 필요` | `missing_files` = DB 에 있는데 파일이 없음 · `orphan_files` = DB 에 없는 파일(10분 넘은 것) · `purge_failed` · `failed_steps` = 정리 실패. 고아 파일은 보고만 하고 지우지 않는다 | 로그의 `missing_sample` · `orphan_sample` 로 경로를 확인. 정리 실패는 다음 주기에 다시 처리되며, 계속되면 `logs web` 의 오류를 본다 |
 | 큰 업로드가 수십 초 걸리거나 web 이 `Exited (137)` | 업로드는 검사가 끝날 때까지 메모리에 있다. 측정: 190MB 3건 동시 677MB · 15초 (`mem_limit` 1g) | `docker stats` 로 확인 후 한도 조정 (#49) |
 | 로그인 · 가입이 가끔 500, 로그에 `sqlState 23000 · errno 4025` | DB CHECK 제약 위반 (mysql2 가 코드 이름을 `AUTOEXTEND_SIZE` 로 잘못 붙임) — `chk_session_time` 이면 서버 PC 시계가 뒤로 보정된 것 | #27 에서 `ended_at = GREATEST(현재, started_at)` 로 막았다. 다른 제약이면 `SHOW CREATE TABLE` 로 확인 |
 | 로그인하면 `LOGIN_ALREADY_ACTIVE` | 같은 계정이 다른 브라우저에서 10분 안에 활동 중 (한 계정 한 곳) | 그 브라우저에서 로그아웃하거나 10분 기다린다 |
@@ -254,7 +255,11 @@ docker compose up -d web          # web 을 다시 만들어야 새 값을 읽�
 | H29 | 엔진 상태 캐시 · 순서 | model-api `/v1/models` 상태를 캐시하고 설정 판본의 엔진 순서로 첫 사용 가능 엔진을 고른다 | `services/modelStatus.ts` | **P1** |
 | H30 | 공유 악보로 시작 | 공유 악보를 "쓰기" 하면 새 요청을 만든다 (`request_from_share`) | `web/shared.ts` | P2 |
 
-### 3. 주기 작업 (web 에서만, `node-cron`)
+### 3. 주기 작업 (web 에서만)
+
+> #85 구현: `src/services/periodicJobs.ts`. 아래 표의 P1 항목과 DB ↔ 파일 일치 확인까지 들어갔고, 공유 악보 · 점검 쿼리 · 키 신청은 아직 없다.
+> 간격은 `PERIODIC_JOB_SECONDS`(기본 21600초 = 6시간)이고 web 이 켜질 때 바로 한 번 돈다. 만료된 파일은 정리 전에도 접근이 막히므로 실제 삭제는 만료 뒤 최대 6시간 늦을 수 있다. 결과는 로그 `주기 정리` 한 줄로 남는다. `node-cron` 은 쓰지 않는다.
+
 
 | 주기 | 작업 | 참고 | 우선 |
 |---|---|---|---|

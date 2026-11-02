@@ -2,7 +2,7 @@
 //
 //   구조에서의 위치: 같은 이미지를 실행 인자만 바꿔 web · admin 두 컨테이너로 띄운다 (v0.1.1 과 같음 · 조정안 B 안 함).
 //   시작 순서: 설정 검증(H1) → 공용 설정 읽기(api/shared) → DB 준비 기다리기(재시도) → 설정 판본 확인
-//     → web 만: 저장소 쓰기 · 예시 목록 확인(#34) · 인식 작업자 시작(#35) → 수신(0.0.0.0)
+//     → web 만: 저장소 쓰기 · 예시 목록 확인(#34) · 인식 작업자 시작(#35) · 주기 정리 시작(#85) → 수신(0.0.0.0)
 //   종료: Docker 가 보내는 SIGTERM 을 받아 새 연결을 멈추고 DB 풀을 닫는다 (Dockerfile 은 exec 형식이라 node 가 PID 1)
 import type { Server } from 'node:http';
 import { env } from './config/env.js';
@@ -13,6 +13,7 @@ import { createAdminApp, createWebApp } from './app.js';
 import { checkStorage } from './services/storage.js';
 import { startWorker, stopWorker } from './services/requestWorker.js';
 import { recoverRenders } from './services/renderQueue.js';
+import { startPeriodicJobs, stopPeriodicJobs } from './services/periodicJobs.js';
 import { checkSoundfonts } from './web/instruments.js';
 import { exampleList } from './web/examples.js';
 import { logger } from './lib/logger.js';
@@ -51,6 +52,7 @@ async function main(): Promise<void> {
   if (role === 'web') {
     await startWorker();
     await recoverRenders();
+    startPeriodicJobs();
   }
 
   const server: Server = role === 'web'
@@ -60,6 +62,7 @@ async function main(): Promise<void> {
   const stop = (signal: string) => {
     logger.info({ signal }, '종료 신호 — 새 연결을 멈춘다');
     stopWorker();
+    stopPeriodicJobs();
     server.close(() => { void closePool().finally(() => process.exit(0)); });
     // 오래 걸리는 연결이 있어도 10초 뒤에는 끝낸다 (Docker 기본 stop 대기 10초)
     setTimeout(() => process.exit(0), 9000).unref();

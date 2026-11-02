@@ -2,7 +2,7 @@
 //
 //   구조에서의 위치: /api/health 를 뺀 모든 /api 요청이 이 미들웨어 → authz → 라우터 순서로 지나간다.
 //     세션은 DB anon_session 에 두고(쿠키에는 세션 ID + 서명만), 로그인하면 계정(account_id)을 묶는다.
-//     세션 종료 = [나가기] · [로그아웃] · 2시간 무활동(v_session_state, 주기 정리는 주기 작업 이슈).
+//     세션 종료 = [나가기] · [로그아웃] · 2시간 무활동(v_session_state, 주기 정리는 services/periodicJobs.ts #85).
 //   Secure 속성(#37): 요청이 실제로 HTTPS 일 때만 붙인다 (req.secure — Funnel → Nginx 가 넘긴 X-Forwarded-Proto 를 trust proxy 로 읽음).
 //     외부(HTTPS)에서는 쿠키가 평문으로 나가지 않고, 서버 PC 로컬 http 시험은 그대로 동작한다.
 //   세션을 끝낼 때 ended_at = GREATEST(현재, started_at): DB 제약 chk_session_time(ended_at >= started_at) 때문.
