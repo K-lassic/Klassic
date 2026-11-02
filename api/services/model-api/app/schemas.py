@@ -78,3 +78,79 @@ class RecognitionResult(BaseModel):
     pdf_page_count: int | None = None
     short_edge_px: int | None = None
     service_down: bool | None = None
+
+
+class PerformancePage(BaseModel):
+    """#32 처리 중 쪽도 포함하는 외부 상태 계약."""
+    page_no: int
+    file_no: int
+    source: str
+    outcome: str
+    fallback_reason: str | None
+    fallback_message: str | None
+    structure_verdict: str | None
+    validity_grade: str | None
+    engine: PageEngine | None
+
+
+class PerformanceStatus(BaseModel):
+    api_version: Literal["v1"]
+    id: str
+    status: Literal["received", "queued", "converting", "rendering", "completed", "completed_fallback", "service_down", "expired"]
+    status_label: str
+    route: str
+    file_kind: str
+    score_type: Literal["staff", "jeongganbo"] | None
+    created_at: str | None
+    completed_at: str | None
+    expires_at: str | None
+    remaining_seconds: int
+    pdf_page_count: int | None
+    page_count: int
+    pages: list[PerformancePage]
+    notice: dict[str, Any] | None
+
+
+class PerformanceFiles(BaseModel):
+    musicxml: str | None
+    midi: str | None
+    mp3: str | None
+
+
+class PerformanceResult(PerformanceStatus):
+    fallback: bool
+    fallback_reason: str | None
+    fallback_message: str | None
+    retry_hint: str | None
+    structure_verdict: str | None
+    type_mismatch: bool
+    detected_type: str | None
+    validity_grade: str | None
+    validity_items: dict[str, float | None] | None
+    files: PerformanceFiles
+    mp3_withheld: bool
+    mp3_withheld_reason: str | None
+    mp3_withheld_message: str | None
+    render_failure: str | None
+    renderer: PageEngine | None
+    recommend_failed: bool
+    original_instruments_unavailable: bool
+    instrument_mode: str
+    transpose_semitones: int
+    volume: float
+    engine: PageEngine | None
+    files_expire_in_seconds: int
+
+
+class InstrumentItem(BaseModel):
+    code: str
+    name: str
+    is_gugak: bool
+    is_percussion: bool
+    range_low: int | None
+    range_high: int | None
+
+
+class InstrumentsResponse(BaseModel):
+    api_version: Literal["v1"]
+    items: list[InstrumentItem]

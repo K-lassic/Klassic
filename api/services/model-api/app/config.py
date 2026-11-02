@@ -1,6 +1,7 @@
 """실행 환경 설정. 비밀값은 환경변수에서만 읽고 repr에도 노출하지 않는다."""
 from dataclasses import dataclass, field
 import os
+import secrets
 from pathlib import Path
 
 API_VERSION = "v1"
@@ -20,6 +21,8 @@ class Config:
     soundfonts_dir: Path = Path("/app/shared/soundfonts")
     model_load_timeout_s: float = 120
     render_timeout_s: float = 120
+    file_token_ttl_s: int = 900
+    file_token_secret: bytes = field(default_factory=lambda: secrets.token_bytes(32), repr=False)
     jeongganbo_device: str = "cpu"
     storage_dir: Path = Path("/storage")
     assets_dir: Path = Path("/app/services/model-api/assets")
@@ -43,6 +46,8 @@ def load_config() -> Config:
         soundfonts_dir=Path(os.environ.get("SOUNDFONTS_DIR", "/app/shared/soundfonts")),
         model_load_timeout_s=float(os.environ.get("MODEL_LOAD_TIMEOUT_SECONDS", "120")),
         render_timeout_s=float(os.environ.get("RENDER_TIMEOUT_SECONDS", "120")),
+        file_token_ttl_s=int(os.environ.get("FILE_TOKEN_TTL_SECONDS", "900")),
+        file_token_secret=(os.environ.get("FILE_TOKEN_SECRET") or "").encode() or secrets.token_bytes(32),
         jeongganbo_device=os.environ.get("JEONGGANBO_DEVICE", "cpu"),
         storage_dir=Path(os.environ.get("STORAGE_DIR", "/storage")),
         assets_dir=Path(os.environ.get("ASSETS_DIR", "/app/services/model-api/assets")),
@@ -58,4 +63,6 @@ def load_config() -> Config:
         raise ValueError("현재 Linux/amd64 검증 범위는 정간보 CPU 실행입니다")
     if not 1 <= cfg.render_timeout_s <= 600:
         raise ValueError("렌더링 제한 시간은 1~600초여야 합니다")
+    if not 1 <= cfg.file_token_ttl_s <= 3600 or len(cfg.file_token_secret) < 32:
+        raise ValueError("파일 서명 유효기간은 1~3600초, 서명 비밀값은 32바이트 이상이어야 합니다")
     return cfg

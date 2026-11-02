@@ -1,4 +1,4 @@
-"""#24·#28~#31 model-api 진입점: 자원·DB·인증을 준비하고 검사·인식·렌더링 라우터를 묶는다."""
+"""#24·#28~#32 model-api 진입점: 자원·DB·인증을 준비하고 검사·인식·렌더링·외부 라우터를 묶는다."""
 import asyncio
 from contextlib import asynccontextmanager
 import logging
@@ -30,6 +30,9 @@ from app.routers.omr_jeongganbo import router as jeongganbo_router
 from app.routers.render import router as render_router
 from app.render.pool import RenderPool
 from app.services.catalog import INSTRUMENTS_DIR
+from app.jobs.performance import PerformanceRunner
+from app.routers.performances import router as performance_router
+from app.routers.catalog import router as catalog_router
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -79,12 +82,15 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             app.state.registry = ModelRegistry(cfg, app.state.db, resources)
             app.state.limiter = Limiter(app.state.settings.current)
             app.state.render_pool = RenderPool(cfg)
+            app.state.performances = PerformanceRunner(app)
             warmup = asyncio.create_task(resources.start(), name="startup-resources")
             yield
         finally:
             if warmup:
                 # 음원 로딩 스레드가 끝나기 전에 synth를 해제하지 않는다.
                 await asyncio.gather(warmup, return_exceptions=True)
+            if hasattr(app.state, "performances"):
+                await app.state.performances.shutdown()
             if hasattr(app.state, "registry"):
                 await app.state.registry.close()
             if hasattr(app.state, "render_pool"):
@@ -202,6 +208,8 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
     app.include_router(staff_router)
     app.include_router(jeongganbo_router)
     app.include_router(render_router)
+    app.include_router(performance_router)
+    app.include_router(catalog_router)
 
     original_openapi = app.openapi
 
@@ -212,7 +220,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
         for path, operations in schema.get("paths", {}).items():
             for operation in operations.values():
                 if isinstance(operation, dict):
-                    protected = any(part in path for part in ("/internal/", "/omr/", "/render/"))
+                    protected = any(part in path for part in ("/internal/", "/omr/", "/render/", "/performances")) or path == "/v1/instruments"
                     operation["security"] = [{"ApiKey": []}] if protected else []
         return schema
 
