@@ -44,6 +44,7 @@ services:
       SOUNDFONTS_DIR: ${SOUNDFONTS_DIR:-/app/shared/soundfonts}
       JEONGGANBO_DEVICE: cpu
       MODEL_LOAD_TIMEOUT_SECONDS: ${MODEL_LOAD_TIMEOUT_SECONDS:-120}
+      STORAGE_DIR: /storage
     depends_on:
       db: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
@@ -51,6 +52,7 @@ services:
       - /tmp:rw,nosuid,nodev,mode=1777
     volumes:
       - *engine-volume
+      - model-storage:/storage
       - type: bind
         source: ../../shared/soundfonts
         target: /app/shared/soundfonts
@@ -88,6 +90,7 @@ services:
           create_host_path: false
 
 volumes:
+  model-storage:
   engines:
     # 새 빈 볼륨을 자동 생성하지 않는다. 기존 설치 결과만 읽는다.
     external: true
