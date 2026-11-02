@@ -2,6 +2,8 @@
 import asyncio
 import base64
 from datetime import timedelta
+from dataclasses import replace
+from contextlib import AsyncExitStack
 import io
 import json
 from pathlib import Path
@@ -353,3 +355,62 @@ def test_missing_fallback_template_finishes_service_down(tmp_path, monkeypatch):
         assert complete.call_args.kwargs["final_status"] == "service_down"
         assert complete.call_args.kwargs["musicxml"] is None
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("failure", ["queue_timeout", "RENDER_TIMEOUT", "RENDER_FAILED", "unexpected"])
+@pytest.mark.parametrize("midi_available", [True, False])
+def test_prepare_failure_still_downloads_recognized_result(client, monkeypatch, failure, midi_available):
+    api, app, db, _ = client
+    app.state.config = replace(app.state.config, render_timeout_s=.02)
+    db.row.update(status="received", completed_at=None)
+    original_execute = db.execute
+
+    async def execute(sql, args=None):
+        if "INSERT INTO derived_file" in sql:
+            db.derived.append(dict(format=args[1], render_status=args[3], storage_uri=args[9],
+                failure_reason=args[8], renderer_name=args[4], renderer_version=args[5]))
+        if "UPDATE score_request SET status = %s" in sql:
+            db.row["status"] = args[0]
+        elif "status = 'completed'" in sql:
+            db.row.update(status="completed", completed_at=utcnow())
+        elif "status = 'service_down'" in sql:
+            db.row.update(status="service_down", route="fallback", fallback_reason="recognition_failed")
+        return await original_execute(sql, args)
+
+    async def persist(*args, **kwargs):
+        folder = app.state.config.api_storage / NO
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "result.musicxml").write_text(kwargs["musicxml"])
+        if kwargs["midi"] is not None:
+            (folder / "result.mid").write_bytes(kwargs["midi"])
+
+    monkeypatch.setattr(db, "execute", execute)
+    monkeypatch.setattr("app.jobs.performance.complete_api_request", persist)
+    monkeypatch.setattr("app.jobs.performance.run_recognition", AsyncMock(return_value=SimpleNamespace(
+        fallback=False, musicxml=XML, midi=b"MThd-test" if midi_available else None, fallback_reason=None)))
+    app.state.render_pool = SimpleNamespace(close=AsyncMock(), prepare=AsyncMock(), render_prepared=AsyncMock())
+    if failure != "queue_timeout":
+        app.state.render_pool.prepare.side_effect = RuntimeError("must-not-leak") if failure == "unexpected" else ApiError(failure)
+
+    async def run():
+        async with AsyncExitStack() as stack:
+            if failure == "queue_timeout":
+                for _ in range(app.state.settings.current.max_concurrency_render):
+                    await stack.enter_async_context(app.state.limiter.slot("render", "api", time.monotonic()+1))
+            job = PerformanceJob(42, NO, "api", "image", "staff", b"image", app.state.config.api_storage / NO / "original.png",
+                                 Assignment(), None, 0, 1, app.state.settings.current, time.monotonic()+10)
+            await PerformanceRunner(app)._run(job)
+
+    api.portal.call(run)
+    response = api.get(f"/v1/performances/{NO}/result", headers=HEADERS)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["status"] == "completed" and not result["fallback"]
+    assert result["render_failure"] == ("RENDER_TIMEOUT" if failure in ("queue_timeout", "RENDER_TIMEOUT") else "RENDER_FAILED")
+    assert api.get(result["files"]["musicxml"]).text == XML
+    if midi_available:
+        assert api.get(result["files"]["midi"]).content == b"MThd-test"
+    else:
+        assert result["files"]["midi"] is None
+    assert result["files"]["mp3"] is None and "must-not-leak" not in response.text
+    app.state.render_pool.render_prepared.assert_not_awaited()

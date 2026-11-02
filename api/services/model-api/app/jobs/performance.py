@@ -1,7 +1,7 @@
-"""#32 구조에서의 위치: 외부 연주 접수 → 이 작업 → 기존 인식·렌더링 작업자와 결과 DB.
+"""#32·#45 구조에서의 위치: 외부 연주 접수 → 이 작업 → 기존 인식·렌더링 작업자와 결과 DB.
 
 접수 후 비동기로 인식·대체·악기 배정·MP3를 수행한다. 결과와 상대 파일 위치를 저장한다.
-종료·실패는 service_down으로 마감하며 작업자를 정리한다. 웹 채널 데이터는 변경하지 않는다.
+인식 결과가 있으면 렌더링 준비 실패에도 원본 악보를 제공한다. 웹 채널 데이터는 변경하지 않는다.
 """
 import asyncio
 import base64
@@ -116,8 +116,16 @@ async def run_performance(state, job):
     # 사진·PDF에는 원래 악기 정보가 없으므로 original은 기준판처럼 기본 구성으로 대체한다.
     assignment = job.assignment if job.assignment.mode != "original" else Assignment()
     deadline = time.monotonic() + cfg.render_timeout_s
-    async with state.limiter.slot("render", job.channel, deadline):
-        prepared = await state.render_pool.prepare(base_xml.encode(), asdict(assignment), job.transpose, job.volume, deadline)
+    try:
+        async with state.limiter.slot("render", job.channel, deadline):
+            prepared = await state.render_pool.prepare(base_xml.encode(), asdict(assignment), job.transpose, job.volume, deadline)
+    except Exception as exc:
+        code = "RENDER_TIMEOUT" if isinstance(exc, (QueueTimeout, TimeoutError)) else getattr(exc, "code", "RENDER_FAILED")
+        if code not in ("RENDER_FAILED", "RENDER_TIMEOUT", "RENDERER_MISSING"):
+            code = "RENDER_FAILED"
+        await _retain_recognition_result(db, cfg, job, base_midi, code)
+        log.warning("prepare_failed request_no=%s code=%s error_type=%s", job.request_no, code, type(exc).__name__)
+        return
     ensemble_id = (job.explicit_ensemble_id if job.assignment.mode == "custom" else await _default_ensemble_id(db))
     ensemble_id = await placed_ensemble_id(db, ensemble_id, prepared["used"])
     if ensemble_id is not None:
@@ -156,9 +164,27 @@ async def run_performance(state, job):
         await _render_failed(db, file_id, code, started)
     except Exception:
         await _render_failed(db, file_id, "RENDER_FAILED", started)
+    await _mark_completed(db, job.request_id)
+
+
+async def _mark_completed(db, request_id):
     await db.execute(
         "UPDATE score_request SET status = 'completed', completed_at = %s WHERE request_id = %s "
-        "AND status NOT IN ('completed','service_down')", (utcnow(), job.request_id))
+        "AND status NOT IN ('completed','service_down')", (utcnow(), request_id))
+
+
+async def _retain_recognition_result(db, cfg, job, base_midi, code):
+    """#45 악기·조옮김 적용 전 저장한 원본 인식/대체 악보를 다운로드 항목으로 등록한다."""
+    folder = request_dir(cfg, job.request_no)
+    xml_path, midi_path = folder / "result.musicxml", folder / "result.mid"
+    if not xml_path.is_file():
+        raise RuntimeError("보존할 인식 결과 파일이 없습니다")
+    await _derived(db, job.request_id, "musicxml", ensemble_id=None, status="ready", path_uri=storage_uri(cfg, xml_path))
+    if base_midi is not None and midi_path.is_file():
+        await _derived(db, job.request_id, "midi", ensemble_id=None, status="ready", path_uri=storage_uri(cfg, midi_path))
+    now = utcnow()
+    await _derived(db, job.request_id, "mp3", ensemble_id=None, status="failed", failure=code, started=now, finished=now)
+    await _mark_completed(db, job.request_id)
 
 
 async def _render_failed(db, file_id, code, started):
