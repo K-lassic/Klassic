@@ -1,5 +1,46 @@
 # model-api (담당: 예은 @yeeun5364)
 
+## MP3·PDF 렌더링 — #31
+
+구조에서의 위치: backend·API 호출자 → `POST /v1/render/mp3` 또는 `/v1/render/pdf` → 검사·정책·처리 자리 → 별도 렌더링 작업자 → FluidSynth·LAME 또는 Verovio·svglib·ReportLab → 결과 바이너리다. 인식 작업과 분리하며 렌더링 요청·중간 작업 행·결과 파일을 영속 저장하지 않는다. 인증 호출 기록은 기존 방식으로 DB에 남긴다.
+
+### 입력·악기·음원
+
+- multipart `score`로 MIDI·MusicXML·MXL 한 개를 받는다. MP3에는 선택적 `instruments` JSON을 받으며 생략하면 기본 가야금·장구 구성이다. 원래 악보에 타악 성부가 없으면 새 장단을 만들어 넣지 않는다.
+- `default`, `custom`, `original` 악기 배정을 지원한다. `custom`의 성부 번호는 0부터다. `recommend`는 추천 서비스 연결 전 기본 구성으로 대체하며 실제 추천 연동은 후속 범위다. `sf2_ref`에는 기본 음원 이름만 허용한다.
+- 요청의 실제 성부를 국악/GM 묶음으로 나눠 국악은 `gugak.sf2`만, GM은 `FluidR3_GM.sf2`만 읽는다. 혼합이면 각 음원으로 따로 합성한 WAV를 섞고 LAME으로 인코딩한다. 필요한 음원 누락은 `RENDERER_MISSING`으로 반환한다. 이 선택 기준은 **렌더링 요청의 음원 로딩**에 적용하며 #24의 기동 준비 검사와 읽기 전용 마운트는 유지한다.
+- 공유 악기 목록의 bank/program을 사용한다. 국악 선율은 bank 1, 장구·북은 타악 채널 10의 bank 128/program 1이다. MusicXML의 음표별 instrument ID·midi-unpitched와 MIDI 타악기 정보를 보존해 장구의 36·38·42 음번호가 기본값 60으로 바뀌지 않게 했다.
+- 청감 피드백에 따라 서버 MP3의 국악 선율 잔향 보내기(CC91)는 72, 타악은 60으로 설정했다. 입력 MIDI의 CC91이 이를 다시 덮지 않도록 한다. 브라우저 연주기 파일은 수정하지 않았다.
+- 사용자 비교 청취에서 선택한 장구 울림 보존을 적용했다. MP3 합성용 MIDI의 국악 타악 세트(128/1)에서만 note-off를 생략해 샘플이 자연스럽게 끝나게 하며, 타격 시점과 전체 트랙 길이는 유지한다. 원본 MIDI·MusicXML과 GM 타악의 음표 종료는 바꾸지 않는다.
+
+### 응답·보안·시간 기록
+
+- UC12 키 권한을 검사한다. 누락·잘못된 키 401, 폐기 키 403 기준을 유지한다. 서비스 키는 내부 렌더링에 사용하며, 외부 키는 DB `v_mp3_license`에서 정책 미확인 시 오디오 대신 200 `Mp3Withheld` JSON을 반환한다. 이 JSON에는 `X-Renderer`가 없다. 정책은 이 작업에서 변경하지 않는다.
+- MP3 성공은 `audio/mpeg`, PDF는 `application/pdf`다. 바이너리 응답에는 `X-Renderer`, 모든 응답에는 `X-Request-ID`를 제공한다. 렌더러 실패·누락은 502, 기한 초과는 504다. `/v1/versions`의 기존 `engines` 배열에도 렌더러 버전·설치 상태를 추가한다.
+- `RENDER_TIMEOUT_SECONDS` 기본값은 120초(환경 설정 범위 1~600초)다. 서비스·외부 호출을 합친 렌더링 동시 처리 상한을 적용한다. 별도 작업자와 자식 CLI는 같은 프로세스 묶음에서 실행해 기한 초과·취소·서버 종료 시 정리한다. Compose `init: true`로 종료된 자식 프로세스도 회수한다. CLI와 작업자에는 DB 비밀번호·서버 API 키를 전달하지 않는다.
+- 원본·중간 SVG/MIDI/WAV는 임시 폴더에서 처리·정리하고 결과를 메모리로 반환한다. SVG의 외부 이미지·참조는 제거한다. 일반 사용자, 읽기 전용 루트·엔진·음원, 권한 제거를 유지한다.
+- 요청 ID와 함께 `midi`, `fluidsynth_gugak`, `fluidsynth_gm`, `mix`, `lame`, `score_prepare`, `pdf`, 전체 시간과 선택한 음원 이름을 완료 로그 한 줄에 기록한다. 적용되지 않는 단계는 생략하거나 0으로 기록한다.
+- PDF에는 NotoSerifKR·Leipzig와 OFL 문서를 이미지에 포함한다. 한글·한자·음악 기호와 여러 쪽 배치를 검증했다. 타악기 MIDI를 MusicXML로 내보낼 때 음표에만 남은 악기도 part-list에 등록한다.
+
+### 검증·재현
+
+추가 Python 의존성은 `mido 1.3.3`, `verovio 5.7.0`, `svglib 2.3.2`, `reportlab 4.5.1`이며 transitive 의존성까지 uv.lock에 고정했다. FluidSynth·LAME은 Dockerfile에서 설치하며 호스트 Python·운영 서비스는 변경하지 않는다. 글꼴 원본은 기준판에서 읽어 서비스 소유 `assets/fonts`에 라이선스와 함께 복사했다. `proto_type/`은 수정하지 않는다.
+
+```powershell
+# 서비스 폴더, Linux Python 3.11
+uv sync --frozen
+uv run ruff check app tests
+uv run pytest -q
+# 격리 시험 DB 전용: 실제 생성 파일·시간·정책·행 수 확인
+Get-Content -Raw tests/container_render_smoke.py | docker compose --env-file <시험 env 절대 경로> -f ../../compose.yaml -p klassic-api-issue24 exec -T model-api python -
+```
+
+Windows Docker Desktop의 Linux/amd64·Debian 12·Python 3.11 컨테이너에서 테스트 **172개 통과**, 건너뜀 0개, Ruff 통과다. Starlette TestClient의 httpx 사용 중단 예고 경고 1건은 유지된다. 자동 검사에는 기존 인식 회귀, 렌더링 계약·정책·음원 선택·악기 배정·장구 타법·잔향·취소 시 자식 CLI 종료·여러 쪽 PDF·글꼴을 포함한다. 실제 HTTP에서는 국악/GM/혼합 MP3, 타악기 포함 MIDI·MXL 입력, PDF 1쪽·3쪽 생성, 외부 정책 미확인 안내와 기존 요청·작업 행 수 유지까지 확인한다. Poppler로 PDF를 이미지화해 페이지 전체를 검토했다. 시험 키·운영자와 해당 호출 기록은 정리하며 소리·PDF 검토 파일만 임시 폴더에 남긴다.
+
+다운로드 완료 시간은 서버의 localhost에서 측정하며 파일을 받은 뒤의 오디오 장치 초기화·실제 브라우저 재생 시작·외부 회선은 포함하지 않는다. 준비된 작업자에서 약 30.8초·0.74MB MP3는 국악 1.08초, GM 1.84초, 혼합 1.92초, MusicXML PDF 1쪽은 0.86초였다(잔향 조정 전 각 1회). 최초 작업자 시작·라이브러리 로딩은 추가 시간이 걸릴 수 있다. 통계적 평균이나 실제 배포 서버 성능으로 해석하지 않는다.
+
+가야금 음색과 비교 음원의 쿵·덩은 사용자 청감 확인을 받았고, 장구는 비교 청취에서 울림 보존 방식을 선택했다. 이 선택을 최종 MP3 합성에 반영했다. 실제 추천 연결은 후속 이슈, 전체 한도·입력 상한은 #33, 브라우저 재생 비교·외부 전체 흐름은 #49에서 확인한다. #29(PR #106)·#30(PR #109) 커밋을 포함한 별도 #31 브랜치에서 시작했으므로 제출 전 선행 병합 상태와 최신 main을 다시 확인한다.
+
 ## 정간보 인식·변환 — #30
 
 구조에서의 위치: backend·API 호출자 → `POST /v1/omr/jeongganbo` → 공통 검사·인식 처리 → 기존 정간보 작업자 → 별도 변환 작업자 → MusicXML/MIDI다. `omr_common`으로 #29의 인증·업로드·쪽별 처리·DB 기록·웹/외부 저장 경계를 재사용한다. 오선보 주소와 요청 필드는 유지한다.

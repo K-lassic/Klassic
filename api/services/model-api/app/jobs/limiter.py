@@ -44,8 +44,7 @@ class Limiter:
         caps = {
             "recognize:web": web,
             "recognize:external": max(1, rec - web),
-            "render:web": max(1, settings.max_concurrency_render),
-            "render:external": max(1, settings.max_concurrency_render),
+            "render:shared": max(1, settings.max_concurrency_render),
         }
         for key, cap in caps.items():
             pool = self._pools.setdefault(key, _Pool(capacity=cap))
@@ -53,6 +52,8 @@ class Limiter:
 
     @staticmethod
     def _key(kind: str, channel: str) -> str:
+        if kind == "render":
+            return "render:shared"  # #31 렌더링 상한은 서비스·외부 호출을 합쳐 적용한다.
         return f"{kind}:{'web' if channel == 'web' else 'external'}"
 
     def is_busy(self, kind: str, channel: str) -> bool:

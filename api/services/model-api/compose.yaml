@@ -21,6 +21,7 @@ x-engine-runtime: &engine-runtime
 services:
   model-api:
     <<: *engine-runtime
+    init: true
     image: ${MODEL_API_IMAGE:-klassic/model-api:issue24-local}
     build:
       context: .
@@ -44,6 +45,7 @@ services:
       SOUNDFONTS_DIR: ${SOUNDFONTS_DIR:-/app/shared/soundfonts}
       JEONGGANBO_DEVICE: cpu
       MODEL_LOAD_TIMEOUT_SECONDS: ${MODEL_LOAD_TIMEOUT_SECONDS:-120}
+      RENDER_TIMEOUT_SECONDS: ${RENDER_TIMEOUT_SECONDS:-120}
       STORAGE_DIR: /storage
     depends_on:
       db: {condition: service_healthy}

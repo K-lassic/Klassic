@@ -12,7 +12,7 @@ FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH=/opt/venv/bin:$PATH \
     SHARED_DIR=/app/shared ENGINES_DIR=/opt/gugak-engines SOUNDFONTS_DIR=/app/shared/soundfonts \
     XDG_CACHE_HOME=/tmp/engine-cache MPLCONFIGDIR=/tmp/matplotlib
-RUN apt-get update && apt-get install -y --no-install-recommends libfluidsynth3 libgl1 libglib2.0-0 \
+RUN apt-get update && apt-get install -y --no-install-recommends libfluidsynth3 fluidsynth lame libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --create-home --shell /usr/sbin/nologin app \
     && mkdir -p /app/shared/soundfonts /storage \
