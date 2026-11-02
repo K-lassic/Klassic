@@ -11,10 +11,19 @@ const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 헷갈리는 0 O 1 I 제외
 
 /** #34 요청 번호 — 날짜 + 무작위 8자라 추측하기 어렵다. 그래도 소유 확인은 web/ownership.ts 가 따로 한다 */
 export function newRequestNo(now = new Date()): string {
+  return numberWith('R', now);
+}
+
+/** #90 공유 번호 — 요청 번호와 같은 모양이고, 요청 번호를 드러내지 않는다 */
+export function newShareNo(now = new Date()): string {
+  return numberWith('S', now);
+}
+
+function numberWith(prefix: string, now: Date): string {
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(now.getUTCDate()).padStart(2, '0');
   const code = Array.from(randomBytes(8), (b) => ALPHA[b % ALPHA.length]).join('');
-  return `R-${mm}${dd}-${code}`;
+  return `${prefix}-${mm}${dd}-${code}`;
 }
 
 /** 접속 주소는 원문으로 저장하지 않는다 — 소금 친 SHA-256 (v0.1.1 과 같은 식) */

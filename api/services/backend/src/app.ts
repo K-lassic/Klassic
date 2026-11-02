@@ -22,6 +22,8 @@ import { modelsRouter } from './web/models.js';
 import { editsRouter } from './web/edits.js';
 import { exportsRouter } from './web/exports.js';
 import { instrumentsRouter } from './web/instruments.js';
+import { myScoresRouter } from './web/myScores.js';
+import { sharedRouter } from './web/shared.js';
 
 function base(): Express {
   const app = express();
@@ -63,7 +65,7 @@ export function createWebApp(): Express {
   // 상태 확인 다음부터는 모든 /api 가 세션 → 권한 판정을 지난다 (상태 확인이 세션을 만들지 않게 순서를 둔다)
   app.use('/api', sessionMiddleware);
   app.use('/api', authz);
-  app.use('/api', accountsRouter, sessionRouter, requestsRouter, examplesRouter, modelsRouter, editsRouter, exportsRouter, instrumentsRouter);
+  app.use('/api', accountsRouter, sessionRouter, requestsRouter, examplesRouter, modelsRouter, editsRouter, exportsRouter, instrumentsRouter, myScoresRouter, sharedRouter);
   // 권한표에는 있지만 아직 만들지 않은 경로(#36 이후) · 대응표에 없는 경로 → 404 (권한 존재를 드러내지 않음 — H9)
   app.use('/api', (_req, res) => sendError(res, new ApiError('REQUEST_NOT_FOUND')));
   app.use(errorHandler);
