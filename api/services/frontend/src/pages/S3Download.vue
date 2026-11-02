@@ -82,7 +82,6 @@ const band = computed(() => {
           :edit-ops="ops" :instruments="instruments" :expired="expired" :midi-available="s.midi_available"
           :notes="{
             mp3: [`연주 악기: ${ensemble || '기본 국악기 구성'}`],
-            musicxml: ['추천 조합으로 늘어난 악기는 원래 선율을 복사한 성부로 적힙니다.'],
           }"
         />
       </section>

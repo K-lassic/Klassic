@@ -100,7 +100,7 @@
 ### 대조 중 발견한 점 (#4 리뷰 때 확인)
 
 - 백엔드에 있지만 **화면이 부르지 않는** 경로 3개 → 계약에 넣을지 결정 필요
-  - `GET /api/requests/:no/recommendation` · `PUT /api/requests/:no/instrument-choice` — 2026-09-30 결정(93번)으로 화면에서 추천 조합 고르기를 뺐다 (`S2Edit.vue` 머리말). `C4InstrumentPicker` · `lib/ensemble.ts` 에 추천 표시 코드는 남아 있다. 백엔드 통합 테스트(`instrument_selection.test.ts`)는 아직 이 경로를 쓴다 → P2 국악기 추천을 되살릴지 함께 정한다
+  - `GET /api/requests/:no/recommendation` · `PUT /api/requests/:no/instrument-choice` — 2026-09-30 결정(93번)으로 화면에서 추천 조합 고르기를 뺐고 (`S2Edit.vue` 머리말), **2026-11-02 남아 있던 추천 표시 코드(`C4InstrumentPicker` 추천 칸 · `lib/ensemble.ts` `applyCombination` · `Recommendation` 형)도 지웠다.** 화면은 이 두 경로를 부르지 않는다. 다시 넣을 때는 `docs/API_업데이트_후보.md` 「화면에서 국악기 추천 받기」
   - `POST /api/session/end` — `POST /api/auth/logout` 과 같은 `endSession` 을 부른다. 화면은 logout 만 쓰므로 계약에서 빼도 된다
 - 폴링 두 군데(요청 상태 · 내보내기)가 모두 **1초 간격** — 외부 공개(Funnel) 응답 시간과 요청 한도에 영향
 - 내려받기는 `<a download>` 로 같은 출처 쿠키를 그대로 쓴다 → 프론트(Nginx)와 백엔드를 다른 출처로 나누면 깨진다. Nginx 에서 `/api` · `/admin` · `/soundfonts` 를 백엔드로 넘기는 구성이 맞다
@@ -221,7 +221,7 @@
 - 부르는 경로는 계약(`api/contracts/web-api.yaml`)의 `/api/my-scores` · `/api/shared-scores*` · `/api/requests/{no}/share` · `/api/api-docs` · `/api/key-applications` 그대로다. 백엔드는 #90(내 악보 · 공유) · #91(API 안내 · 키 신청)에서 만든다. 그 전에는(2026-11-02 api/ 9603 에 붙여 확인, 네 경로 모두 404) "내가 만든 악보" · "악보 공유하기" 칸이 "목록을 불러오지 못했습니다"를, API 안내는 엔드포인트 목록 없이 안내 문구만 보인다. 4단계 공유 칸은 입력 칸이 보이지만 공유는 되지 않는다. 올리기 → 결과 → 편집 → 내려받기는 그대로 쓴다.
 - 개발 서버 프록시 키를 `'/api'` → `'/api/'` 로 고쳤다 — 앞부분이 같은 화면 경로 `/api-guide` 까지 백엔드로 넘어가 빈 화면이 됐다. 운영 Nginx 는 처음부터 `location ^~ /api/` 라 문제없다.
 - 바꾼 것: S4A 오류 코드 표는 v0.1.1 `shared/error-codes.json` 대신 `i18n/errorCodes.ts`(세 파일 합침, #19)를 읽는다. 공개 주소는 코드에 적지 않고 `window.location.origin` 을 쓴다 — Funnel 로 열면 그 주소가 예시에 그대로 나온다 (v0.1.1 주석의 옛 외부 주소는 지움).
-- **추천 화면 연결은 하지 않았다.** 2026-09-30 결정(93번)으로 화면에서 "전체 구성 고르기(추천 조합)"를 뺐고, 지금은 악기 하나씩 바꾸기만 있다. 추천을 되살릴지 · 어디에 둘지는 #88 · #89 와 함께 정한다 (C4 에 추천 표시 코드는 남아 있다).
+- **추천 화면 연결은 하지 않았다.** 2026-09-30 결정(93번)으로 화면에서 "전체 구성 고르기(추천 조합)"를 뺐고, 지금은 악기 하나씩 바꾸기만 있다. 2026-11-02 화면에서 추천 기능을 빼기로 정해 남은 추천 표시 코드도 지웠다 — 다음에 넣을 후보로 `docs/API_업데이트_후보.md` 에 적어 두었다 (중요도 낮음).
 - 시험: v0.1.1 `sharedScores`(관리자 S8 부분 제외 · #101) · `round16` · `tour210` · `apiExamples` · `s4aEndpoints` · `s4aStart` 를 옮기고, #46 때 P2 라서 뺀 시험 줄을 되살렸다.
 
 ### 프론트 P1 시험 (#46)
