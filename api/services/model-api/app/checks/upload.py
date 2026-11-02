@@ -431,6 +431,10 @@ def _check_upload(
             pages.append(PageImage(page_no=i, file_no=i, source="file", short_edge_px=edge, image=data,
                                    suffix=_ext(filename or "") or ".png"))
             if render_pdf:
+                from app.checks.image import recognition_copy
+
+                pages[-1].image = recognition_copy(data)
+                pages[-1].suffix = ".png"
                 _maybe_upscale(pages[-1], spec)
 
     short_edge = min((p.short_edge_px for p in pages if p.short_edge_px is not None), default=None)

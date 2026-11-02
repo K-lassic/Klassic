@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <work><work-title>아리랑 (세마치장단)</work-title></work>
+  <identification>
+    <encoding><software>gugak score-core</software><supports element="accidental" type="yes"/></encoding>
+    <miscellaneous>
+      <miscellaneous-field name="gugak-part-P1">{&quot;instrument&quot;:&quot;gayageum&quot;,&quot;origin&quot;:&quot;original&quot;,&quot;volume&quot;:100,&quot;isPercussion&quot;:false,&quot;sourceInstrument&quot;:null,&quot;name&quot;:&quot;가야금&quot;}</miscellaneous-field>
+      <miscellaneous-field name="gugak-part-P2">{&quot;instrument&quot;:&quot;janggu&quot;,&quot;origin&quot;:&quot;original&quot;,&quot;volume&quot;:100,&quot;isPercussion&quot;:true,&quot;sourceInstrument&quot;:null,&quot;name&quot;:&quot;장구&quot;}</miscellaneous-field>
+    </miscellaneous>
+  </identification>
+  <part-list>
+    <score-part id="P1">
+      <part-name>가야금</part-name>
+      <score-instrument id="P1-I1"><instrument-name>가야금</instrument-name></score-instrument>
+      <midi-instrument id="P1-I1"><midi-channel>1</midi-channel><midi-program>108</midi-program><volume>78.74</volume></midi-instrument>
+    </score-part>
+    <score-part id="P2">
+      <part-name>장구</part-name>
+      <score-instrument id="P2-I37"><instrument-name>장구</instrument-name></score-instrument>
+      <score-instrument id="P2-I39"><instrument-name>장구</instrument-name></score-instrument>
+      <score-instrument id="P2-I43"><instrument-name>장구</instrument-name></score-instrument>
+      <midi-instrument id="P2-I37"><midi-channel>10</midi-channel><midi-program>1</midi-program><midi-unpitched>37</midi-unpitched><volume>78.74</volume></midi-instrument>
+      <midi-instrument id="P2-I39"><midi-channel>10</midi-channel><midi-program>1</midi-program><midi-unpitched>39</midi-unpitched><volume>78.74</volume></midi-instrument>
+      <midi-instrument id="P2-I43"><midi-channel>10</midi-channel><midi-program>1</midi-program><midi-unpitched>43</midi-unpitched><volume>78.74</volume></midi-instrument>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>480</divisions>
+        <key><fifths>-1</fifths><mode>major</mode></key>
+        <time><beats>9</beats><beat-type>8</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><beat-unit-dot/><per-minute>100</per-minute></metronome></direction-type><sound tempo="150"/></direction>
+      <direction placement="below"><direction-type><dynamics><mp/></dynamics></direction-type><sound dynamics="76.67"/></direction>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>960</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>240</duration><tie type="stop"/><voice>1</voice><type>eighth</type><notations><tied type="stop"/></notations></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="2">
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>960</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>240</duration><tie type="stop"/><voice>1</voice><type>eighth</type><notations><tied type="stop"/></notations></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="3">
+      <note dynamics="97.78"><pitch><step>A</step><octave>4</octave></pitch><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>A</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="4">
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>960</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>240</duration><tie type="stop"/><voice>1</voice><type>eighth</type><notations><tied type="stop"/></notations></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note><rest/><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="5">
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>960</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>240</duration><tie type="stop"/><voice>1</voice><type>eighth</type><notations><tied type="stop"/></notations></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="6">
+      <note dynamics="97.78"><pitch><step>A</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="7">
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>960</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>240</duration><tie type="stop"/><voice>1</voice><type>eighth</type><notations><tied type="stop"/></notations></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+    </measure>
+    <measure number="8">
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>1440</duration><voice>1</voice><type>half</type><dot/></note>
+      <note><rest/><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+    </measure>
+    <measure number="9">
+      <note dynamics="97.78"><pitch><step>C</step><octave>5</octave></pitch><duration>1440</duration><voice>1</voice><type>half</type><dot/></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>5</octave></pitch><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+    </measure>
+    <measure number="10">
+      <note dynamics="97.78"><pitch><step>C</step><octave>5</octave></pitch><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="97.78"><pitch><step>A</step><octave>4</octave></pitch><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+    </measure>
+    <measure number="11">
+      <note dynamics="97.78"><pitch><step>A</step><octave>4</octave></pitch><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>A</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="12">
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>960</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>240</duration><tie type="stop"/><voice>1</voice><type>eighth</type><notations><tied type="stop"/></notations></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note><rest/><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="13">
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>960</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>240</duration><tie type="stop"/><voice>1</voice><type>eighth</type><notations><tied type="stop"/></notations></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="14">
+      <note dynamics="97.78"><pitch><step>A</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>C</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type></note>
+      <note dynamics="97.78"><pitch><step>D</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+    <measure number="15">
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>960</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>240</duration><tie type="stop"/><voice>1</voice><type>eighth</type><notations><tied type="stop"/></notations></note>
+      <note dynamics="97.78"><pitch><step>G</step><octave>4</octave></pitch><duration>240</duration><voice>1</voice><type>eighth</type></note>
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+    </measure>
+    <measure number="16">
+      <note dynamics="97.78"><pitch><step>F</step><octave>4</octave></pitch><duration>1440</duration><voice>1</voice><type>half</type><dot/></note>
+      <note><rest/><duration>720</duration><voice>1</voice><type>quarter</type><dot/></note>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="1">
+      <attributes>
+        <divisions>480</divisions>
+        <key><fifths>-1</fifths><mode>major</mode></key>
+        <time><beats>9</beats><beat-type>8</beat-type></time>
+        <clef><sign>percussion</sign></clef>
+      </attributes>
+      <direction placement="below"><direction-type><dynamics><mf/></dynamics></direction-type><sound dynamics="84.44"/></direction>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="3">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="4">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="5">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="6">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="7">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="8">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="9">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="10">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="11">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="12">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="13">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="14">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="15">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>480</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I39"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="105.56"><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched><duration>240</duration><instrument id="P2-I43"/><voice>1</voice><type>eighth</type></note>
+      <note dynamics="111.11"><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><instrument id="P2-I39"/><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="16">
+      <note dynamics="105.56"><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched><duration>720</duration><instrument id="P2-I37"/><voice>1</voice><type>quarter</type><dot/></note>
+      <note><rest/><duration>1440</duration><voice>1</voice><type>half</type><dot/></note>
+    </measure>
+  </part>
+</score-partwise>

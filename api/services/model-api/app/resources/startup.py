@@ -1,4 +1,7 @@
-"""기동 시 실제 모델·음원을 로딩한다. 인식 HTTP 경로는 #29·#30에서 연결한다."""
+"""#24·#29 기동 자원: main → DB 모델 등록부·읽기 전용 엔진/음원 → 공유 작업자와 준비 상태.
+
+모델 로딩 이력은 DB에, 준비 표시는 /tmp에 남긴다. 오선보 인식은 같은 작업자를 재사용한다.
+"""
 import asyncio
 import ctypes
 import ctypes.util
@@ -8,6 +11,7 @@ import logging
 import os
 from pathlib import Path
 import time
+from app.db import utcnow
 
 from app.resources.worker import EngineWorker
 
@@ -66,6 +70,8 @@ class Resources:
         self.cfg, self.db = cfg, db
         self.entries = []
         self.workers = {}
+        self.model_rows = {}
+        self.load_info = {}
         self.startup_done = False
         self.soundfonts_ready = False
         self.soundfonts = Soundfonts()
@@ -75,10 +81,24 @@ class Resources:
         Path("/tmp/model-api-ready").unlink(missing_ok=True)
         try:
             rows = await self.db.fetch_all("SELECT * FROM model_registry ORDER BY kind, model_name")
-            for row in rows:
-                entry = {"name": row["model_name"], "kind": row["kind"], "provider": row["provider"],
-                         "installed": False, "version": None, "state": "unavailable", "enabled": bool(row["enabled"])}
-                self.entries.append(entry)
+            self.model_rows = {row["model_name"]: dict(row) for row in rows}
+            self.entries = [{"name": row["model_name"], "kind": row["kind"], "provider": row["provider"],
+                             "installed": False, "version": None, "state": "unavailable", "enabled": bool(row["enabled"])}
+                            for row in rows]
+            # 첫 엔진을 기다리는 동안에도 다른 설치 엔진은 cold로 조회되어야 한다.
+            for row, entry in zip(rows, self.entries, strict=True):
+                options = json.loads(row.get("config_json") or "{}")
+                adapter = options.get("adapter")
+                if row["provider"] == "venv" and adapter in ("homr", "jeongganbo"):
+                    folder = self._engine_folder(row, adapter)
+                    try:
+                        version = (folder / "VERSION").read_text().strip() if folder else ""
+                        if version and (folder / ".venv/bin/python").exists():
+                            entry.update(installed=True, version=version[:40], state="cold")
+                            self.workers[entry["name"]] = self._make_worker(entry["name"], folder, adapter)
+                    except OSError:
+                        pass
+            for row, entry in zip(rows, self.entries, strict=True):
                 if not entry["enabled"]:
                     continue
                 if row["provider"] == "builtin" and row["model_name"] == "rules":
@@ -106,17 +126,33 @@ class Resources:
         if self.soundfonts_ready and not self.missing_kinds():
             Path("/tmp/model-api-ready").touch()
 
-    async def _load_engine(self, entry, row, adapter):
-        started = time.monotonic()
+    def _engine_folder(self, row, adapter):
         folder = self.cfg.engines_dir / adapter
         # 기준 DB의 ~/gugak-engines 참조는 새 ENGINES_DIR 아래로 옮겨 해석한다.
         ref = row.get("provider_ref")
         if ref and not ref.startswith("~/gugak-engines/"):
             folder = Path(ref)
             if not folder.is_absolute():
-                return
+                return None
         elif ref:
             folder = self.cfg.engines_dir / ref.removeprefix("~/gugak-engines/")
+        return folder
+
+    def _make_worker(self, name, folder, adapter):
+        cmd = [str(folder / ".venv/bin/python"), "-B", str(RUNNERS / f"{adapter}_runner.py")]
+        cwd = None
+        if adapter == "jeongganbo":
+            cwd = str(folder / "repo")
+            cmd += ["--repo", cwd, "--device", self.cfg.jeongganbo_device, "--serve"]
+        return EngineWorker(name, cmd, cwd=cwd, env=worker_environment())
+
+    async def _load_engine(self, entry, row, adapter):
+        started = time.monotonic()
+        started_at = utcnow()
+        self.load_info[entry["name"]] = {"started_at": started_at}
+        folder = self._engine_folder(row, adapter)
+        if folder is None:
+            return
         python = folder / ".venv/bin/python"
         worker = None
         try:
@@ -124,20 +160,29 @@ class Resources:
             if not python.exists() or not entry["version"]:
                 raise FileNotFoundError("엔진 설치 누락")
             entry.update(installed=True, state="loading")
-            cmd = [str(python), "-B", str(RUNNERS / f"{adapter}_runner.py")]
-            cwd = None
-            if adapter == "jeongganbo":
-                cwd = str(folder / "repo")
-                cmd += ["--repo", cwd, "--device", self.cfg.jeongganbo_device, "--serve"]
-            worker = EngineWorker(entry["name"], cmd, cwd=cwd, env=worker_environment())
-            await worker.start(self.cfg.model_load_timeout_s)
+            worker = self.workers.get(entry["name"]) or self._make_worker(entry["name"], folder, adapter)
             self.workers[entry["name"]] = worker
+            await worker.start(self.cfg.model_load_timeout_s)
             entry["state"] = "ready"
         except Exception as exc:
             if worker:
                 await worker.stop()
             entry["state"] = "failed" if entry["installed"] else "unavailable"
             log.error("engine_failed model=%s error_type=%s", entry["name"], type(exc).__name__)
+        ended_at = utcnow()
+        self.load_info[entry["name"]].update(
+            loaded_at=ended_at.isoformat() + "Z" if entry["state"] == "ready" else None,
+            last_load_ms=round((time.monotonic() - started) * 1000),
+            error=None if entry["state"] == "ready" else "MODEL_LOAD_FAILED_OR_MISSING",
+        )
+        try:
+            await self.db.execute(
+                "INSERT INTO model_load_event(model_name,trigger_kind,started_at,finished_at,outcome,error_text) "
+                "VALUES(%s,'startup',%s,%s,%s,%s)",
+                (entry["name"], started_at, ended_at, "ok" if entry["state"] == "ready" else "failed",
+                 self.load_info[entry["name"]]["error"]))
+        except Exception as exc:
+            log.warning("model_load_event_failed error_type=%s", type(exc).__name__)
         log.info("engine_load model=%s duration_ms=%s state=%s", entry["name"],
                  round((time.monotonic() - started) * 1000), entry["state"])
 
@@ -145,7 +190,7 @@ class Resources:
         entries = [dict(entry) for entry in self.entries]
         for entry in entries:
             worker = self.workers.get(entry["name"])
-            if worker and not worker.alive():
+            if worker and entry["state"] == "ready" and not worker.alive():
                 entry["state"] = "failed"
         return entries
 

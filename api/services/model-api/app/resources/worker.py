@@ -172,6 +172,9 @@ class EngineWorker:
             except WorkerStartError as exc:
                 return WorkerReply(None, error=str(exc), stderr_tail=self.stderr_tail(),
                                    duration_ms=int((time.monotonic() - t0) * 1000))
+            except asyncio.CancelledError:
+                await self._kill()
+                raise
             except TimeoutError:
                 await self._kill()
                 return WorkerReply(None, timed_out=True, duration_ms=int((time.monotonic() - t0) * 1000))

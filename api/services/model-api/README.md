@@ -1,5 +1,71 @@
 # model-api (담당: 예은 @yeeun5364)
 
+## 정간보 인식·변환 — #30
+
+구조에서의 위치: backend·API 호출자 → `POST /v1/omr/jeongganbo` → 공통 검사·인식 처리 → 기존 정간보 작업자 → 별도 변환 작업자 → MusicXML/MIDI다. `omr_common`으로 #29의 인증·업로드·쪽별 처리·DB 기록·웹/외부 저장 경계를 재사용한다. 오선보 주소와 요청 필드는 유지한다.
+
+- `image` 반복 필드, `request_no`와 호환 필드 `request_id`, `X-Deadline`을 받는다. 서비스·외부 키는 DB UC12 권한에 따르며 키 누락·잘못된 키 401, 폐기 키 403을 유지한다. 두 인식 경로의 OpenAPI에도 키 필요 여부를 명시했다.
+- DB의 `jeongganbo` 어댑터를 기존 읽기 전용 설치 경로로 연결하고 #24의 상주 작업자를 재사용한다. DB에 남은 macOS `mps` 설정과 관계없이 현재 검증 환경은 CPU로 실행한다. 작업자가 바쁘면 마감 안에서 기다리며 추가 모델을 중복 실행하지 않는다.
+- 기준판의 자체 작성 `jeongganbo_convert`를 옮겨 율명·옥타브·정간 안 자리·쉼표·이음·여러 성부를 MusicXML/MIDI로 변환한다. `OR` 후보는 첫 후보만 사용하고 범위 밖 자리 번호는 변환 실패로 처리한다. SejongMusic 코드는 가져오지 않는다.
+- 변환은 별도 프로세스로 실행한다. 기한 초과·취소 시 변환 프로세스도 종료할 수 있으며, 서버 종료 시 모델 등록부가 사용한 어댑터·변환 작업자를 정리한다. 서버 DB 비밀번호·API 키는 작업자 환경에 넘기지 않는다.
+- 오선보·정간보 점수를 함께 검사해 잘못 고른 종류를 `type_mismatch`·`detected_type`으로 반환한다. 구조 불통과 시 엔진을 호출하지 않으며 웹 대체 응답에는 파일을 넣거나 저장하지 않는다.
+- `request_page`, `engine_attempt`, `processing_job`, `validity_check_item`, `stage_timing`에 판정과 처리 시간을 남긴다. 정간보의 율명 인식 비율과 `jg_convert` 단계 시간도 포함한다. 여러 쪽 병합·부분 실패·원본 보존·방향/색상 사본 처리는 #29와 같은 흐름을 쓴다.
+
+### 검증 결과 — 2026-11-02
+
+Linux/amd64·Debian 12·Python 3.11 컨테이너에서 **139개 테스트 통과**, 건너뜀 0개, Ruff 통과다. 율명·길이·박자·성부·OR 후보·잘못된 인코딩, 실제 별도 변환 프로세스, 중복 모델 실행 방지, 변환 시간 초과, 인증·종류 불일치와 #24·#28·#29 회귀를 포함한다. Starlette TestClient의 httpx 사용 중단 예고 경고 1건은 유지된다. 새 의존성이나 lock 변경은 없다.
+
+공개 `taryeong-gayageum-jeongganbo.pdf`로 실제 엔진을 검증했다. 사진은 이 PDF 첫 쪽을 300dpi PNG로 만든 입력이다.
+
+| 입력 | 실인식 결과 | 인식 시간 | 변환 시간 | DB 기록 |
+|---|---|---:|---:|---|
+| 정간보 사진 1장 | fallback=false · trust · 율명 비율 1.0 · MusicXML/MIDI 생성 | 약 19.5초 | 약 1.7초 | 쪽 1 · 엔진 시도 1 · 작업 1 · 타당성 5 · 단계 시간 5행 |
+| 정간보 PDF 2쪽 | fallback=false · trust · 율명 비율 1.0 · MusicXML/MIDI 생성 | 약 24.6초 | 약 0.6초 | 쪽 2 · 엔진 시도 2 · 작업 1 · 타당성 5 · 단계 시간 8행 |
+
+오선보를 정간보로, 정간보를 오선보로 보낸 실제 입력 모두 종류 불일치를 감지했다. 웹 응답의 결과 파일 없음·엔진 시도 없음, 기한 초과 `TIMEOUT`, 키 없음 401, 저장 파일과 DB 위치 일치, 정간보 설치·누락 진단을 확인했다. 격리된 `klassic_issue24` DB에서 생성한 시험 키·운영자·요청·파일만 정리했다. 일반 사용자·읽기 전용 루트/엔진/음원·권한 제거 상태와 healthy도 확인했다.
+
+```powershell
+# 서비스 폴더, Linux Python 3.11
+uv run ruff check app tests
+uv run pytest -q
+python -m app.engines.selftest --engine jeongganbo
+```
+
+실제 HTTP 검사는 `tests/container_jeongganbo_smoke.py`에 공개 예제의 base64를 넣어 시험 컨테이너의 `python -`로 전달한다. 운영 DB에서는 실행을 거부한다. 위 수치는 Windows Docker Desktop의 Linux 컨테이너 실측이며 별도 Linux 서버·브라우저 전체 흐름·실제 사진 촬영 조건별 정확도 검증은 #49·#45에서 이어간다. 시작 시 #29 브랜치의 커밋 `bf0ce5a`를 포함했으며 제출 전 선행 PR 병합 상태와 최신 main을 다시 확인한다.
+
+## 오선보 인식·모델 상태 — #29
+
+구조에서의 위치: backend → `model-api:9543/v1/omr/staff` → 업로드·구조 검사 → 기존 homr 작업자 → 타당성 검사 → MusicXML/MIDI 응답이다. 모델·가중치는 #25의 읽기 전용 엔진 볼륨을 쓰며, #24에서 올린 작업자를 재사용한다. `GET /v1/models`는 키 없이 설치·준비 상태와 예상 로딩 시간을 반환한다. 정간보 인식 경로는 #30, MP3/PDF 렌더링은 #31에서 연결한다.
+
+### 호출·결과·저장 경계
+
+- multipart `image`를 사진 순서대로 반복하거나 PDF 한 개를 보낸다. 최대 10쪽이며 PDF는 모든 쪽을 300dpi PNG로 만든다. 인증은 `X-API-Key`와 DB의 UC12 권한을 따른다. 기존 키 누락·잘못된 키 401, 폐기 키 403 기준을 유지한다.
+- 서비스 키와 `request_no`가 있으면 기존 웹 요청에 판정만 기록한다. 호환 필드 `request_id`도 받을 수 있다. 없는 웹 요청은 404이며 새 API 요청으로 바꾸지 않는다. 성공 결과 파일은 응답으로 보내 backend가 저장한다. 웹 대체 응답에는 MusicXML·MIDI를 넣거나 별도 결과 파일을 저장하지 않는다.
+- `request_no` 없는 호출은 API 요청·원본을 만들고 결과 위치를 DB에 기록한다. 파일은 전용 `model-storage` 볼륨의 `/storage/api/<request_no>`에 저장한다. 엔진용 사본·중간 산출물은 `/tmp`에서 처리 후 제거한다. API 인식 실패에는 이미지에 포함한 api_server 대체 템플릿을 쓸 수 있으며, 템플릿 누락은 `service_down=true`다. 파일 보관 한도·정리 작업은 후속 범위다.
+- 쪽마다 구조 → 설정된 엔진 순서 → 타당성을 검사하고 `request_page`, `engine_attempt`, `processing_job`, `validity_check_item`, `stage_timing`에 기록한다. 구조가 없으면 엔진을 호출하지 않는다. 타당성 항목은 요청 전체로 합치며 음 개수는 합, 나머지는 가장 낮은 값이다.
+- 읽은 쪽을 올린 순서대로 이어 MusicXML/MIDI 한 곡으로 만든다. 일부 쪽 실패는 `PAGES_PARTIAL`과 실패한 쪽 번호를 제공한다. 전부 실패하면 `fallback=true`와 사유를 반환한다. HTTP 200만으로 실인식 성공을 판정하지 않는다.
+- `X-Deadline`의 ISO 시각과 쪽별 제한을 함께 적용한다. 구조 검사·엔진·타당성 검사 대기를 제한하고 엔진 시간 초과·취소 시 프로세스 묶음을 끝낸다. MIDI 변환은 별도 작업자로 제한 시간을 두고 수행하며, 변환 실패 시 MusicXML만 반환할 수 있다.
+- 인식용 사진 사본에만 EXIF 방향을 적용하고 투명 배경을 흰색으로 합성한다. 16비트 PNG는 0~65535 명암을 0~255로 변환한다. 그 뒤 작은 사진을 확대한다. 원본과 #28 검사 API의 판정·확대 생략은 유지한다. 긴 변·읽기 단계의 상한 강화는 #33 범위다.
+- DB `model_registry`를 읽고 미설치·비활성 엔진은 건너뛴다. 모델 상태에는 `unavailable/cold/loading/ready/failed`, 설치 버전, 로딩 시작·소요·예상 시간을 제공한다. 예상값은 최근 성공 기록 `v_model_load_estimate`를 우선하며 없으면 설정의 힌트를 쓴다. 시작 시 `model_load_event`에 로딩 결과를 남긴다.
+- non-root, 읽기 전용 루트·엔진·음원, 권한 제거를 유지한다. 영속 저장을 위한 `/storage`만 추가로 쓰며, 엔진·MIDI 작업자에는 DB 비밀번호·서버 키를 넘기지 않는다. 다른 담당 서비스와 `proto_type/`은 수정하지 않는다.
+
+### 검증·재현
+
+2026-11-02 Linux/amd64·Debian 12·Python 3.11 컨테이너에서 테스트 **104개**와 Ruff 검사를 통과했다. #24·#28 회귀, 실제 이미지 색·방향 처리, 인증, 여러 쪽·부분 실패, 엔진 누락, 기한, 웹 파일 경계, 작업자 시작 중 취소·종료를 포함하며 건너뛴 테스트는 없다. Starlette TestClient의 httpx 사용 중단 예고 경고 1건은 남아 있다.
+
+```powershell
+# 서비스 폴더, Linux Python 3.11
+uv sync --frozen
+uv run ruff check app tests
+uv run pytest -q
+# 엔진 설치 진단 (서버에 모델을 중복 로딩하지 않는 probe 전용)
+python -m app.engines.selftest
+```
+
+`tests/container_recognition_smoke.py`는 `klassic_issue24` 별도 시험 DB에서만 실행한다. 저장소의 공개 `arirang-semachi-staff.png`를 `SAMPLE_BASE64` 자리에 넣어 컨테이너의 `python -`로 전달한다. 시험 키·운영자·요청을 만들고 실제 사진·PDF 인식, MusicXML·MIDI, 쪽별 DB 기록, 대체 파일·기한을 확인한 뒤 시험 자료를 정리한다. 키 원문과 인식 응답 원문은 출력하지 않는다. 실제 파일 결과와 DB를 함께 보며 웹 화면 전체·다중 사용자·별도 Linux 서버 검증은 #49에 남긴다.
+
+실제 Docker 검증 결과: 악보+빈 사진 두 장은 2쪽 중 1쪽을 `trust`로 변환하고 2쪽 실패 안내를 반환했다(`fallback=false`, homr 인식 약 24.1초). DB에는 쪽 2행·엔진 시도 1행·작업 1행·타당성 항목 3행·단계 시간 5행이 남았고 MusicXML/MIDI 파일 위치도 일치했다. 동일 악보 PDF는 약 30.8초에 `fallback=false`·MIDI 생성에 성공했다. API 대체 템플릿 제공, 웹 대체 파일·엔진 호출 없음, 기한 초과 `TIMEOUT`, 키 없음 401, 공개 모델 준비 상태도 확인했다. 시험 자료는 검사 후 정리했다. 시간은 Windows Docker Desktop의 Linux 컨테이너 실측이며 별도 Linux 서버 성능으로 보지 않는다.
+
 ## 업로드 검사 — #28
 
 `POST /v1/internal/upload-check`는 backend가 PDF 검사를 맡기는 서비스 키 전용 경로다. multipart 필드는 `file`(여러 파일이면 같은 이름 반복), `score_type`(`staff` 또는 `jeongganbo`)이며 기존 계약을 유지한다. 외부 키는 403, 키 누락·잘못된 키는 401이다. 검사 결과만 반환하며 요청·쪽별 처리·작업 행이나 원본 파일을 만들지 않는다. 인증 호출 기록은 기존 방식으로 DB에 남긴다.
@@ -9,7 +75,7 @@
 - 기준판의 업로드·PDF 검사 코드를 가져와 앱별 `SHARED_DIR/upload-rules.json`을 사용하도록 분리했다. 다른 앱·호출의 규칙이 섞이지 않게 ContextVar로 적용·해제한다.
 - 순서: 파일 개수 → 확장자·실제 파일 형식 → PDF 혼합 여부 → 손상·암호·PDF 쪽 수 → 파일 용량 → 쪽별 사진 크기 → 악보 종류. 여러 문제가 있으면 계약에 맞게 먼저 검사한 사유를 반환한다.
 - 사진은 PNG·JPEG·WEBP, PDF는 한 개만 허용한다. 사진 최대 10장 또는 PDF 최대 10쪽, 기본 파일당 20MiB다. MIDI·MusicXML은 이 사용자 업로드 경로에서 거절한다.
-- 사진은 짧은 변 300px 미만을 거절한다. 300~649px는 원본 bytes를 유지하고 인식용 1000px PNG 사본을 만든다. `PageImage.image`에 사본, `short_edge_px`에 원래 크기, `upscaled_short_side_px`에 사본 크기를 남긴다. API 응답 필드는 기존 계약 그대로이며 사본 데이터는 보내지 않는다.
+- 사진은 짧은 변 300px 미만을 거절한다. 검사 API에서는 확대 사본을 만들지 않는다. 인식 경로에서만 300~649px를 원본 bytes를 유지한 채 1000px PNG 사본으로 만든다. `PageImage.image`에 사본, `short_edge_px`에 원래 크기, `upscaled_short_side_px`에 사본 크기를 남긴다. API 응답 필드는 기존 계약 그대로이며 사본 데이터는 보내지 않는다.
 - 검사 API는 PDF를 그림으로 만들지 않고 모든 쪽의 크기를 300dpi 기준으로 계산한다. 인식 단계가 사용할 공통 helper에서는 명시적으로 `render_pdf=True`인 경우만 페이지 렌더링·확대 사본을 생성한다.
 - PDFium 호출은 lock으로 직렬화하고 검사는 작업 스레드로 보내 HTTP 이벤트 루프를 막지 않는다. 사용한 UploadFile은 성공·오류 모두 닫는다. 외부 프로세스 실행이나 별도 파일 저장은 없다.
 - 성공 응답: `ok`, `kind`, `short_edge_px`, `pdf_page_count`, `page_count`, `pages`(page_no·file_no·source·short_edge_px). 사진 순서를 유지하며, 크기 오류에는 해당 쪽 번호를 포함한다.
