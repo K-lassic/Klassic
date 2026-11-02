@@ -1,7 +1,9 @@
-"""#24·#28~#32 model-api 진입점: 자원·DB·인증을 준비하고 검사·인식·렌더링·외부 라우터를 묶는다."""
+"""#24·#28~#33 model-api 진입점: 자원·인증·한도와 라우터를 묶고 API 파일 주기 정리를 실행한다."""
 import asyncio
 from contextlib import asynccontextmanager
 import logging
+import os
+from pathlib import Path
 import re
 import sys
 import time
@@ -30,6 +32,8 @@ from app.routers.omr_jeongganbo import router as jeongganbo_router
 from app.routers.render import router as render_router
 from app.render.pool import RenderPool
 from app.services.catalog import INSTRUMENTS_DIR
+from app.bounds import UploadBounds
+from app.jobs.purge import purge_loop
 from app.jobs.performance import PerformanceRunner
 from app.routers.performances import router as performance_router
 from app.routers.catalog import router as catalog_router
@@ -67,14 +71,18 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
 
     @asynccontextmanager
     async def lifespan(app):
+        if temp_dir := os.environ.get("TMPDIR"):
+            # #33 multipart 사본도 tmpfs 대신 디스크 볼륨에 두어 큰 요청의 메모리 중복을 줄인다.
+            await asyncio.to_thread(Path(temp_dir).mkdir, parents=True, exist_ok=True)
         # 파일·중복 오류 또는 DB 연결 실패는 준비된 척하지 않고 시작을 실패시킨다.
         app.state.catalog = load_errors(cfg.shared_dir)
         app.state.upload_rules = read_rules(cfg.shared_dir)
         app.state.db = await db_factory(cfg)
         resources = None
         warmup = None
+        purge_task = None
         try:
-            app.state.settings = SettingsStore(app.state.db)
+            app.state.settings = SettingsStore(app.state.db, timeout_max_s=cfg.recognition_timeout_max_s)
             await app.state.settings.load()
             rbac.clear_cache()
             resources = resource_factory(cfg, app.state.db)
@@ -84,8 +92,12 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             app.state.render_pool = RenderPool(cfg)
             app.state.performances = PerformanceRunner(app)
             warmup = asyncio.create_task(resources.start(), name="startup-resources")
+            purge_task = asyncio.create_task(purge_loop(app), name="api-file-purge")
             yield
         finally:
+            if purge_task:
+                purge_task.cancel()
+                await asyncio.gather(purge_task, return_exceptions=True)
             if warmup:
                 # 음원 로딩 스레드가 끝나기 전에 synth를 해제하지 않는다.
                 await asyncio.gather(warmup, return_exceptions=True)
@@ -105,6 +117,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
                   openapi_url="/v1/openapi.json", docs_url="/v1/docs", redoc_url=None,
                   dependencies=[Depends(reject_unknown_fields)], lifespan=lifespan)
     app.state.config = cfg
+    app.add_middleware(UploadBounds)
 
     @app.exception_handler(ApiError)
     async def api_error(request, exc):
@@ -148,6 +161,9 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
                      round((time.monotonic() - started) * 1000))
             return response
         finally:
+            admission = getattr(request.state, "admission", None)
+            if admission:
+                admission.release()
             CATALOG.reset(token)
             INSTRUMENTS_DIR.reset(instruments_token)
 

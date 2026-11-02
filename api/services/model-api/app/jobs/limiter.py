@@ -30,6 +30,18 @@ class _Pool:
     capacity: int
     running: int = 0
     waiting: int = 0
+    admitted: int = 0
+
+
+@dataclass
+class Admission:
+    pool: _Pool
+    released: bool = False
+
+    def release(self):
+        if not self.released:
+            self.pool.admitted -= 1
+            self.released = True
 
 
 class Limiter:
@@ -60,6 +72,14 @@ class Limiter:
         """외부 호출 접수 전에 본다: 자리가 다 찼고 줄도 자리 수만큼 섰으면 바쁨."""
         pool = self._pools[self._key(kind, channel)]
         return pool.running >= pool.capacity and pool.waiting >= pool.capacity
+
+    def admit(self, kind, channel):
+        """#33 업로드 중·접수 중 요청까지 2×처리 자리로 제한한다. 이벤트 루프에서 await 없이 예약한다."""
+        pool = self._pools[self._key(kind, channel)]
+        if self.is_busy(kind, channel) or pool.admitted >= 2 * pool.capacity:
+            return None
+        pool.admitted += 1
+        return Admission(pool)
 
     def stats(self) -> dict[str, int]:
         rec = [p for k, p in self._pools.items() if k.startswith("recognize")]

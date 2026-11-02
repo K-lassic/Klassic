@@ -5,6 +5,7 @@
 from fastapi import APIRouter, Depends, Request
 
 from app.auth.keys import Caller, require_key
+from app.auth.limits import enforce_limits
 from app.schemas import InstrumentsResponse
 
 router = APIRouter(prefix="/v1", tags=["목록"])
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/v1", tags=["목록"])
 
 @router.get("/instruments", summary="악기 목록 (UC12 A10)", response_model=InstrumentsResponse)
 async def list_instruments(request: Request, caller: Caller = Depends(require_key)) -> dict:
+    await enforce_limits(request, caller, None)
     rows = await request.app.state.db.fetch_all(
         "SELECT code, name, family, is_percussion, range_low, range_high FROM instrument "
         "WHERE is_active = 1 AND code IS NOT NULL ORDER BY menu_order IS NULL, menu_order, instrument_id")

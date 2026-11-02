@@ -20,14 +20,15 @@ from app.services.recognize import RecognizeInput, run_recognition
 from app.services.requests import complete_api_request, create_api_request, find_web_request, stage
 
 def deadline_from_header(value, timeout_seconds, started_mono=None):
+    cap = (time.monotonic() if started_mono is None else started_mono) + timeout_seconds
     if value:
         try:
             at = datetime.fromisoformat(value.strip())
             at = at.replace(tzinfo=UTC) if at.tzinfo is None else at
-            return time.monotonic() + (at - datetime.now(UTC)).total_seconds()
+            return min(cap, time.monotonic() + (at - datetime.now(UTC)).total_seconds())
         except ValueError:
             pass  # 기존 계약: 잘못된 X-Deadline이면 설정 시간으로 판정한다.
-    return (time.monotonic() if started_mono is None else started_mono) + timeout_seconds
+    return cap
 
 
 async def recognize_endpoint(request: Request, score_type: str, image: list[UploadFile],

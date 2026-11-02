@@ -65,6 +65,8 @@ def _scale(w_pt: float, h_pt: float, dpi: float) -> float:
     scale = dpi / 72.0
     if max(w_pt, h_pt) * scale > MAX_RENDER_EDGE_PX:
         scale = MAX_RENDER_EDGE_PX / max(w_pt, h_pt)
+    if w_pt * h_pt * scale * scale > 40_000_000:
+        scale = (40_000_000 / (w_pt * h_pt)) ** .5
     return scale
 
 

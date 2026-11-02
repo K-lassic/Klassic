@@ -90,10 +90,21 @@ def page_rows_notice(rows: list[dict]) -> dict | None:
     return pages_notice(len(rows), failed)
 
 
-async def read_files(files: list[UploadFile] | None) -> list[tuple[str, bytes]]:
+async def read_files(files: list[UploadFile] | None, *, max_bytes=20 * 1024 * 1024, max_files=10) -> list[tuple[str, bytes]]:
+    if len(files or []) > max_files:
+        raise ApiError("UPLOAD_TOO_MANY_FILES", details={"max_files": max_files})
     out = []
     for f in files or []:
-        out.append((f.filename or "upload", await f.read()))
+        chunks, total = [], 0
+        while True:
+            chunk = await f.read(min(1024 * 1024, max_bytes + 1 - total))
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                raise ApiError("UPLOAD_TOO_LARGE", details={"bytes": total, "limit": max_bytes})
+            chunks.append(chunk)
+        out.append((f.filename or "upload", b"".join(chunks)))
     return out
 
 

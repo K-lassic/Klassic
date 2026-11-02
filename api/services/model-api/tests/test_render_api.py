@@ -74,7 +74,7 @@ def test_success_contract_and_no_request_file_storage(client, kind):
     assert response.headers["content-type"] == ("audio/mpeg" if kind == "mp3" else "application/pdf")
     assert response.headers["x-renderer"] == "test-renderer 1.0" and response.headers["x-request-id"]
     assert db.policy_reads == 0
-    assert not list(app.state.config.storage_dir.iterdir())
+    assert not [p for p in app.state.config.storage_dir.rglob("*") if p.is_file()]
     assert not any("INSERT INTO score_request" in sql for sql, _ in db.logs)
 
 

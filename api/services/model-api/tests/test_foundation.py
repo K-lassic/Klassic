@@ -1,5 +1,6 @@
 """기반 계약·최소권한 인증·기동 장애를 실제 ASGI 앱에서 검증한다."""
 import asyncio
+from contextlib import asynccontextmanager
 import hashlib
 import json
 import os
@@ -19,6 +20,7 @@ SHARED = Path(os.environ["SHARED_TEST_DIR"]) if "SHARED_TEST_DIR" in os.environ 
 
 
 class FakeDB:
+    lastrowid = 1
     def __init__(self):
         self.down = False
         self.closed = False
@@ -53,6 +55,15 @@ class FakeDB:
     async def execute(self, sql, args=None):
         self.logs.append((sql, args))
         return 1
+
+    @asynccontextmanager
+    async def transaction(self):
+        yield self
+
+    async def fetchone(self):
+        if self.logs and "v_key_quota" in self.logs[-1][0]:
+            return {"status": "active", "is_exhausted": 0, "retry_after_at": None}
+        return {"n": 1}
 
     async def close(self):
         self.closed = True
@@ -118,6 +129,19 @@ def test_shared_path_override(monkeypatch, tmp_path):
     from app.config import load_config
     monkeypatch.setenv("SHARED_DIR", str(tmp_path))
     assert load_config().shared_dir == tmp_path
+
+
+def test_runtime_multipart_temp_directory_prepared(monkeypatch, tmp_path):
+    temp_dir = tmp_path / "multipart"
+    monkeypatch.setenv("TMPDIR", str(temp_dir))
+    db = FakeDB()
+
+    async def connect(cfg):
+        return db
+
+    with TestClient(create_app(Config(shared_dir=SHARED), db_factory=connect, resource_factory=FakeResources)) as api:
+        assert api.get("/v1/health").status_code == 200
+        assert temp_dir.is_dir()
 
 
 @pytest.mark.parametrize("startup,missing,down,status,http", [

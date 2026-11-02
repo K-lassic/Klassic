@@ -48,6 +48,7 @@ class CallRecord:
     reason_code: str | None = None
     retry_after_at: datetime | None = None
     request_id: int | None = None
+    quota_call_id: int | None = None
     called_at: datetime = field(default_factory=utcnow)
 
     def fail(self, err: ApiError) -> None:
@@ -80,6 +81,8 @@ def call_record(request: Request) -> CallRecord:
 
 async def authenticate(request: Request) -> Caller:
     """G2 판정. 실패하면 ApiError(AUTH_*) — 미들웨어가 rejected_key 로 기록한다."""
+    if getattr(request.state, "caller", None) is not None:
+        return request.state.caller
     rec = call_record(request)
     raw = request.headers.get("x-api-key", "").strip()
     if not raw:
@@ -96,7 +99,6 @@ async def authenticate(request: Request) -> Caller:
         raise ApiError("AUTH_KEY_REVOKED")
     caller = Caller(key_id=int(row["key_id"]), kind=row["key_kind"], prefix=row["key_prefix"],
                     call_limit_per_hour=row["call_limit_per_hour"])
-    request.state.caller = caller
     # G13 권한표(2026-09-29 RBAC, FR-068): 키 → 역할, 경로 → 유스케이스, role_permission 으로 허용 여부
     role = "service" if caller.is_service else "api_caller"
     uc = rbac.uc_of(request.url.path)
@@ -105,6 +107,7 @@ async def authenticate(request: Request) -> Caller:
             # 내부 경로에 외부 키 — 계약에 적힌 기존 코드를 그대로 쓴다
             raise ApiError("AUTH_SERVICE_KEY_REQUIRED", http=403, details={"reason": "service_key_required"})
         raise ApiError("AUTH_FORBIDDEN", http=403, details={"uc": uc or "unknown", "role": role})
+    request.state.caller = caller
     return caller
 
 
@@ -133,6 +136,11 @@ async def write_call_log(db: Database, rec: CallRecord) -> None:
         retry = utcnow()
     request_id = None if outcome.startswith("rejected") else rec.request_id
     try:
+        if rec.quota_call_id is not None:
+            await db.execute("UPDATE api_call_log SET outcome=%s,reason_code=%s,retry_after_at=%s,request_id=%s "
+                             "WHERE call_id=%s AND access_key_id=%s",
+                             (outcome, reason, retry, request_id, rec.quota_call_id, rec.key_id))
+            return
         await db.execute(
             "INSERT INTO api_call_log (called_at, endpoint, access_key_id, outcome, reason_code, retry_after_at, request_id) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s)",

@@ -51,7 +51,7 @@ class RecordingDB(FakeDB):
         yield self
 
     async def fetchone(self):
-        return {"n": 1}
+        return await super().fetchone()
 
     async def fetch_one(self, sql, args=None):
         if "FROM score_request" in sql:
@@ -241,7 +241,7 @@ def test_web_fallback_never_returns_or_stores_files(recognition_client):
     body = response.json()
     assert body["fallback"] and body["page_count"] == 2
     assert body["musicxml"] is None and body["midi_base64"] is None
-    assert not list(app.state.config.storage_dir.iterdir())
+    assert not [p for p in app.state.config.storage_dir.rglob("*") if p.is_file()]
     assert not any("INSERT INTO score_request" in sql or "INSERT INTO score_result" in sql for sql, _ in db.logs)
 
 

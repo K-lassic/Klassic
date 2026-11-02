@@ -11,12 +11,12 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-ins
 FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH=/opt/venv/bin:$PATH \
     SHARED_DIR=/app/shared ENGINES_DIR=/opt/gugak-engines SOUNDFONTS_DIR=/app/shared/soundfonts \
-    XDG_CACHE_HOME=/tmp/engine-cache MPLCONFIGDIR=/tmp/matplotlib
+    XDG_CACHE_HOME=/tmp/engine-cache MPLCONFIGDIR=/tmp/matplotlib TMPDIR=/storage/tmp
 RUN apt-get update && apt-get install -y --no-install-recommends libfluidsynth3 fluidsynth lame libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/shared/soundfonts /storage \
-    && chown app:app /storage
+    && mkdir -p /app/shared/soundfonts /storage/tmp \
+    && chown app:app /storage /storage/tmp
 COPY --from=build /opt/venv /opt/venv
 WORKDIR /app/services/model-api
 COPY --from=shared errors /app/shared/errors
@@ -27,4 +27,4 @@ COPY assets ./assets
 USER 1000:1000
 EXPOSE 9543
 HEALTHCHECK --interval=10s --timeout=8s --start-period=300s --retries=3 CMD ["python", "-m", "app.healthcheck"]
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9543", "--root-path", "/api", "--workers", "1", "--no-access-log", "--no-proxy-headers"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9543", "--root-path", "/api", "--workers", "1", "--no-access-log", "--proxy-headers", "--forwarded-allow-ips", "*"]

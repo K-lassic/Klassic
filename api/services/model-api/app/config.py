@@ -23,6 +23,12 @@ class Config:
     render_timeout_s: float = 120
     file_token_ttl_s: int = 900
     file_token_secret: bytes = field(default_factory=lambda: secrets.token_bytes(32), repr=False)
+    busy_retry_after_s: int = 5
+    upload_read_timeout_s: float = 300
+    max_body_bytes: int = 210 * 1024 * 1024
+    recognition_timeout_max_s: int = 180
+    purge_interval_s: float = 600
+    orphan_retention_h: int = 24
     jeongganbo_device: str = "cpu"
     storage_dir: Path = Path("/storage")
     assets_dir: Path = Path("/app/services/model-api/assets")
@@ -48,6 +54,12 @@ def load_config() -> Config:
         render_timeout_s=float(os.environ.get("RENDER_TIMEOUT_SECONDS", "120")),
         file_token_ttl_s=int(os.environ.get("FILE_TOKEN_TTL_SECONDS", "900")),
         file_token_secret=(os.environ.get("FILE_TOKEN_SECRET") or "").encode() or secrets.token_bytes(32),
+        busy_retry_after_s=int(os.environ.get("BUSY_RETRY_AFTER_SECONDS", "5")),
+        upload_read_timeout_s=float(os.environ.get("UPLOAD_READ_TIMEOUT_SECONDS", "300")),
+        max_body_bytes=int(os.environ.get("MAX_REQUEST_BODY_BYTES", str(210 * 1024 * 1024))),
+        recognition_timeout_max_s=int(os.environ.get("RECOGNITION_TIMEOUT_MAX_SECONDS", "180")),
+        purge_interval_s=float(os.environ.get("PURGE_INTERVAL_SECONDS", "600")),
+        orphan_retention_h=int(os.environ.get("ORPHAN_RETENTION_HOURS", "24")),
         jeongganbo_device=os.environ.get("JEONGGANBO_DEVICE", "cpu"),
         storage_dir=Path(os.environ.get("STORAGE_DIR", "/storage")),
         assets_dir=Path(os.environ.get("ASSETS_DIR", "/app/services/model-api/assets")),
@@ -65,4 +77,8 @@ def load_config() -> Config:
         raise ValueError("렌더링 제한 시간은 1~600초여야 합니다")
     if not 1 <= cfg.file_token_ttl_s <= 3600 or len(cfg.file_token_secret) < 32:
         raise ValueError("파일 서명 유효기간은 1~3600초, 서명 비밀값은 32바이트 이상이어야 합니다")
+    if not (1 <= cfg.busy_retry_after_s <= 60 and 1 <= cfg.upload_read_timeout_s <= 600
+            and 1024 <= cfg.max_body_bytes <= 210 * 1024 * 1024 and 1 <= cfg.recognition_timeout_max_s <= 600
+            and 1 <= cfg.purge_interval_s <= 86400 and 1 <= cfg.orphan_retention_h <= 168):
+        raise ValueError("공개 API 제한·정리 주기 설정 범위를 확인하십시오")
     return cfg

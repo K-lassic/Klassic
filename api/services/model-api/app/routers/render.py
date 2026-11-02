@@ -28,7 +28,8 @@ async def render_response(request, caller, files, kind, assignment=None):
     started = time.monotonic()
     deadline = started + state.config.render_timeout_s
     try:
-        checked = await asyncio.to_thread(uploads.check, await uploads.read_files(files),
+        read_limit = state.settings.current.score_file_max_bytes or state.upload_rules["kinds"]["musicxml"]["max_bytes"]
+        checked = await asyncio.to_thread(uploads.check, await uploads.read_files(files, max_bytes=read_limit, max_files=1),
             settings=state.settings.current, score_type=None, require_score_type=False,
             allowed_kinds=("midi", "musicxml"), render_pdf=False, rules=state.upload_rules)
         assigned = parse_assignment(assignment) if kind == "mp3" else None
