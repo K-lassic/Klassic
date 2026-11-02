@@ -668,6 +668,7 @@ paths:
           description: 새 요청 (`route=direct` · `from_shared=true`)
           content: { application/json: { schema: { $ref: "#/components/schemas/RequestStatus" } } }
         "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }   # 공유 파일을 읽지 못함 UPLOAD_CORRUPTED
 
   /api/shared-scores/{shareNo}/like:
     post:

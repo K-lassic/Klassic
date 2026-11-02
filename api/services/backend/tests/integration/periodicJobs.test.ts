@@ -86,12 +86,13 @@ describe.skipIf(!HAS_DB)('보관 기간 정리', () => {
   });
 
   it('한 묶음(200건)보다 많이 밀려도 한 주기에 모두 지운다', async () => {
+    const prefix = `R-M${Date.now() % 100000000}-`; // 같은 DB 에서 다시 돌려도 겹치지 않게
     await db.exec(`INSERT INTO score_request (request_no, channel, file_kind, chosen_score_type, route, setting_version_id, received_at, identity_purged_at)
-                   SELECT CONCAT('R-MANY-', seq), 'web', 'image', 'staff', 'recognize', v.setting_version_id, CURRENT_TIMESTAMP(3) - INTERVAL 2 DAY, CURRENT_TIMESTAMP(3)
-                     FROM seq_1_to_205 JOIN v_current_setting v`);
+                   SELECT CONCAT(?, seq), 'web', 'image', 'staff', 'recognize', v.setting_version_id, CURRENT_TIMESTAMP(3) - INTERVAL 2 DAY, CURRENT_TIMESTAMP(3)
+                     FROM seq_1_to_205 JOIN v_current_setting v`, [prefix]);
     const out = await jobs.runPeriodicJobs();
     expect(out!.purged).toBeGreaterThanOrEqual(205);
-    const left = await db.one<{ n: number }>("SELECT COUNT(*) AS n FROM score_request WHERE request_no LIKE 'R-MANY-%' AND purged_at IS NULL");
+    const left = await db.one<{ n: number }>('SELECT COUNT(*) AS n FROM score_request WHERE request_no LIKE ? AND purged_at IS NULL', [`${prefix}%`]);
     expect(Number(left!.n)).toBe(0);
   });
 
