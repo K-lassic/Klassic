@@ -216,6 +216,46 @@ docker compose stop model-api                                   # 끄기
 - 시험하지 않은 것: 재구성판의 브라우저 화면 · 소리, 사진 예시 밖의 품질 비교, 장애 시험(#45), 외부 Funnel.
 - 임시 프로젝트 주의: `compose.standin.yaml` 까지 붙여 `down -v` 하면 `model-storage` 볼륨이 남는다. 시험이 끝나면 `-f compose.yaml` 로 지운다.
 
+## CPU 전용 엔진 볼륨 시험 (2026-11-02)
+
+model-api 는 정간보를 CPU 로만 돌리는데, 고정 목록에 GPU 패키지가 들어 있어 엔진 볼륨이 크다. [build-cpu-engines.sh](build-cpu-engines.sh) 로 GPU 패키지를 뺀 새 볼륨을 만들어 기존 볼륨과 비교했다. `services/model-api/README.md` 「CPU 전용 정간보 환경」 순서를 따랐다.
+
+**시험용이다. 서비스 기본값은 그대로 `klassic_engines` 다.** 발표에는 검증을 마친 기존 볼륨을 쓰고, 채택은 #96 이미지 작업 때 판단한다.
+
+| 항목 | 기존 `klassic_engines` | 새 `klassic_engines_cpu` |
+|---|---|---|
+| 볼륨 전체 | 6,077,483,140 B | **2,471,021,198 B** |
+| 정간보 폴더 | 5,326MB | **1,881MB** |
+| torch | 2.0.1+cu117 | 2.0.1+cpu |
+| `nvidia` · `triton` | 있음 | 없음 |
+| 쪽당 인식 (3장 · 2회씩) | 3.9~4.9초 | 4.0~4.8초 |
+| 인식 프로세스 최대 메모리 | 1,891~1,894MiB | 1,807~1,819MiB |
+| 모델 불러오기 | 2.8~4.2초 | 6.2~6.3초 |
+
+- 측정 환경: 코드 작업용 PC, Docker 6코어 · 메모리 31GiB, torch 스레드 3개. 서버 PC 측정값이 아니다.
+- 패키지 101개, `uv pip check` 통과. homr · 저장소 파일은 기존과 차이가 없다.
+- 지금 스크립트로 다시 만들면 2,484,213,201 B 였다. 표의 값과 약 13MB 차이가 나며 원인은 조사하지 않았다.
+- 입력 3장(`ok_jeongganbo.png` · 타령 PDF 2쪽): 인식 문자열 · 신뢰도 · 칸 수가 모두 같다.
+- 임시 프로젝트 기동: 약 30초 healthy · `models_ready` 3 · 볼륨 읽기 전용.
+- 서비스 경로 `/v1/omr/*` 예시 4개: 모두 200 · 실제 엔진 사용 · 대체 없음.
+- MusicXML: 오선보 3개는 완전히 같다. 타령 PDF 는 2,866줄 중 파트 ID 2줄만 다르다. 이 값은 music21 이 매번 새로 만들어서 같은 볼륨을 반복해도 달라진다. 빼고 비교하면 4회 모두 같다.
+- 모델 불러오기가 늘어난 원인은 조사하지 않았다. 시작할 때 한 번만 든다.
+- 시험하지 않은 것: 예시 밖 입력 · 전체 화면 흐름 · MP3 · PDF 내려받기 · 동시 인식 메모리 · 패키지 해시 고정 · 엔진 포함 이미지 크기.
+
+**다시 만들기** (Git Bash · `api/` 폴더) — 이미지 `klassic/klassic-engines-installer:0.1.1` 과 기존 볼륨 `klassic_engines` 가 있어야 한다. 대상 볼륨이 비어 있지 않으면 끝 코드 2 로 멈춘다. 약 1분 뒤 마지막 줄이 `DONE` 이면 정상이다.
+
+```bash
+docker volume create klassic_engines_cpu
+MSYS_NO_PATHCONV=1 docker run --rm -v klassic_engines:/src:ro -v klassic_engines_cpu:/opt/gugak-engines -v "$(pwd -W)/deploy:/job:ro" klassic/klassic-engines-installer:0.1.1 bash /job/build-cpu-engines.sh
+```
+
+**쓰기 · 되돌리기** — 값을 빼고 다시 실행하면 기존 볼륨으로 돌아간다. 대역 구성에서는 쓰지 않는다.
+
+```bash
+ENGINES_VOLUME_NAME=klassic_engines_cpu docker compose up -d model-api
+docker compose up -d model-api
+```
+
 ## 서버 PC 운영 (#47)
 
 서버 PC = 팀장 노트북(Windows · Docker Desktop · WSL2). 코드 작업은 다른 PC 에서 하므로, **서버 PC 설정을 바꾸면 이 표에 남긴다.**
