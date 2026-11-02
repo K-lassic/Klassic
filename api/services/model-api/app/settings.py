@@ -36,8 +36,9 @@ def _f(value) -> float | None:
 
 
 class SettingsStore:
-    def __init__(self, db: Database | None) -> None:
+    def __init__(self, db: Database | None, *, timeout_max_s=180) -> None:
         self.db = db
+        self.timeout_max_s = timeout_max_s
         self._current: Settings | None = None
 
     @property
@@ -63,7 +64,7 @@ class SettingsStore:
         rec = row.get("max_concurrency_recognize") or row.get("max_concurrency") or 2
         self._current = Settings(
             version_id=int(row["setting_version_id"]),
-            timeout_seconds=int(row.get("timeout_seconds") or 180),
+            timeout_seconds=min(self.timeout_max_s, max(1, int(row.get("timeout_seconds") or 180))),
             max_concurrency_recognize=int(rec),
             max_concurrency_render=int(row.get("max_concurrency_render") or row.get("max_concurrency") or 2),
             web_concurrency_share=int(row.get("web_concurrency_share") or 1),

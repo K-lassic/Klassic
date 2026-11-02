@@ -77,3 +77,19 @@ class Database:
             except BaseException:
                 await conn.rollback()
                 raise
+
+    @asynccontextmanager
+    async def advisory_lock(self, name):
+        """#33 같은 DB를 쓰는 정리 작업 중 하나만 실행한다. 연결 종료 시 DB가 잠금을 회수한다."""
+        async with self.pool.acquire() as conn, conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute("SELECT GET_LOCK(%s,0) AS acquired", (name,))
+            acquired = bool((await cur.fetchone())["acquired"])
+            try:
+                yield acquired
+            finally:
+                if acquired:
+                    try:
+                        await cur.execute("SELECT RELEASE_LOCK(%s)", (name,))
+                    except BaseException:
+                        conn.close()  # 잠금을 쥔 연결을 풀에 돌려주지 않는다.
+                        raise

@@ -40,6 +40,7 @@ class PerformanceJob:
     settings: Settings
     deadline_mono: float
     pages: list[PageInput] = field(default_factory=list)
+    admission: object | None = None
 
 
 class PerformanceRunner:
@@ -50,7 +51,11 @@ class PerformanceRunner:
     def submit(self, job):
         task = asyncio.create_task(self._run(job), name=f"perf-{job.request_no}")
         self.tasks[job.request_no] = task
-        task.add_done_callback(lambda _task: self.tasks.pop(job.request_no, None))
+        def finished(_task):
+            self.tasks.pop(job.request_no, None)
+            if getattr(job, "admission", None):
+                job.admission.release()
+        task.add_done_callback(finished)
 
     async def shutdown(self):
         tasks = list(self.tasks.values())

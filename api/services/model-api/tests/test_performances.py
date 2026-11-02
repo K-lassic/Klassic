@@ -188,6 +188,7 @@ def test_mp3_policy_rechecked_at_download(client):
 @pytest.mark.parametrize("scheme", ["https", "http"])
 def test_forwarded_scheme_in_actual_result_urls(client, scheme):
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+    from fastapi import Request
 
     _, app, db, _ = client
     add_file(app, db, "midi", b"MThd-test")
@@ -196,11 +197,16 @@ def test_forwarded_scheme_in_actual_result_urls(client, scheme):
     args = json.loads(command)
     assert "--proxy-headers" in args and "--no-proxy-headers" not in args
     trusted = args[args.index("--forwarded-allow-ips") + 1]
+    @app.get("/test-only-peer")
+    async def peer(request: Request):
+        return {"peer": request.client.host}
+
     proxy = TestClient(ProxyHeadersMiddleware(app, trusted_hosts=trusted), root_path="/api", client=("172.20.0.10", 40000))
     response = proxy.get(f"/v1/performances/{NO}/result", headers=HEADERS | {
         "Host": "klassic.example.test", "X-Forwarded-Proto": scheme, "X-Forwarded-For": "203.0.113.10"})
     assert response.status_code == 200, response.text
     assert response.json()["files"]["midi"].startswith(f"{scheme}://klassic.example.test/api/v1/files/")
+    assert proxy.get("/test-only-peer", headers={"X-Forwarded-For": "203.0.113.10"}).json()["peer"] == "203.0.113.10"
 
 
 @pytest.mark.parametrize("kind", ["missing", "outside", "symlink", "directory_symlink", "other_request"])

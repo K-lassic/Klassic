@@ -184,17 +184,29 @@ def _maybe_upscale(pg: PageImage, spec: dict) -> None:
     pg.suffix = ".png"
 
 
-def _open_image(data: bytes) -> tuple[int, int] | None:
+class ResourceLimit(ValueError):
+    """#33 압축 해제·픽셀 디코딩 전에 자원 상한을 넘긴 입력."""
+
+
+def _open_image(data: bytes, spec: dict | None = None) -> tuple[int, int] | None:
     """끝까지 풀어 본다(잘린 파일도 잡는다). 성공하면 (가로, 세로)."""
     from PIL import Image
 
     try:
         with Image.open(io.BytesIO(data)) as im:
+            w, h = im.size
+            spec = spec or {"upscale_below_short_edge_px": 650, "upscale_to_short_edge_px": 1000}
+            below, target = spec.get("upscale_below_short_edge_px"), spec.get("upscale_to_short_edge_px")
+            scale = target / min(w, h) if below and target and min(w, h) < below else 1
+            if max(w, h) * scale > 10000 or w * h * scale * scale > 40_000_000:
+                raise ResourceLimit("image_pixels")
             im.verify()  # 구조·CRC
         with Image.open(io.BytesIO(data)) as im:
             im.load()  # 픽셀까지 풀기
             return int(im.width), int(im.height)
     # Pillow 는 형식마다 다른 예외를 던진다 — 무엇이든 '열 수 없음'
+    except ResourceLimit:
+        raise
     except Exception:  # noqa: BLE001
         return None
 
@@ -218,6 +230,8 @@ def _read_mxl(data: bytes) -> bytes | None:
     """압축 MusicXML(.mxl)에서 본문 XML 을 꺼낸다. 압축이 깨졌으면 None."""
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
+        if len(zf.infolist()) > 100 or sum(info.file_size for info in zf.infolist()) > 20 * 1024 * 1024:
+            raise ResourceLimit("mxl_uncompressed_bytes")
         names = zf.namelist()
         root_path = None
         if "META-INF/container.xml" in names:
@@ -355,7 +369,10 @@ def _check_upload(
                 return _fail("count", kind=kind, pdf_page_count=page_count, max_pages=max_pages)
             sizes.append(None)
         elif kind == "image":
-            wh = _open_image(data)
+            try:
+                wh = _open_image(data, spec)
+            except ResourceLimit:
+                return _fail("size", kind=kind, reason="image_pixels", max_edge=10000, max_pixels=40_000_000, **where(i))
             if wh is None:
                 return _fail("corrupted", kind=kind, format=fmt, **where(i))
             sizes.append(wh)
@@ -366,7 +383,10 @@ def _check_upload(
                 return _fail("corrupted", kind=kind, format=fmt)
             sizes.append(None)
         else:  # musicxml
-            xml = _read_mxl(data) if fmt == "mxl" else data
+            try:
+                xml = _read_mxl(data) if fmt == "mxl" else data
+            except ResourceLimit:
+                return _fail("size", kind=kind, reason="mxl_uncompressed_bytes", limit=20 * 1024 * 1024)
             if xml is None:
                 return _fail("corrupted", kind=kind, format=fmt)
             struct = musicxml_structure(xml)

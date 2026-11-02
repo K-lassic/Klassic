@@ -155,7 +155,9 @@ async def create_performance(
         assignment=assignment, explicit_ensemble_id=ensemble_id, transpose=transpose_semitones, volume=volume,
         settings=settings, deadline_mono=time.monotonic() + settings.timeout_seconds * checked.page_count,
         pages=uploads.page_inputs(checked, image_paths),
+        admission=getattr(request.state, "admission", None),
     ))
+    request.state.admission = None  # #33 비동기 작업이 끝날 때 접수 예약을 반환한다.
     row = await _load_request(request, request_no, caller)
     return JSONResponse(status_code=202, content=_status_body(row))
 
