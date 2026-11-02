@@ -34,13 +34,29 @@ class RenderPool:
             self.free.put_nowait(worker)
 
     async def render(self, kind, data, assignment, deadline):
+        body = await self._request({"kind": kind, "score_base64": base64.b64encode(data).decode("ascii"),
+                                    "assignment": assignment}, deadline)
+        return RenderResult(base64.b64decode(body["data_base64"], validate=True), body["name"],
+                            body["version"], body["timings_ms"])
+
+    async def prepare(self, data, assignment, transpose, volume, deadline):
+        """#32 악기·조옮김·음량 처리를 별도 프로세스에서 수행한다."""
+        return await self._request({"kind": "prepare", "score_base64": base64.b64encode(data).decode("ascii"),
+                                    "assignment": assignment, "transpose": transpose, "volume": volume}, deadline)
+
+    async def render_prepared(self, prepared, deadline):
+        body = await self._request({"kind": "mp3_prepared", "score_base64": prepared["midi_base64"],
+                                    "part_fonts": prepared["part_fonts"], "part_presets": prepared["part_presets"]}, deadline)
+        return RenderResult(base64.b64decode(body["data_base64"], validate=True), body["name"],
+                            body["version"], body["timings_ms"])
+
+    async def _request(self, payload, deadline):
         try:
             worker = await asyncio.wait_for(self.free.get(), timeout=max(0, deadline - time.monotonic()))
         except TimeoutError:
             raise ApiError("RENDER_TIMEOUT") from None
         try:
-            payload = {"kind": kind, "score_base64": base64.b64encode(data).decode("ascii"),
-                       "assignment": assignment, "deadline": deadline}
+            payload = payload | {"deadline": deadline}
             reply = await worker.request(payload, deadline)
             if reply is None or reply.timed_out:
                 raise ApiError("RENDER_TIMEOUT")
@@ -51,8 +67,7 @@ class RenderPool:
                 code = body.get("code")
                 raise ApiError(code if code in ("RENDER_FAILED", "RENDER_TIMEOUT", "RENDERER_MISSING", "UPLOAD_CORRUPTED")
                                else "RENDER_FAILED")
-            return RenderResult(base64.b64decode(body["data_base64"], validate=True), body["name"],
-                                body["version"], body["timings_ms"])
+            return body
         finally:
             self.free.put_nowait(worker)
 

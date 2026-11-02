@@ -17,6 +17,7 @@ from app.errors import ApiError, status_message
 from app.jobs.limiter import QueueTimeout
 from app.services import uploads
 from app.services.arrange import check_sf2_refs, parse_assignment
+from app.services.policy import mp3_allowed
 
 router = APIRouter(prefix="/v1", tags=["렌더링"])
 log = logging.getLogger("model-api.render")
@@ -34,8 +35,7 @@ async def render_response(request, caller, files, kind, assignment=None):
         if assigned:
             check_sf2_refs(assigned)
         if kind == "mp3" and not caller.is_service:
-            row = await state.db.fetch_one("SELECT api_mp3_allowed FROM v_mp3_license")
-            if not row or int(row["api_mp3_allowed"]) != 1:
+            if not await mp3_allowed(state.db):
                 return JSONResponse({"api_version": "v1", "mp3_withheld": True,
                     "mp3_withheld_reason": "LICENSE_UNCONFIRMED", "message": status_message("LICENSE_UNCONFIRMED")})
         try:

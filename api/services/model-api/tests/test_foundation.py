@@ -6,11 +6,10 @@ import os
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from fastapi import Depends, Form
+from fastapi import Form
 from fastapi.testclient import TestClient
 import pytest
 
-from app.auth.keys import require_key
 from app.catalog import load_errors
 from app.config import Config
 from app.db import Database
@@ -95,14 +94,6 @@ def connected():
     async def form(name: str = Form(...)):
         return {"name": name}
 
-    @app.post("/v1/performances", dependencies=[Depends(require_key)])
-    async def external():
-        return {"ok": True}
-
-    @app.get("/v1/files/{token}")
-    async def broken(token: str):
-        raise RuntimeError("request-body-secret")
-
     with TestClient(app) as client:
         yield client, app, db
     assert db.closed
@@ -165,7 +156,7 @@ def test_service_reload_and_external_role_boundary(connected):
     assert response.status_code == 200
     assert response.json() == {"settings_version": 1, "engine_order": {}}
     assert client.post("/v1/performances", headers={"X-API-Key": "service-secret"}).status_code == 403
-    assert client.post("/v1/performances", headers={"X-API-Key": "external-secret"}).status_code == 200
+    assert client.post("/v1/performances", headers={"X-API-Key": "external-secret"}).status_code == 422
 
 
 @pytest.mark.parametrize("data", [{}, {"name": "ok", "secret-unknown-field": "value"}])
@@ -176,7 +167,11 @@ def test_form_validation_uses_common_error_and_omits_input(connected, data):
     assert "value" not in response.text
 
 
-def test_error_logging_redacts_token_query_and_exception(connected, caplog):
+def test_error_logging_redacts_token_query_and_exception(connected, caplog, monkeypatch):
+    def broken(*args):
+        raise RuntimeError("request-body-secret")
+
+    monkeypatch.setattr("app.services.files.verify", broken)
     client, _, _ = connected
     caplog.set_level("INFO")
     response = client.get("/v1/files/signed-secret?api_key=query-secret")

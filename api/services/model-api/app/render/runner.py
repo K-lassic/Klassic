@@ -21,15 +21,30 @@ def render_job(request):
     data = base64.b64decode(request["score_base64"], validate=True)
     kind, deadline = request["kind"], request["deadline"]
     try:
-        doc = scoreio.load_score(data)
-        if kind == "mp3":
+        if kind == "mp3_prepared":
+            midi, fonts = data, request["part_fonts"]
+            presets = [tuple(p) if p is not None else None for p in request["part_presets"]]
+        else:
+            doc = scoreio.load_score(data)
+        if kind in ("mp3", "prepare"):
             assignment = Assignment(**request["assignment"])
-            arrange(doc, assignment=assignment, codes=None, transpose=0, volume=1)
+            used = arrange(doc, assignment=assignment, codes=None, transpose=request.get("transpose", 0),
+                           volume=request.get("volume", 1))
             fonts = render_fonts(doc)
             presets = render_presets(doc, fonts)
-            midi = scoreio.to_midi(doc)
+            xml = scoreio.to_musicxml(doc) if kind == "prepare" else None
+            # #32 재직렬화한 MusicXML을 기준으로 내려받을 MIDI를 만든다.
+            try:
+                midi = scoreio.to_midi(scoreio.load_score(xml.encode()) if xml else doc)
+            except Exception:
+                if kind != "prepare":
+                    raise
+                midi = None  # MusicXML은 유지하고 MIDI·MP3만 미제공한다.
             timings["midi"] = round((time.monotonic() - at) * 1000)
-        else:
+            if kind == "prepare":
+                return {"ok": True, "musicxml": xml, "midi_base64": base64.b64encode(midi).decode() if midi else None,
+                        "used": used, "part_fonts": fonts, "part_presets": presets, "timings_ms": timings}
+        elif kind != "mp3_prepared":
             # 원래 MusicXML의 편집·음악 기호는 재직렬화하지 않고 보존한다.
             xml = data.decode("utf-8") if not data.startswith((b"MThd", b"PK\x03\x04")) else scoreio.to_musicxml(doc)
             timings["score_prepare"] = round((time.monotonic() - at) * 1000)
@@ -38,7 +53,7 @@ def render_job(request):
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise RenderError("RENDER_TIMEOUT")
-    if kind == "mp3":
+    if kind in ("mp3", "mp3_prepared"):
         from app.render.fluidsynth_mp3 import render_mp3
         result, name, version = render_mp3(midi, [], remaining, part_fonts=fonts, part_presets=presets, timings=timings)
     else:
