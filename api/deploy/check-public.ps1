@@ -1,3 +1,4 @@
+﻿#Requires -Version 7
 # =============================================================================
 # #48 공개 점검 — 공개 주소에서 열려야 할 것은 열리고, 막혀야 할 것은 막혔는지 한 번에 본다.
 #
@@ -7,9 +8,11 @@
 # 사용:
 #   pwsh api/deploy/check-public.ps1                                      # 기본: Funnel 공개 주소
 #   pwsh api/deploy/check-public.ps1 -Url http://127.0.0.1:9603 -Local    # Funnel 없이 로컬 입구 확인
+#   PowerShell 7(pwsh)이 필요하다. Windows PowerShell 5.1(powershell)에서는 돌지 않는다.
 #
 #   -Local 은 쿠키 Secure 를 보지 않는다 — HTTP 에서는 붙지 않는 것이 맞다 (#37).
 #   model-api 가 없으면 /api/v1/health 는 502 로 표시된다. 그때는 model-api 줄만 실패한다.
+#   #86 인식 · 렌더링 경로 줄이 실패하면 업로드가 오류 없이 모두 대체 악보로 끝난다 — 대역이 빠진 상태다.
 #   실패가 하나라도 있으면 종료 코드 1.
 # =============================================================================
 param(
@@ -44,6 +47,20 @@ Test-Path-Status '화면' '/' @(200)
 Test-Path-Status '백엔드 상태' '/api/health' @(200)
 Test-Path-Status 'model-api 상태' '/api/v1/health' @(200)
 Test-Path-Status '국악기 음원' '/soundfonts/gugak.sf2' @(200)
+
+# #86 인식 · 렌더링 경로 — 재구성판은 /api/v1/health 200 · 엔진 ready 여도 이 경로가 없어(#29~#31) 악보가 대체로 끝난다.
+#   판본 이름 대신 backend 가 부르는 경로가 있는지를 본다. 재구성판이 완성되면 고칠 것 없이 통과한다.
+$apiPaths = @()
+$res = Get-Status '/api/v1/openapi.json'
+if ($res -and [int]$res.StatusCode -eq 200) {
+    try { $apiPaths = @(($res.Content | ConvertFrom-Json).paths.PSObject.Properties.Name) } catch { $apiPaths = @() }
+}
+foreach ($path in @('/v1/omr/staff', '/v1/omr/jeongganbo', '/v1/render/mp3', '/v1/render/pdf')) {
+    $ok = $apiPaths -contains $path
+    if (-not $ok) { $script:Failed++ }
+    $mark = if ($ok) { 'OK  ' } else { '실패' }
+    Write-Host "[$mark] 인식 · 렌더링 경로  $path"
+}
 
 # 로그인해야 하는 것 — 방문자는 401
 Test-Path-Status '악기 목록(방문자)' '/api/instruments' @(401)

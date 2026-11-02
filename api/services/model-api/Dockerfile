@@ -15,13 +15,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH=/opt/venv/bin:$PATH \
 RUN apt-get update && apt-get install -y --no-install-recommends libfluidsynth3 libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 1000 --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/shared/soundfonts
+    && mkdir -p /app/shared/soundfonts /storage \
+    && chown app:app /storage
 COPY --from=build /opt/venv /opt/venv
 WORKDIR /app/services/model-api
 COPY --from=shared errors /app/shared/errors
 COPY --from=shared upload-rules.json instruments.json /app/shared/
 # 음원은 11/02 팀 지시에 따라 Compose에서 읽기 전용으로 붙인다.
 COPY app ./app
+COPY assets ./assets
 USER 1000:1000
 EXPOSE 9543
 HEALTHCHECK --interval=10s --timeout=8s --start-period=300s --retries=3 CMD ["python", "-m", "app.healthcheck"]

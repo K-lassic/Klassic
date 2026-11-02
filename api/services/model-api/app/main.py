@@ -1,4 +1,4 @@
-"""#24: 설정·DB·인증·상태 API. 업무 경로는 후속 이슈에서 추가한다."""
+"""#24·#28~#30 model-api 진입점: 자원·DB·인증을 준비하고 검사·오선보·정간보 인식 라우터를 묶는다."""
 import asyncio
 from contextlib import asynccontextmanager
 import logging
@@ -22,6 +22,11 @@ from app.db import Database
 from app.errors import ApiError, CATALOG, error_body, error_response
 from app.resources.startup import Resources
 from app.settings import SettingsStore
+from app.jobs.limiter import Limiter
+from app.models.registry import ModelRegistry
+from app.routers.models import router as models_router
+from app.routers.omr_staff import router as staff_router
+from app.routers.omr_jeongganbo import router as jeongganbo_router
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -68,14 +73,20 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             rbac.clear_cache()
             resources = resource_factory(cfg, app.state.db)
             app.state.resources = resources
+            app.state.registry = ModelRegistry(cfg, app.state.db, resources)
+            app.state.limiter = Limiter(app.state.settings.current)
             warmup = asyncio.create_task(resources.start(), name="startup-resources")
             yield
         finally:
             if warmup:
                 # 음원 로딩 스레드가 끝나기 전에 synth를 해제하지 않는다.
                 await asyncio.gather(warmup, return_exceptions=True)
+            if hasattr(app.state, "registry"):
+                await app.state.registry.close()
             if resources:
                 await resources.close()
+            from app.services.safe_midi import close_safe_midi
+            await close_safe_midi()
             await app.state.db.close()
 
     app = FastAPI(title="K-lassic model-api", version="0.1.1",
@@ -143,7 +154,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             status = "ok" if db_ok else "degraded"
         entries = resources.snapshot()
         body = {"status": status, "api_version": "v1", "db": "ok" if db_ok else "unreachable",
-                "queue": {"recognize_running": 0, "recognize_waiting": 0, "render_running": 0},
+                "queue": {k: v for k, v in state.limiter.stats().items() if k != "render_waiting"},
                 "settings_version": state.settings.current.version_id or None,
                 "models_ready": sum(e["state"] == "ready" for e in entries), "models_total": len(entries)}
         if status in ("loading", "unavailable"):
@@ -168,10 +179,14 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
     @app.post("/v1/internal/settings/reload", dependencies=[Depends(require_service_key)])
     async def reload_settings():
         settings = await app.state.settings.load()
+        app.state.limiter.resize(settings)
         await app.state.settings.mark_applied()
         return {"settings_version": settings.version_id, "engine_order": settings.engine_order}
 
     app.include_router(upload_router)
+    app.include_router(models_router)
+    app.include_router(staff_router)
+    app.include_router(jeongganbo_router)
 
     original_openapi = app.openapi
 
@@ -182,7 +197,8 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
         for path, operations in schema.get("paths", {}).items():
             for operation in operations.values():
                 if isinstance(operation, dict):
-                    operation["security"] = [{"ApiKey": []}] if "/internal/" in path else []
+                    protected = "/internal/" in path or "/omr/" in path
+                    operation["security"] = [{"ApiKey": []}] if protected else []
         return schema
 
     app.openapi = openapi_with_key

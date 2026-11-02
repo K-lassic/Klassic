@@ -148,25 +148,33 @@ cd /c/project/Klassic/api
 docker compose run --rm -it web node dist/tools/createOperator.js --login <아이디> --name <이름>
 # 2) 서비스 키를 발급해 .env 에 넣는다 — 화면에 키가 나오지 않는다
 KEY=$(docker compose run --rm -T web node dist/tools/issueServiceKey.js --operator <아이디> 2>/dev/null | tail -1)
-sed -i '/^SERVICE_API_KEY=/d' .env; printf '
-SERVICE_API_KEY=%s
-' "$KEY" >> .env; unset KEY
+sed -i '/^SERVICE_API_KEY=/d' .env; printf '\nSERVICE_API_KEY=%s\n' "$KEY" >> .env; unset KEY
 grep -c '^SERVICE_API_KEY=gk_' .env   # 1 이 나오면 정상
+```
+
+**기본 구성으로 만들기 (서버 PC, #86)** — `api/.env` 에 두 줄을 더하면 `api/` 폴더에서 `-f` 없이 써도 대역이 유지된다. 비밀값이 아니다.
+
+```bash
+cd /c/project/Klassic/api
+printf '\nCOMPOSE_PATH_SEPARATOR=:\nCOMPOSE_FILE=compose.yaml:deploy/compose.standin.yaml\n' >> .env
+docker compose config --services    # 목록에 model-api 가 있고
+docker compose config | grep 'image: klassic/klassic-model-api'    # 이 줄이 나오면 정상
 ```
 
 **켜기 · 확인 · 끄기**
 
 ```bash
 cd /c/project/Klassic/api
-docker compose -f compose.yaml -f deploy/compose.standin.yaml up -d --wait   # model-api 가 Healthy
-pwsh deploy/check-public.ps1 -Url http://127.0.0.1:9603 -Local               # 모두 통과
-docker compose -f compose.yaml -f deploy/compose.standin.yaml stop model-api # 끄기
+docker compose up -d --wait                                     # model-api 가 Healthy
+pwsh deploy/check-public.ps1 -Url http://127.0.0.1:9603 -Local  # 모두 통과 (PowerShell 7 필요)
+docker compose stop model-api                                   # 끄기
 ```
 
 - `web` 까지 다시 만들어야 새 서비스 키를 읽는다 — 위 `up -d` 가 함께 처리한다.
-- **대역을 쓰는 동안 `docker compose` 명령에는 항상 `-f` 두 개를 붙인다.** #24 병합 뒤로 `-f` 없이 `docker compose up -d` 를 하면 **재구성판 model-api 가 대역을 밀어낸다.** 재구성판은 #29 · #30 · #31 전까지 인식 · 렌더링이 없어서, 올린 악보가 모두 대체 악보로 끝난다.
+- **`COMPOSE_FILE` 이 없는 PC 에서는 `-f compose.yaml -f deploy/compose.standin.yaml` 을 붙인다.** 안 붙이면 재구성판 model-api 가 대역을 밀어낸다. 재구성판은 #29 · #30 · #31 전까지 인식 · 렌더링이 없어서, 오류 없이 모든 악보가 대체 악보로 끝난다. `COMPOSE_FILE` 은 `api/` 폴더에서만 읽힌다.
+- 이 실수는 `check-public.ps1` 의 「인식 · 렌더링 경로」 줄이 잡는다. 재구성판도 `/api/v1/health` 200 · 엔진 `ready` 라서 상태만으로는 알 수 없다.
 - 대역은 재구성판 서비스 정의 위에 합쳐진다. 재구성판 값이 섞이지 않게 `!reset` · `!override` 를 쓴다 (Docker Compose 2.24 이상).
-- **재구성 model-api 로 교체:** #29 · #30 · #31 이 끝난 뒤 `-f deploy/compose.standin.yaml` 을 빼고 `docker compose up -d --build model-api`. 서비스 이름 · 포트가 같아 backend · Nginx 는 고칠 것이 없다.
+- **재구성 model-api 로 교체:** #29 · #30 · #31 이 끝난 뒤 `api/.env` 의 두 줄을 지우고 `docker compose up -d --build model-api`. 서비스 이름 · 포트가 같아 backend · Nginx 는 고칠 것이 없다.
 
 **시험 결과 (2026-11-02, 임시 프로젝트)**
 
@@ -194,6 +202,7 @@ docker compose -f compose.yaml -f deploy/compose.standin.yaml stop model-api # �
 |---|---|---|---|---|
 | 2026-11-01 | 전원 연결 시 절전 | 5시간 뒤 | **안 함** | 설정 → 시스템 → 전원 → 화면 및 절전 |
 | 2026-11-01 | 덮개 닫기(전원 연결) | 절전 | **아무것도 안 함** | 제어판 → 전원 옵션 → 덮개를 닫으면 |
+| 2026-11-02 | `api/.env` `COMPOSE_FILE` | 없음 | **대역을 기본 구성으로** (#86) | `api/.env` 의 두 줄 삭제 |
 | 2026-11-01 | Windows 업데이트 | 중지 안 함 | **11/05 까지 일시 중지** | 설정 → Windows 업데이트 → 업데이트 재개 |
 | 2026-11-01 | Tailscale Run unattended | 꺼짐 | **켜짐** (`ForceDaemon: true` 확인) | 작업 표시줄 Tailscale 앱 Preferences |
 
@@ -205,9 +214,9 @@ docker compose -f compose.yaml -f deploy/compose.standin.yaml stop model-api # �
 재부팅은 자동 복구하지 않는다. 다시 켜면 Windows 로그인 뒤 사람이 띄운다.
 
 ```bash
-# api/ — 시연 서비스 (frontend 는 restart 정책이 없어 자동으로 안 돌아온다)
-# 대역을 쓰는 동안 -f 두 개가 필요하다 — 없으면 인식이 없는 재구성판 model-api 가 뜬다 (「model-api 대역」)
-cd api && docker compose -f compose.yaml -f deploy/compose.standin.yaml up -d
+# api/ — 시연 서비스 (Docker Desktop 이 뜨면 restart 정책으로 돌아온다. 안 돌아온 것만 띄운다)
+# api/.env 의 COMPOSE_FILE 로 대역이 함께 뜬다 (#86 · 「model-api 대역」)
+cd api && docker compose up -d
 
 # proto_type — 예비 시연 · 코드 작업 중 필요할 때만
 cd proto_type && docker compose up -d --force-recreate web gateway admin model-api
