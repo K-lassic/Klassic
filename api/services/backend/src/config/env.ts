@@ -42,6 +42,9 @@ const schema = z.object({
   // 공용 설정 파일 위치 (api/shared 를 이미지에 구운 곳 — api/shared/README.md 「이미지에 넣는 방법」)
   SHARED_DIR: z.string().min(1).default('/app/shared'),
 
+  /** #85 주기 정리 간격(초, 기본 6시간). 재시작하면 바로 한 번 돌고 이 간격으로 이어진다. 만료된 파일은 정리 전에도 접근이 막힌다 */
+  PERIODIC_JOB_SECONDS: z.coerce.number().int().positive().default(21600),
+
   // #34 사용자 파일 저장소 — 이름 있는 볼륨 storage 를 붙이는 고정 경로 (services/backend/compose.yaml · 작성규칙 1-2)
   STORAGE_DIR: z.string().min(1).default('/storage'),
   /** #34 이미지에 구운 파일(예시 악보 · 대체 악보). DB 의 assets/... 경로가 이 폴더 기준이다 */

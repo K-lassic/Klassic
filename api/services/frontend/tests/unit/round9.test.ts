@@ -23,11 +23,13 @@ vi.mock('@/player/player', () => ({ player: fake, PLAYBACK_RATE_MIN: 0.5, PLAYBA
 
 import HelpTip from '@/components/HelpTip.vue';
 import C5PlayerBar from '@/components/C5PlayerBar.vue';
+import SharedScoreList from '@/components/SharedScoreList.vue';
 import C6DownloadCard from '@/components/C6DownloadCard.vue';
 import type { ScoreDoc } from '@/types/score';
 
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
 const noComments = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\/[^\n]*/g, '');
+const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } });
 const doc = { tempoBpm: 100, parts: [] } as unknown as ScoreDoc;
 
 beforeEach(() => { setActivePinia(createPinia()); fake.calls = []; fake.state = 'idle'; fake.position = 0; fake.duration = 0; fake.listeners.clear(); });
@@ -92,7 +94,23 @@ describe('88 · 89 · 91 연주 막대 — 진행 막대 · 재생/멈춤 · [?]
   });
 });
 
-// #46: '76 공유 악보 [듣기] ↔ [멈추기]'(SharedScoreList)는 P2 — 공유 악보 목록을 옮길 때 v0.1.1 에서 되살린다
+describe('76 공유 악보 [듣기] ↔ [멈추기]', () => {
+  it('음원을 처음 불러오며 player 가 ready 를 먼저 알려도 [멈추기]가 유지되고, 누르면 멈춘다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).startsWith('/api/shared-scores?')) return json({ sort: 'likes', has_more: false, items: [{ share_no: 'S-1', title: '아리랑', score_type: 'staff', shared_at: 'x', likes: 0, liked_by_me: false }] });
+      if (String(url).endsWith('/score')) return json({ share_no: 'S-1', title: '아리랑', score_type: 'staff', musicxml: '<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>A</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions></attributes><note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note></measure></part></score-partwise>' });
+      return json({ gugak: [], others: [], default_set: [] });
+    }));
+    const w = mount(SharedScoreList);
+    await flushPromises();
+    await w.get('[data-test="listen"]').trigger('click');
+    await flushPromises();
+    expect(w.get('[data-test="listen"]').text()).toContain('멈추기');
+    await w.get('[data-test="listen"]').trigger('click');
+    expect(fake.calls).toContain('stop');
+    expect(w.get('[data-test="listen"]').text()).toContain('듣기');
+  });
+});
 
 describe('104 형식 [?] · 102 · 103 카드 문장 없음', () => {
   it('형식 고르기 옆 [?] 에 형식 설명', () => {
@@ -141,7 +159,8 @@ describe('화면 다듬기 9차(소스 확인)', () => {
     const src = read('src/pages/S1Result.vue');
     expect(src).toContain('<HelpTip label="인식 엔진" :text="engineHelp" />');
     expect(noComments(src)).not.toContain('SharePanel');
-    // #46: 4단계 SharePanel 확인은 P2(공유)를 옮길 때 되살린다
+    const s3 = read('src/pages/S3Download.vue');
+    expect(s3).toContain('<SharePanel v-if="s && s.status === \'completed\'"');
   });
   it('90~99 3단계', () => {
     const src = read('src/pages/S2Edit.vue');

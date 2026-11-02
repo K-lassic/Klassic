@@ -52,6 +52,6 @@ describe('147~155 소스 · 문구', () => {
   it('4단계: 카드 안 제목 · [공유하기]', () => {
     const w = mount(C6DownloadCard, { props: { requestNo: 'R-1', title: '변환한 악보 저장하기' } });
     expect(w.get('[data-test="download-card"] [data-test="save-title"]').text()).toBe('변환한 악보 저장하기');
-    // #46: [공유하기](SharePanel, P2) 확인은 공유를 옮길 때 되살린다
+    expect(tpl('src/components/SharePanel.vue')).toContain('>공유하기</button>');
   });
 });
