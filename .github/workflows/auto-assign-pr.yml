@@ -1,0 +1,26 @@
+# PR 을 연 사람을 담당자(Assignees)로 지정한다 (#95, 담당: 팀장)
+#
+#   구조에서의 위치: GitHub 가 PR 을 열 때 실행 → gh pr edit 로 담당자만 바꾼다. 서비스 · 이미지와는 관계없다.
+#   pull_request_target 을 쓰는 이유: 포크에서 온 PR 에도 담당자를 넣을 쓰기 권한이 필요하다.
+#     이 권한으로 PR 코드를 실행하면 위험하므로 checkout 을 하지 않는다. 값은 환경변수로만 넘긴다.
+#   PR 템플릿에는 담당자 설정이 없어서 Actions 로 처리한다. 리뷰어 지정은 CODEOWNERS 가 맡는다.
+name: PR 담당자 자동 지정
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR 을 연 사람을 담당자로 지정
+        run: gh pr edit "$PR" --repo "$REPO" --add-assignee "$AUTHOR"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
