@@ -11,6 +11,7 @@
 //   번호가 겹치지 않으므로 첼로(0/42)가 아쟁(1/5) 소리로 나지 않는다. gugak.sf2 가 없으면 FluidR3 만 싣고 GM 번호로 대신 연주.
 //   둘 다 없으면 연주만 못 하고 나머지 화면은 그대로 쓴다(U2 — 결과·내려받기는 막지 않음).
 // 구간별 시간(#42): 음원 받기 · 음원 싣기 · MIDI 만들기 · 첫 소리까지 — player.timings 와 브라우저 성능 기록(performance.measure 'klassic:player:*')에 남긴다.
+// 음원은 기기 저장 공간(Cache Storage, fontCache.ts)에 한 번만 받는다(#42) — 두 번째 접속부터 서버에 묻지 않는다. 어디서 왔는지는 timings 의 gugakFrom · fluidFrom.
 // 사용자 음원(.sf2 올리기, US8)은 2026-09-29 삭제 — 기본 음원 두 개만 쓴다.
 import { playbackSpeed } from './tempo';
 import { Sequencer, Synthetizer } from 'spessasynth_lib';
@@ -18,6 +19,7 @@ import workletUrl from 'spessasynth_lib/synthetizer/worklet_processor.min.js?url
 import type { ScoreDoc } from '@/types/score';
 import { GUGAK_REVERB_SEND, toMidi } from '@/lib/scoreCore';
 import { fontsFor, midiSoundNumbers } from './soundNumbers';
+import { clearOldFontCaches, fetchFont, type FontSource } from './fontCache';
 
 export type BaseFont = 'gugak' | 'fluid' | 'none';
 export type PlayerState = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'error';
@@ -27,21 +29,6 @@ export type PlayerState = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 
 export const SOUNDFONT_URLS = { gugak: '/soundfonts/gugak.sf2', fluid: '/soundfonts/FluidR3_GM.sf2' } as const;
 
 type Listener = (s: PlayerState, detail?: string) => void;
-
-async function fetchFont(url: string): Promise<ArrayBuffer | null> {
-  try {
-    const res = await fetch(url, { credentials: 'same-origin' });
-    if (!res.ok) return null;
-    const type = res.headers.get('content-type') ?? '';
-    if (type.includes('text/html')) return null; // 개발 서버가 index.html 을 돌려준 경우
-    const buf = await res.arrayBuffer();
-    const head = new Uint8Array(buf, 0, Math.min(12, buf.byteLength));
-    const riff = String.fromCharCode(...head.slice(0, 4)) === 'RIFF' && String.fromCharCode(...head.slice(8, 12)) === 'sfbk';
-    return riff ? buf : null;
-  } catch {
-    return null;
-  }
-}
 
 /** 구간별 시간(ms) — 어디서 느린지 보이게(#42). 아직 지나지 않은 구간은 없다 */
 export interface PlayerTimings {
@@ -57,9 +44,15 @@ export interface PlayerTimings {
   midiMs?: number;
   /** 마지막 [재생]을 누른 뒤 연주를 시작하기까지(위 구간 중 그때 기다린 것 포함) */
   firstSoundMs?: number;
+  /** gugak.sf2 를 어디서 — 'cache' 면 서버 요청 없음 */
+  gugakFrom?: FontSource;
+  /** FluidR3_GM.sf2 를 어디서 */
+  fluidFrom?: FontSource;
 }
 
-function measure(key: keyof PlayerTimings, start: number, into: PlayerTimings): void {
+type MsKey = { [K in keyof PlayerTimings]-?: PlayerTimings[K] extends number | undefined ? K : never }[keyof PlayerTimings];
+
+function measure(key: MsKey, start: number, into: PlayerTimings): void {
   const end = performance.now();
   into[key] = Math.round(end - start);
   try { performance.measure(`klassic:player:${key}`, { start, end }); } catch { /* 성능 기록을 못 쓰는 브라우저 */ }
@@ -148,15 +141,20 @@ class GugakPlayer {
       try {
         const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         this.ctx = new Ctx();
+        void clearOldFontCaches();   // 음원 판 번호를 올렸으면 옛 저장본을 지운다
         let t = performance.now();
-        const gugakBuf = await fetchFont(SOUNDFONT_URLS.gugak);
+        const gugak = await fetchFont(SOUNDFONT_URLS.gugak);
         measure('fetchGugakMs', t, this.timings);
+        this.timings.gugakFrom = gugak?.from;
+        const gugakBuf = gugak?.buf ?? null;
         // gugak.sf2 를 못 받으면 FluidR3 를 바탕으로 GM 번호로 대신 연주한다
         let fluidBuf: ArrayBuffer | null = null;
         if (!gugakBuf) {
           t = performance.now();
-          fluidBuf = await fetchFont(SOUNDFONT_URLS.fluid);
+          const fluid = await fetchFont(SOUNDFONT_URLS.fluid);
           measure('fetchFluidMs', t, this.timings);
+          this.timings.fluidFrom = fluid?.from;
+          fluidBuf = fluid?.buf ?? null;
         }
         const baseBuf = gugakBuf ?? fluidBuf;
         if (!baseBuf) {
@@ -198,9 +196,11 @@ class GugakPlayer {
     const synth = this.synth;
     this.fluidP = (async () => {
       let t = performance.now();
-      const buf = await fetchFont(SOUNDFONT_URLS.fluid);
+      const fluid = await fetchFont(SOUNDFONT_URLS.fluid);
       measure('fetchFluidMs', t, this.timings);
-      if (!buf) { this.fluidP = null; return false; }
+      this.timings.fluidFrom = fluid?.from;
+      if (!fluid) { this.fluidP = null; return false; }
+      const buf = fluid.buf;
       try {
         t = performance.now();
         await synth.soundfontManager.addNewSoundFont(buf, 'fluid', 0);
