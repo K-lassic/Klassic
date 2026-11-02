@@ -169,7 +169,7 @@ docker compose up -d web          # web 을 다시 만들어야 새 값을 읽�
 | `오류 코드 중복` 으로 시작 안 함 | `api/shared/errors/*.json` 에 같은 코드 | `python api/shared/check_errors.py` 로 찾아 한쪽에서 지운다 |
 | `/api/health` 503 `reason: db` | 운영 중 DB 끊김 | DB 가 돌아오면 자동 회복 (2026-10-30 시험: 다시 켠 뒤 약 6초) |
 | 도구가 `터미널이 없어 비밀번호를 물을 수 없습니다` | `docker compose run` 에 `-it` 가 없음 | `-it` 를 붙여 다시 실행 |
-| model-api 호출이 401 | `SERVICE_API_KEY` 가 비었거나 폐기된 키 | `issueServiceKey` 로 새로 발급 → `.env` → `docker compose up -d web` |
+| model-api 호출이 401 · 403 | 401 은 `SERVICE_API_KEY` 가 비었거나 틀린 키, 403 `AUTH_KEY_REVOKED` 는 폐기된 키 | `issueServiceKey` 로 새로 발급 → `.env` → `docker compose up -d web` |
 | web 이 `EACCES` · `EROFS` 로 `시작 실패` | 볼륨 storage 가 없거나 쓸 수 없음 (시작할 때 `/storage` 쓰기를 확인한다) | `docker compose exec web ls -ld /storage` — 소유자가 `node` 인지 |
 | PDF 만 503 `UPLOAD_CHECK_UNAVAILABLE` · 사진은 됨 | model-api 가 꺼졌거나 서비스 키 오류 (로그 `PDF 검사 불가`) | `docker compose ps model-api` · 위의 401 조치 |
 | 재생해도 소리가 안 남 · `/soundfonts/*` 404 또는 아주 작은 파일 | 로그 `음원 파일이 없거나 LFS 포인터뿐` | `git lfs pull` 후 `docker compose up -d web` — 파일은 `api/shared/soundfonts`, 읽기 전용 마운트 |

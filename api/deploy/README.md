@@ -128,6 +128,60 @@ pwsh api/deploy/funnel.ps1 stop
 - proto_type(v0.1.1)은 9503 · 26101 을 쓴다. `api/` 는 **9603 · 26201**(`API_PUBLIC_PORT` · `API_ADMIN_PORT`)로 띄워서 둘이 같이 떠 있게 한다 (#20).
 - 발표에 쓸 쪽을 정하면 `start -Port <포트>` 로 Funnel 이 가리키는 곳만 바꾼다. 컨테이너는 끄지 않는다.
 
+## model-api 대역 (#49)
+
+재구성 model-api(#24 · #28~#31)가 발표까지 갖춰지지 않을 때를 대비해, **v0.1.1 이미지를 `model-api` 이름으로 `api/` 에 붙인다.** 코드는 고치지 않는다. 파일은 [compose.standin.yaml](compose.standin.yaml) · [model-standin.env](model-standin.env)(키 이름만) 두 개다.
+
+```
+web ──┐
+      ├─▶ model-api:9543 (klassic/klassic-model-api:0.1.1) ─▶ db · 엔진 볼륨 klassic_engines(읽기 전용)
+Nginx ┘
+```
+
+필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`. proto_type 컨테이너는 떠 있지 않아도 된다.
+
+**처음 한 번 — 서비스 키 만들기** (서버 PC · Git Bash · `api/` 폴더)
+
+```bash
+cd /c/project/Klassic/api
+# 1) 운영자 만들기 — 비밀번호를 두 번 묻는다 (12자 이상, 화면에 안 보임)
+docker compose run --rm -it web node dist/tools/createOperator.js --login <아이디> --name <이름>
+# 2) 서비스 키를 발급해 .env 에 넣는다 — 화면에 키가 나오지 않는다
+KEY=$(docker compose run --rm -T web node dist/tools/issueServiceKey.js --operator <아이디> 2>/dev/null | tail -1)
+sed -i '/^SERVICE_API_KEY=/d' .env; printf '
+SERVICE_API_KEY=%s
+' "$KEY" >> .env; unset KEY
+grep -c '^SERVICE_API_KEY=gk_' .env   # 1 이 나오면 정상
+```
+
+**켜기 · 확인 · 끄기**
+
+```bash
+cd /c/project/Klassic/api
+docker compose -f compose.yaml -f deploy/compose.standin.yaml up -d --wait   # model-api 가 Healthy
+pwsh deploy/check-public.ps1 -Url http://127.0.0.1:9603 -Local               # 모두 통과
+docker compose -f compose.yaml -f deploy/compose.standin.yaml stop model-api # 끄기
+```
+
+- `web` 까지 다시 만들어야 새 서비스 키를 읽는다 — 위 `up -d` 가 함께 처리한다.
+- **대역을 쓰는 동안 `docker compose` 명령에는 항상 `-f` 두 개를 붙인다.** #24 병합 뒤로 `-f` 없이 `docker compose up -d` 를 하면 **재구성판 model-api 가 대역을 밀어낸다.** 재구성판은 #29 · #30 · #31 전까지 인식 · 렌더링이 없어서, 올린 악보가 모두 대체 악보로 끝난다.
+- 대역은 재구성판 서비스 정의 위에 합쳐진다. 재구성판 값이 섞이지 않게 `!reset` · `!override` 를 쓴다 (Docker Compose 2.24 이상).
+- **재구성 model-api 로 교체:** #29 · #30 · #31 이 끝난 뒤 `-f deploy/compose.standin.yaml` 을 빼고 `docker compose up -d --build model-api`. 서비스 이름 · 포트가 같아 backend · Nginx 는 고칠 것이 없다.
+
+**시험 결과 (2026-11-02, 임시 프로젝트)**
+
+| 확인 | 결과 |
+|---|---|
+| non-root · 뿌리 읽기 전용 · 엔진 볼륨 읽기 전용 | ✅ |
+| 기동 | ✅ 약 20초 뒤 healthy |
+| 미뉴에트 오선보 | ✅ homr 31초 · 신뢰 등급 |
+| 타령 정간보 PDF 2쪽 | ✅ PDF 검사 통과 · jeongganbo-omr 23초 · 신뢰 등급 |
+| 편집 후 MIDI · PDF · MP3 | ✅ MP3 최대 7.3초 · PDF 3.2초 |
+| `/api/v1/health` (Nginx 경유) · 공개 점검 | ✅ 모두 통과 |
+| 메모리 | 최대 2.24GiB (`mem_limit` 4g) |
+
+추천(LLM) 모델과 audiveris 는 이 구성에서 `unavailable` 이다 — 발표 흐름에는 쓰지 않는다.
+
 ## 서버 PC 운영 (#47)
 
 서버 PC = 팀장 노트북(Windows · Docker Desktop · WSL2). 코드 작업은 다른 PC 에서 하므로, **서버 PC 설정을 바꾸면 이 표에 남긴다.**
@@ -152,7 +206,8 @@ pwsh api/deploy/funnel.ps1 stop
 
 ```bash
 # api/ — 시연 서비스 (frontend 는 restart 정책이 없어 자동으로 안 돌아온다)
-cd api && docker compose up -d
+# 대역을 쓰는 동안 -f 두 개가 필요하다 — 없으면 인식이 없는 재구성판 model-api 가 뜬다 (「model-api 대역」)
+cd api && docker compose -f compose.yaml -f deploy/compose.standin.yaml up -d
 
 # proto_type — 예비 시연 · 코드 작업 중 필요할 때만
 cd proto_type && docker compose up -d --force-recreate web gateway admin model-api
