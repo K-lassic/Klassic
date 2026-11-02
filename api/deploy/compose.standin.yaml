@@ -4,10 +4,11 @@
 #   구조에서의 위치: web ─▶ model-api:9543 · Nginx /api/v1/* ─▶ model-api:9543 · model-api ─▶ db · 엔진 볼륨
 #     서비스 이름 · 포트가 재구성판과 같아서 backend · Nginx 는 고칠 것이 없다.
 #   켜기: cd api && docker compose -f compose.yaml -f deploy/compose.standin.yaml up -d
-#   끄기(재구성 model-api 로 교체): 재구성판이 준비되면 -f deploy/compose.standin.yaml 만 뺀다
+#     서버 PC 는 api/.env 의 COMPOSE_FILE 로 이 파일을 기본에 넣어 -f 없이 쓴다 (#86 · deploy/README.md)
+#   끄기(재구성 model-api 로 교체): 재구성판이 준비되면 -f deploy/compose.standin.yaml(서버 PC 는 api/.env 의 두 줄)만 뺀다
 #   주의: -f 로 더한 파일의 상대 경로는 첫 파일(api/) 기준이다.
 #   재구성판(services/model-api/compose.yaml)도 같은 이름이라 이 파일이 그 위에 합쳐진다.
-#     그대로 합치면 빌드 · tmpfs · 볼륨이 섞이므로 !reset · !override 로 재구성판 값을 지우고 교체한다.
+#     그대로 합치면 빌드 · 환경변수 · tmpfs · 볼륨이 섞이므로 !reset · !override 로 재구성판 값을 지우고 교체한다.
 #   v0.1.1 이미지 그대로 쓰며 코드는 고치지 않는다. 바꾸는 것은 실행 명령 · 환경변수뿐이다.
 # =============================================================================
 services:
@@ -21,7 +22,7 @@ services:
     # 이미지 기본 수신 주소는 127.0.0.1 이라 web · Nginx 가 닿지 못한다 (작성규칙 1-6)
     command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9543",
               "--root-path", "/api", "--workers", "1", "--no-access-log"]
-    environment:
+    environment: !override
       DB_HOST: db
       DB_PORT: "3306"
       DB_NAME: ${DB_NAME:?api/.env 에 DB_NAME 이 필요합니다}
@@ -50,6 +51,7 @@ services:
     mem_limit: 4g
     # 보안 옵션 (작성규칙 4-6) — 쓸 수 있는 곳은 /tmp 뿐
     read_only: true
-    tmpfs: !override [/tmp]
+    tmpfs: !override
+      - /tmp:rw,nosuid,nodev,mode=1777
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
