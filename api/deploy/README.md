@@ -256,6 +256,75 @@ ENGINES_VOLUME_NAME=klassic_engines_cpu docker compose up -d model-api
 docker compose up -d model-api
 ```
 
+### 서버 PC 전체 흐름 시험 계획 (시간이 남을 때)
+
+**목표:** 서버 PC 에서 CPU 전용 엔진을 다시 만들어 재구성판 전체 흐름을 임시 프로젝트로 돌려 본다. 결과가 좋으면 발표에서 **"업데이트 계획이며, 업데이트 전에 시험해 보았다"** 로 소개한다.
+
+**전제**
+- 발표 판본 결정(#49)과 리허설을 먼저 끝낸다. 이 시험은 그 뒤 시간이 남을 때만 하고, 발표 당일에는 하지 않는다.
+- 실제 서비스는 건드리지 않는다. 임시 프로젝트로 띄우고 포트는 9703 · 26301 을 쓴다. `klassic_engines` 와 실제 DB · storage 볼륨은 그대로다.
+- 서버 PC 의 `api/.env` 에 `COMPOSE_FILE` 이 있으므로 `-f compose.yaml` 을 꼭 붙인다. 안 붙이면 대역이 뜬다.
+- 시험 중에는 model-api 가 2개 돌아 서버 PC 메모리를 더 쓴다. 실제 서비스를 쓰는 시간과 겹치지 않게 한다.
+
+**실행** (서버 PC · Git Bash · `api/` 폴더) — 코드 작업용 PC 에서 같은 순서로 기동 · 키 발급 · 공개 점검까지 확인했다. 전체 화면 흐름은 아직 해 보지 않았다.
+
+1) `docs/engine-cpu-test` 가 병합된 main 을 받고 준비물을 확인한다. 이미지 한 줄과 볼륨 한 줄이 보여야 한다. 하나라도 없으면 여기서 멈춘다.
+
+```bash
+docker images klassic/klassic-engines-installer:0.1.1
+docker volume ls --filter name=klassic_engines
+```
+
+2) 위 「다시 만들기」로 `klassic_engines_cpu` 를 만든다. 마지막 줄이 `DONE` 이어야 한다.
+
+3) 임시 프로젝트를 띄운다. 모든 서비스가 Healthy 로 끝나야 한다.
+
+```bash
+export ENGINES_VOLUME_NAME=klassic_engines_cpu API_PUBLIC_PORT=9703 API_ADMIN_PORT=26301
+docker compose -p klassic-cpu-test -f compose.yaml up -d --wait
+```
+
+4) 시험 DB 에 운영자와 서비스 키를 만든다. 키는 이 터미널 변수에만 두고 `api/.env` 에 쓰지 않는다. 운영자 비밀번호를 두 번 묻는다. `key ok` 가 나오면 정상이고, `key bad` 면 멈춘다.
+
+```bash
+docker compose -p klassic-cpu-test -f compose.yaml run --rm -it web node dist/tools/createOperator.js --login cputest --name cputest
+export SERVICE_API_KEY=$(docker compose -p klassic-cpu-test -f compose.yaml run --rm -T web node dist/tools/issueServiceKey.js --operator cputest 2>/dev/null | tail -1 | tr -d '\r')
+case "$SERVICE_API_KEY" in gk_*) echo "key ok";; *) echo "key bad";; esac
+docker compose -p klassic-cpu-test -f compose.yaml up -d --wait web
+```
+
+5) 공개 점검을 돌린다. 모두 통과해야 한다.
+
+```bash
+pwsh deploy/check-public.ps1 -Url http://127.0.0.1:9703 -Local
+```
+
+6) 브라우저로 `http://127.0.0.1:9703` 에 접속해 확인하고, 인식 중 `docker stats` 로 메모리를 잰다.
+
+| 확인 | 통과 기준 |
+|---|---|
+| 가입 · 로그인 | 시험 계정으로 들어감 |
+| 예시 4개 인식 | 대체 악보 없이 실제 엔진 결과 |
+| 사진 · PDF 직접 올리기 | 예시 밖 입력 1개 이상 인식 |
+| 편집 · 연주 | 고친 내용이 소리와 저장에 반영됨 |
+| 4형식 내려받기 | MP3 · PDF · MIDI · MusicXML 파일이 열림 |
+| model-api 메모리 | 최대값 기록 (대역 2.24GiB · 재구성판 2.29GiB 와 비교) |
+
+7) 정리한다. 목록에 `klassic-cpu-test_` 로 시작하는 볼륨만 있는지 보고 지운다. 이름 없는 빈 볼륨이 하나 남을 수 있는데, 사용 중이 아니고 비어 있는지 확인한 뒤 지운다. `klassic_engines_cpu` 는 남긴다.
+
+```bash
+docker compose -p klassic-cpu-test -f compose.yaml down
+docker volume ls -q | grep '^klassic-cpu-test_'
+docker volume ls -q | grep '^klassic-cpu-test_' | xargs docker volume rm
+unset ENGINES_VOLUME_NAME API_PUBLIC_PORT API_ADMIN_PORT SERVICE_API_KEY
+```
+
+**발표 반영**
+- 위 표를 모두 통과하면 업데이트 계획에 넣는다. 예: "정간보 엔진을 CPU 전용으로 바꾸는 업데이트를 계획하고 있고, 업데이트 전에 임시 환경에서 시험했다. 엔진 볼륨은 6.08GB 에서 2.47GB 로 줄었고, 시험한 예시의 인식 결과는 같았다."
+- 서버 PC 측정값이 나오면 크기 · 메모리를 그 값으로 바꾼다.
+- 실제 서비스는 여전히 기존 엔진으로 돈다고 함께 말한다. 적용을 마친 기능으로 소개하지 않는다.
+- 시험을 못 했거나 실패하면 코드 작업용 PC 결과만 말하거나 빼고, 시험하지 못한 항목을 그대로 밝힌다.
+
 ## 서버 PC 운영 (#47)
 
 서버 PC = 팀장 노트북(Windows · Docker Desktop · WSL2). 코드 작업은 다른 PC 에서 하므로, **서버 PC 설정을 바꾸면 이 표에 남긴다.**
