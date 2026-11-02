@@ -15,6 +15,8 @@ from fastapi.responses import JSONResponse
 from app.auth.keys import require_service_key, write_call_log
 from app.auth import rbac
 from app.catalog import load_errors
+from app.checks.api import router as upload_router
+from app.checks.upload import read_rules
 from app.config import Config, load_config
 from app.db import Database
 from app.errors import ApiError, CATALOG, error_body, error_response
@@ -56,6 +58,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
     async def lifespan(app):
         # 파일·중복 오류 또는 DB 연결 실패는 준비된 척하지 않고 시작을 실패시킨다.
         app.state.catalog = load_errors(cfg.shared_dir)
+        app.state.upload_rules = read_rules(cfg.shared_dir)
         app.state.db = await db_factory(cfg)
         resources = None
         warmup = None
@@ -167,6 +170,8 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
         settings = await app.state.settings.load()
         await app.state.settings.mark_applied()
         return {"settings_version": settings.version_id, "engine_order": settings.engine_order}
+
+    app.include_router(upload_router)
 
     original_openapi = app.openapi
 

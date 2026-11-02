@@ -1,5 +1,44 @@
 # model-api (담당: 예은 @yeeun5364)
 
+## 업로드 검사 — #28
+
+`POST /v1/internal/upload-check`는 backend가 PDF 검사를 맡기는 서비스 키 전용 경로다. multipart 필드는 `file`(여러 파일이면 같은 이름 반복), `score_type`(`staff` 또는 `jeongganbo`)이며 기존 계약을 유지한다. 외부 키는 403, 키 누락·잘못된 키는 401이다. 검사 결과만 반환하며 요청·쪽별 처리·작업 행이나 원본 파일을 만들지 않는다. 인증 호출 기록은 기존 방식으로 DB에 남긴다.
+
+### 검사와 결과
+
+- 기준판의 업로드·PDF 검사 코드를 가져와 앱별 `SHARED_DIR/upload-rules.json`을 사용하도록 분리했다. 다른 앱·호출의 규칙이 섞이지 않게 ContextVar로 적용·해제한다.
+- 순서: 파일 개수 → 확장자·실제 파일 형식 → PDF 혼합 여부 → 손상·암호·PDF 쪽 수 → 파일 용량 → 쪽별 사진 크기 → 악보 종류. 여러 문제가 있으면 계약에 맞게 먼저 검사한 사유를 반환한다.
+- 사진은 PNG·JPEG·WEBP, PDF는 한 개만 허용한다. 사진 최대 10장 또는 PDF 최대 10쪽, 기본 파일당 20MiB다. MIDI·MusicXML은 이 사용자 업로드 경로에서 거절한다.
+- 사진은 짧은 변 300px 미만을 거절한다. 300~649px는 원본 bytes를 유지하고 인식용 1000px PNG 사본을 만든다. `PageImage.image`에 사본, `short_edge_px`에 원래 크기, `upscaled_short_side_px`에 사본 크기를 남긴다. API 응답 필드는 기존 계약 그대로이며 사본 데이터는 보내지 않는다.
+- 검사 API는 PDF를 그림으로 만들지 않고 모든 쪽의 크기를 300dpi 기준으로 계산한다. 인식 단계가 사용할 공통 helper에서는 명시적으로 `render_pdf=True`인 경우만 페이지 렌더링·확대 사본을 생성한다.
+- PDFium 호출은 lock으로 직렬화하고 검사는 작업 스레드로 보내 HTTP 이벤트 루프를 막지 않는다. 사용한 UploadFile은 성공·오류 모두 닫는다. 외부 프로세스 실행이나 별도 파일 저장은 없다.
+- 성공 응답: `ok`, `kind`, `short_edge_px`, `pdf_page_count`, `page_count`, `pages`(page_no·file_no·source·short_edge_px). 사진 순서를 유지하며, 크기 오류에는 해당 쪽 번호를 포함한다.
+- 오류 예: 형식 415 `UPLOAD_UNSUPPORTED_TYPE`, 용량 413 `UPLOAD_TOO_LARGE`, 손상·암호 422 `UPLOAD_CORRUPTED`, 11쪽 422 `UPLOAD_TOO_MANY_PAGES`, 작은 사진 422 `UPLOAD_RESOLUTION_TOO_LOW`, 종류 누락·잘못된 값 422 `UPLOAD_SCORE_TYPE_REQUIRED`. 빈 파일·누락·알 수 없는 폼 필드는 422 `VALIDATION_ERROR`다.
+
+### 검증·기동
+
+73개 테스트가 통과했다(#24의 20개 포함). 공용 `fixtures/upload/expected.json`의 모든 항목을 공통 검사기와 ASGI API에 대조했다. 저장소에 없는 25MiB PNG는 시험 중 메모리에서 생성한다. 쪽 수 10/11, 사진 299/300/649/650px, 원본·사본, 규칙 격리, 서비스 키 전용 접근, 요청 DB 쓰기 없음과 입력 오류를 추가로 확인했다. 정적 검사도 통과했다.
+
+추가 의존성은 Pillow 12.3.0·pypdfium2 5.14.0이며 uv.lock에 고정했다. pytest의 프로젝트 경로를 지정해 `uv run pytest`와 `python -m pytest`에서 같은 앱을 찾도록 했다. 시험 파일은 공유 폴더에서만 읽고 runtime 이미지에는 포함하지 않는다.
+
+```powershell
+# 서비스 폴더, Linux Python 3.11
+uv sync --frozen
+uv run ruff check app tests
+uv run pytest -q
+```
+
+실제 컨테이너 검사는 `tests/container_upload_smoke.py`로 수행한다. #24에서 사용한 격리 프로젝트 `klassic-api-issue24`와 DB `klassic_issue24`를 재사용하며 운영 DB에서는 실행을 거부한다. 시험용 키를 생성해 HTTP를 호출하고, `score_request`·`request_page`·`processing_job`·`engine_attempt`·`validity_check_item` 행 수가 바뀌지 않는지 확인한 뒤 시험 키·운영자·관련 호출 기록을 정리한다.
+
+```powershell
+# 서비스 폴더에서 별도 시험 env 파일 경로 지정
+Get-Content -Raw tests/container_upload_smoke.py | docker compose --env-file <시험 env 절대 경로> -f ../../compose.yaml -p klassic-api-issue24 exec -T model-api python -
+```
+
+2026-11-02 실제 검증도 통과했다. Windows Docker Desktop 위의 **Linux/amd64·Debian GNU/Linux 12(bookworm)·Python 3.11.18 컨테이너**에서 실행했으며 별도 Linux 서버에서의 검증은 아직 수행하지 않았다. `klassic/model-api:issue28-local` 빌드·재생성 후 DB·model-api healthy, migrate 종료 코드 0을 확인했다. 직접 HTTP 검사 10건에서 정상 사진·작은 사진·2쪽 PDF 200, 키 없음 401, 형식 415, 용량 413, 손상 PDF·11쪽·작은 사진·종류 누락 422를 확인했다. 요청·쪽·작업·엔진 시도·타당성 테이블의 행 수는 모두 유지됐고 시험 키·운영자·관련 기록을 정리했다. 공통 오류 70개 검사와 `git diff --check`도 통과했다. 로컬 이미지 ID는 `sha256:c89b25cf470a2274712647539735fcc66bdbe5919fbfcd22653d7f7b24b19543`, 크기 584,048,953 bytes이며 registry 게시 digest가 아니다.
+
+#24 PR #79가 아직 병합되지 않은 시점에 #24 커밋을 포함한 `feat/28-upload-check-yeeun`에서 시작했으며 제출 전 최신 main과 선행 PR 병합 상태를 다시 확인한다. 이번 검증은 검사기·API·실제 DB/HTTP까지이며 웹 화면 전체 흐름은 #49에서 확인한다. 인식 API·쪽별 DB 결과 기록은 #29·#30, 전체 한도·시간 상한은 #33에서 이어진다.
+
 ## 기반 서비스 — #24
 
 Python 3.11·FastAPI 기반의 설정·로그·MariaDB 연결·API 키 인증과 준비 상태를 구성한다.
