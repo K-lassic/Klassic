@@ -110,7 +110,7 @@
 
 `src/` · `tests/` · `public/` · `index.html` · `admin.html` · `package.json` · `package-lock.json` · `vite.config.ts` · `nginx/default.conf` · `Dockerfile` · `.dockerignore` · `compose.yaml` · 이 README(Runbook)
 
-- 옮기지 않은 화면은 빈 화면(`pages/Placeholder.vue`)이다. 경로는 v0.1.1 `router.ts` 와 같고, 화면 이슈(#39 · #40 · #41 · #43)에서 component 만 바꾼다.
+- 경로는 v0.1.1 `router.ts` 와 같다. 골격 때 빈 화면(`pages/Placeholder.vue`)으로 열던 경로는 화면 이슈(#39 · #40 · #41 · #43 · #92)에서 모두 실제 화면으로 바꿨고, 빈 화면은 #92 에서 지웠다. 관리자 화면만 `admin/pages/AdminPlaceholder.vue`(P3 · #101).
 - 의존성은 지금 쓰는 것만 넣었다. #40 에서 score-core · 악보 그리기(OSMD 1.9.9) · idb 8.0.3 을, #42 에서 연주기(spessasynth_lib · spessasynth_core 3.27.8 — lib 가 core 를 `latest` 로 받아서 core 판을 직접 고정)를 더했다. 판은 v0.1.1 lock 과 같게 고정한다.
 
 ### 공통 부품 · API 클라이언트 (#38)
@@ -207,6 +207,23 @@
 - 옮기지 않은 것: 모두에게 공유(`SharePanel`)는 P2.
 - 시험: v0.1.1 `downloadCard` 를 옮겼다 (오류 문구는 `i18n/errorCodes` 로 읽음).
 
+### 내 악보 · 공유 · 체험하기 · API 안내 (#92, P2)
+
+| 위치 | 내용 (v0.1.1 에서 그대로 옮김) |
+|---|---|
+| `components/MyScoresList.vue` | 1단계 [다음] 줄 아래 "내가 만든 악보" — 로그인했을 때만 그리고 부른다. [저장하기](C6 받기 카드 재사용) · [편집하기] · [제거] |
+| `components/SharedScoreList.vue` | 1단계 맨 아래 "악보 공유하기" 게시판 — 좋아요 · 최근 순, 4개씩 쪽 넘기기, [듣기](기본 국악기 구성으로 브라우저 연주) · [좋아요] · [이 악보로 작업하기] |
+| `components/SharePanel.vue` | 4단계 "모두에게 공유" — 기본은 공유 안 함, 제목을 넣어 공유 · 거두기 |
+| `pages/S1Tour.vue` · `lib/tour.ts` | `/tour` 체험하기 — 로그인 없이, 6장 |
+| `pages/S4AApiGuide.vue` · `components/C8MaskedKey.vue` | `/api-guide` API 안내 · 오류 코드 표 · 키 신청(로그인했을 때) |
+| `pages/S4CApiExamples.vue` | `/api-guide/examples` 활용 예시(curl · Python · JS) |
+
+- 부르는 경로는 계약(`api/contracts/web-api.yaml`)의 `/api/my-scores` · `/api/shared-scores*` · `/api/requests/{no}/share` · `/api/api-docs` · `/api/key-applications` 그대로다. 백엔드는 #90(내 악보 · 공유) · #91(API 안내 · 키 신청)에서 만든다. 그 전에는(2026-11-02 api/ 9603 에 붙여 확인, 네 경로 모두 404) "내가 만든 악보" · "악보 공유하기" 칸이 "목록을 불러오지 못했습니다"를, API 안내는 엔드포인트 목록 없이 안내 문구만 보인다. 4단계 공유 칸은 입력 칸이 보이지만 공유는 되지 않는다. 올리기 → 결과 → 편집 → 내려받기는 그대로 쓴다.
+- 개발 서버 프록시 키를 `'/api'` → `'/api/'` 로 고쳤다 — 앞부분이 같은 화면 경로 `/api-guide` 까지 백엔드로 넘어가 빈 화면이 됐다. 운영 Nginx 는 처음부터 `location ^~ /api/` 라 문제없다.
+- 바꾼 것: S4A 오류 코드 표는 v0.1.1 `shared/error-codes.json` 대신 `i18n/errorCodes.ts`(세 파일 합침, #19)를 읽는다. 공개 주소는 코드에 적지 않고 `window.location.origin` 을 쓴다 — Funnel 로 열면 그 주소가 예시에 그대로 나온다 (v0.1.1 주석의 옛 외부 주소는 지움).
+- **추천 화면 연결은 하지 않았다.** 2026-09-30 결정(93번)으로 화면에서 "전체 구성 고르기(추천 조합)"를 뺐고, 지금은 악기 하나씩 바꾸기만 있다. 추천을 되살릴지 · 어디에 둘지는 #88 · #89 와 함께 정한다 (C4 에 추천 표시 코드는 남아 있다).
+- 시험: v0.1.1 `sharedScores`(관리자 S8 부분 제외 · #101) · `round16` · `tour210` · `apiExamples` · `s4aEndpoints` · `s4aStart` 를 옮기고, #46 때 P2 라서 뺀 시험 줄을 되살렸다.
+
 ### 프론트 P1 시험 (#46)
 
 v0.1.1 시험 44개(단위 시험 43개 파일 + 손으로 하는 점검표 1개) 가운데 P1 화면에 해당하는 것을 모두 옮겼다.
@@ -220,14 +237,14 @@ v0.1.1 시험 44개(단위 시험 43개 파일 + 손으로 하는 점검표 1개
 | `playback207` · `playerRate` · `playerSound` · `preload204` · `round17` | 5 | 그대로, `preload204` 는 `preload(doc)` 부분만 고침 (#42) |
 | `downloadCard` | 1 | 그대로 (#43) |
 | `centerTitles213` · `logo203` · `round8` · `round9` · `round10` · `round11` · `round12` · `round14` · `round15` · `round18` · `round19` · `themeAndScore` | 12 | P1 부분만 (#46) — 아래 |
-| `sharedScores` · `round16` · `tour210` | 3 | 옮기지 않음 — 공유 악보 · 내가 만든 악보 · 체험하기 (P2) |
-| `apiExamples` · `s4aEndpoints` · `s4aStart` | 3 | 옮기지 않음 — API 안내 · 예시 (P2) |
+| `sharedScores` · `round16` · `tour210` | 3 | #92 에서 옮김 — `sharedScores` 의 관리자 S8 시험만 #101 로 미룸 |
+| `apiExamples` · `s4aEndpoints` · `s4aStart` | 3 | #92 에서 옮김 — 그대로 |
 | `admin-*` 6개 | 6 | 옮기지 않음 — 관리자 화면 (P3) |
 | `e2e/us6_restore.md` | 1 | 손으로 하는 브라우저 점검표 — 백엔드가 뜬 뒤 브라우저로 (아래 「확인하지 못한 것」) |
 
 `#46` 에서 옮긴 12개 파일은 여러 화면을 한꺼번에 보는 시험이라, P2 · P3 부품을 읽는 줄만 빼고 그 자리에 `// #46:` 주석으로 무엇을 뺐는지 · 언제 되살릴지 적었다.
 
-- P2 · P3 부품(`SharedScoreList` · `MyScoresList` · `SharePanel` · `S1Tour` · `S4AApiGuide` · `C7AdminBar`)을 읽는 줄 · 블록 — 그 화면을 옮길 때 v0.1.1 에서 되살린다
+- P2 · P3 부품(`SharedScoreList` · `MyScoresList` · `SharePanel` · `S1Tour` · `S4AApiGuide` · `C7AdminBar`)을 읽는 줄 · 블록 — 그 화면을 옮길 때 v0.1.1 에서 되살린다. **P2 부분은 #92 에서 되살렸다** (`centerTitles213` · `round9` · `round10` · `round15` · `round18` · `round19` 는 v0.1.1 과 같아짐). 관리자(`C7AdminBar`, P3) 부분만 남았다
 - `logo203` 스타일가이드 견본 HTML 확인 — 견본은 api/ 로 옮기지 않았다 (`proto_type/src/app/docs/reference/style-guide`)
 - `themeAndScore` 서버 전용 예시 폴더 확인 — 예시 파일은 백엔드(#34)가 가진다. 화면 쪽 확인(공개 폴더에 없음 · 원본을 받지 않음)만 남겼다
 - `round14` 파일 읽기에서 줄 끝을 LF 로 맞춘다 — Windows 에서 받으면(`core.autocrlf`) CRLF 라 `'\n'` 이 들어간 비교가 틀렸다
