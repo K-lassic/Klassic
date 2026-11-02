@@ -1,4 +1,4 @@
-"""#24·#28~#30 model-api 진입점: 자원·DB·인증을 준비하고 검사·오선보·정간보 인식 라우터를 묶는다."""
+"""#24·#28~#31 model-api 진입점: 자원·DB·인증을 준비하고 검사·인식·렌더링 라우터를 묶는다."""
 import asyncio
 from contextlib import asynccontextmanager
 import logging
@@ -27,6 +27,9 @@ from app.models.registry import ModelRegistry
 from app.routers.models import router as models_router
 from app.routers.omr_staff import router as staff_router
 from app.routers.omr_jeongganbo import router as jeongganbo_router
+from app.routers.render import router as render_router
+from app.render.pool import RenderPool
+from app.services.catalog import INSTRUMENTS_DIR
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -75,6 +78,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             app.state.resources = resources
             app.state.registry = ModelRegistry(cfg, app.state.db, resources)
             app.state.limiter = Limiter(app.state.settings.current)
+            app.state.render_pool = RenderPool(cfg)
             warmup = asyncio.create_task(resources.start(), name="startup-resources")
             yield
         finally:
@@ -83,6 +87,8 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
                 await asyncio.gather(warmup, return_exceptions=True)
             if hasattr(app.state, "registry"):
                 await app.state.registry.close()
+            if hasattr(app.state, "render_pool"):
+                await app.state.render_pool.close()
             if resources:
                 await resources.close()
             from app.services.safe_midi import close_safe_midi
@@ -113,6 +119,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
     @app.middleware("http")
     async def request_log(request, call_next):
         token = CATALOG.set(app.state.catalog)
+        instruments_token = INSTRUMENTS_DIR.set(cfg.shared_dir)
         req_id = uuid.uuid4().hex[:12]
         request.state.req_id = req_id
         started = time.monotonic()
@@ -136,6 +143,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             return response
         finally:
             CATALOG.reset(token)
+            INSTRUMENTS_DIR.reset(instruments_token)
 
     @app.get("/v1/health")
     async def health():
@@ -171,8 +179,14 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
                 "SELECT template_id, name, version FROM fallback_template WHERE holder='api_server' AND is_active=TRUE")
         except Exception:
             rows = []
+        from app.render.pdf import renderer_versions
+        renderers = await asyncio.to_thread(renderer_versions)
+        engines = [{k: v for k, v in entry.items() if k != "enabled"} for entry in resources.snapshot()]
+        engines += [{"name": row["name"], "version": row["version"], "kind": f"render_{row['kind']}",
+                     "provider": "renderer", "installed": row["installed"],
+                     "state": "ready" if row["installed"] else "unavailable"} for row in renderers]
         return {"api_version": "v1", "openapi_url": "/v1/openapi.json",
-                "engines": [{k: v for k, v in entry.items() if k != "enabled"} for entry in resources.snapshot()],
+                "engines": engines,
                 "templates": [{"id": str(r["template_id"]), "name": r["name"], "version": r["version"]} for r in rows],
                 "rules_hash": resources.rules_hash}
 
@@ -187,6 +201,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
     app.include_router(models_router)
     app.include_router(staff_router)
     app.include_router(jeongganbo_router)
+    app.include_router(render_router)
 
     original_openapi = app.openapi
 
@@ -197,7 +212,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
         for path, operations in schema.get("paths", {}).items():
             for operation in operations.values():
                 if isinstance(operation, dict):
-                    protected = "/internal/" in path or "/omr/" in path
+                    protected = any(part in path for part in ("/internal/", "/omr/", "/render/"))
                     operation["security"] = [{"ApiKey": []}] if protected else []
         return schema
 

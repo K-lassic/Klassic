@@ -19,6 +19,7 @@ class Config:
     engines_dir: Path = Path("/opt/gugak-engines")
     soundfonts_dir: Path = Path("/app/shared/soundfonts")
     model_load_timeout_s: float = 120
+    render_timeout_s: float = 120
     jeongganbo_device: str = "cpu"
     storage_dir: Path = Path("/storage")
     assets_dir: Path = Path("/app/services/model-api/assets")
@@ -41,6 +42,7 @@ def load_config() -> Config:
         engines_dir=Path(os.environ.get("ENGINES_DIR", "/opt/gugak-engines")),
         soundfonts_dir=Path(os.environ.get("SOUNDFONTS_DIR", "/app/shared/soundfonts")),
         model_load_timeout_s=float(os.environ.get("MODEL_LOAD_TIMEOUT_SECONDS", "120")),
+        render_timeout_s=float(os.environ.get("RENDER_TIMEOUT_SECONDS", "120")),
         jeongganbo_device=os.environ.get("JEONGGANBO_DEVICE", "cpu"),
         storage_dir=Path(os.environ.get("STORAGE_DIR", "/storage")),
         assets_dir=Path(os.environ.get("ASSETS_DIR", "/app/services/model-api/assets")),
@@ -54,4 +56,6 @@ def load_config() -> Config:
             raise ValueError("자원 경로는 절대 경로여야 합니다")
     if cfg.jeongganbo_device != "cpu":
         raise ValueError("현재 Linux/amd64 검증 범위는 정간보 CPU 실행입니다")
+    if not 1 <= cfg.render_timeout_s <= 600:
+        raise ValueError("렌더링 제한 시간은 1~600초여야 합니다")
     return cfg
