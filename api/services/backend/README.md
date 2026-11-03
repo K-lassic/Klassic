@@ -2,7 +2,7 @@
 
 사용자 API(`/api/*`, web) · 관리자 API(`/admin/*`, admin) · 인식 작업자 · 렌더링 대기열 · 주기 작업.
 
-- 참고 코드: `proto_type/src/app/backend` (Node.js 22 · Express · TypeScript, 약 4,500줄 · 테스트 29개 파일 — helpers 포함)
+- 참고 코드: `proto_type/src/app/backend` (Node.js 22 · Express · TypeScript, 약 4,500줄 · 테스트 29개 파일 — helpers 포함) — 원본은 git 태그 `v0.1.1` 에 있다 (#143)
 - 계약: [../../contracts/web-api.yaml](../../contracts/web-api.yaml) (화면 쪽) · [../../contracts/model-api.yaml](../../contracts/model-api.yaml) (부르는 쪽)
 
 ## 재구성 시 바꿀 점
@@ -206,7 +206,7 @@ docker compose run --rm -T web node dist/tools/confirmLicense.js --operator <운
 ## v0.1.1 기능 목록 (#5)
 
 > 재구성 이슈(2단계 이후)의 범위와 완료 기준으로 쓴다. 우선순위: **P1** 발표 필수 · **P2** 여유 있으면 · **P3** 발표 이후.
-> 참고 경로는 `proto_type/src/app/backend/src/` 기준. 테스트는 `proto_type/src/app/backend/tests/`.
+> 참고 경로는 `proto_type/src/app/backend/src/` 기준. 테스트는 `proto_type/src/app/backend/tests/`. — 원본은 git 태그 `v0.1.1` 에 있다 (#143)
 
 ### 1. 유스케이스(UC)별 기능
 

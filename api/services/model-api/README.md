@@ -421,7 +421,7 @@ Get-Content -Raw tests/container_smoke.py | docker compose -f ../../compose.yaml
 
 악보 인식(오선보 · 정간보) · MP3/PDF 렌더링 · 국악기 추천 · 외부 API(`/api/v1`, API 키).
 
-- 참고 코드: `proto_type/src/app/model-api` (Python 3.11 · FastAPI · uv, 약 8,800줄 · 테스트 36개 파일)
+- 참고 코드: `proto_type/src/app/model-api` (Python 3.11 · FastAPI · uv, 약 8,800줄 · 테스트 36개 파일) — 원본은 git 태그 `v0.1.1` 에 있다 (#143)
 - 엔진 설치 참고: `proto_type/src/app/ops/engines` · `proto_type/docker/engines-installer.Dockerfile`
 - 계약: [../../contracts/model-api.yaml](../../contracts/model-api.yaml)
 
@@ -748,8 +748,8 @@ Audiveris를 실행하지 않은 것은 P3 판단에 따른 범위 결정이며 
 
 참고한 프로젝트 파일:
 
-- [엔진 설치 스크립트](../../../proto_type/src/app/ops/engines/) · [설치용 Dockerfile](../../../proto_type/docker/engines-installer.Dockerfile) · [모델 API Dockerfile](../../../proto_type/docker/model-api.Dockerfile)
-- [엔진 어댑터](../../../proto_type/src/app/model-api/app/engines/) · [렌더러](../../../proto_type/src/app/model-api/app/render/) · [상태 API](../../../proto_type/src/app/model-api/app/routers/health.py)
+- 엔진 설치 스크립트 (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/src/app/ops/engines`) · 설치용 Dockerfile (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/docker/engines-installer.Dockerfile`) · 모델 API Dockerfile (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/docker/model-api.Dockerfile`)
+- 엔진 어댑터 (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/src/app/model-api/app/engines`) · 렌더러 (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/src/app/model-api/app/render`) · 상태 API (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/src/app/model-api/app/routers/health.py`)
 - [프로젝트 작성규칙](../../../docs/API_재구성_작성규칙.md)
 
 로컬 최종 검사: 사전 검증 응답 5건과 본문의 시간·성공·fallback 값을 대조했고, 참조 파일 존재 여부·`git diff --check`·`docker compose -f api/compose.yaml config --quiet`를 검사했다. Compose 검사 통과는 골격의 설정 유효성만 뜻한다.
