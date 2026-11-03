@@ -32,6 +32,22 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 남은 확인: 실제 model-api 로 `/api/v1/*` 다시 (#24 뒤). 실제 web · Funnel 외부 주소는 확인함 (#47 · #48).
 
+### `/demo` 연결 (#93, 2026-11-03)
+
+외부 API 예시 홈페이지(`demo` 프로필, PR #131)를 사용자 server 의 `/demo/` 에 붙였다. 접두사를 떼지 않고 `demo:26102` 로 넘긴다. 실제 `frontend:dev` 이미지(읽기 전용 · `/tmp` tmpfs)에 받은 경로를 돌려주는 가짜 `demo` 서버를 붙여 시험했다.
+
+| 확인 | 결과 |
+|---|---|
+| demo 가 **없어도** Nginx 기동 · 화면 200 | ✅ `/demo/` 만 503 안내 화면(HTML) |
+| `/demo` → `/demo/` | ✅ 301, `Location: /demo/` (상대 주소 — Funnel 뒤에서 내부 포트로 튀지 않음) |
+| `/demo/` · `/demo/api/bgm?share=3&inst=gayageum` · `/demo/app.js` | ✅ 접두사 · 쿼리 그대로, `X-Forwarded-Proto: https` 전달 |
+| 25MiB 응답(MP3 상한 20MiB) | ✅ 끝까지 받음, 임시 파일 오류 없음 |
+| demo 가 스스로 보낸 502 | ✅ 안내 화면으로 바꾸지 않고 그대로 전달 |
+| `/demox` | ✅ demo 로 가지 않음 (화면) |
+| demo 를 끄면 | ✅ 10초 안에 다시 503 안내 화면 |
+
+켜기 · 끄기는 PR #131 병합 뒤 `api/` 에서 `docker compose --profile demo up -d demo` · `docker compose stop demo`. Nginx 는 다시 띄우지 않아도 된다. 남은 확인: 실제 demo 서버 · 외부 키 · Funnel 브라우저 재생 (#49).
+
 - 도메인 없이 `*.ts.net` 주소와 HTTPS 인증서를 받는다. 공유기 포트를 열지 않는다.
 - **Tailscale 은 Windows 앱(서비스)으로 돌린다** (#9 결정). 컨테이너로 돌리지 않으므로 인증 키(`TS_AUTHKEY`)가 필요 없다 — 로그인은 앱에서 사람이 한다.
 - 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(proto_type 9503 또는 api/ 9603)이고, 관리자 · 내부 포트(26101 · 26201 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
