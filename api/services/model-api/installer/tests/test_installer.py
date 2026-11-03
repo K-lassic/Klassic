@@ -77,10 +77,25 @@ class InstallerTest(unittest.TestCase):
         python = folder/'python'
         python.write_text('unfinished')
         result = subprocess.run(['bash', '-c', 'source /scripts/common.sh; initialize homr'],
-                                env={**os.environ, 'ENGINES_DIR': str(self.root)}, capture_output=True)
+                                env={**os.environ, 'ENGINES_DIR': str(self.root),
+                                     'ENGINES_VOLUME_NAME': 'issue138-test'}, capture_output=True)
         self.assertEqual(result.returncode, 2)
         self.assertEqual(python.read_text(), 'unfinished')
         self.assertFalse((self.root/'homr/INSTALL_MANIFEST.json').exists())
+
+    def test_missing_volume_name_fails_before_any_engine_write(self):
+        self.reject_volume('')
+
+    def test_operating_volume_name_fails_before_any_engine_write(self):
+        self.reject_volume('klassic_engines')
+
+    def reject_volume(self, name):
+        target = self.root/'must-not-be-created'
+        result = subprocess.run(['bash', '-c', 'source /scripts/common.sh; initialize homr'],
+                                env={**os.environ, 'ENGINES_DIR': str(target),
+                                     'ENGINES_VOLUME_NAME': name}, capture_output=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(target.exists())
 
     def test_marker_checks_input_locks_and_weight_corruption(self):
         folder = self.root/'homr'

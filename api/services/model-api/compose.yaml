@@ -153,6 +153,8 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     environment:
+      # :?는 비활성 tools 프로필까지 일반 compose 실행을 막으므로 설치기 시작 시 필수 검사한다.
+      ENGINES_VOLUME_NAME: ${ENGINES_VOLUME_NAME:-}
       ENGINES_DIR: ${ENGINES_DIR:-/opt/gugak-engines}
       UV_PYTHON_INSTALL_DIR: ${ENGINES_DIR:-/opt/gugak-engines}/.uv-python
       UV_PYTHON_BIN_DIR: /tmp/python-bin
@@ -161,7 +163,7 @@ services:
     volumes:
       # 빈 외부 볼륨의 최초 마운트에서는 이미지의 UID 1000 디렉터리 소유권을 물려받는다.
       - type: volume
-        source: engines
+        source: engines-install-target
         target: ${ENGINES_DIR:-/opt/gugak-engines}
       # 대형 wheel 캐시는 RAM(tmpfs)이 아니라 임시 디스크 볼륨. run --rm 종료 시 함께 제거한다.
       - /tmp
@@ -196,6 +198,10 @@ services:
           create_host_path: false
 
 volumes:
+  engines-install-target:
+    # 설치기는 미지정 시 운영 볼륨을 마운트하지 않는다. 일반 서비스의 engines 정의는 유지한다.
+    external: true
+    name: ${ENGINES_VOLUME_NAME:-klassic_engine_install_target_required}
   # backend Compose의 같은 이름·정의와 공유한다(include 병합 시 동일 자원).
   storage:
   model-storage:
