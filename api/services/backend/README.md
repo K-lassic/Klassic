@@ -151,6 +151,9 @@ docker compose up -d web          # web 을 다시 만들어야 새 값을 읽�
 
 # 3) 외부 키 (#91) — 시험 · 시연용. 다른 키를 폐기하지 않고, 원문이 한 번만 나온다. --limit 이 없으면 처리 설정의 기본 한도
 docker compose run --rm -T web node dist/tools/issueExternalKey.js --name <이름> --email <메일> --limit 100
+
+# 4) 음원 · 렌더러 라이선스 확인 (#98) — 인자 없이 실행하면 지금 상태만 본다. --withhold 는 되돌리기
+docker compose run --rm -T web node dist/tools/confirmLicense.js --operator <운영자 아이디> --confirm
 ```
 
 | 도구 | 파일 | DB 에 남는 것 |
@@ -158,6 +161,7 @@ docker compose run --rm -T web node dist/tools/issueExternalKey.js --name <이�
 | 운영자 만들기 | `src/tools/createOperator.ts` | `account`(argon2id 해시) · `operator_account` · `account_role`(operator · user). 이미 가입한 계정이면 operator 역할만 더함 |
 | 서비스 키 발급 | `src/tools/issueServiceKey.ts` → `src/services/accessKeys.ts` | `access_key`(SHA-256 해시 + 앞 8글자, 원문 없음) · 이전 서비스 키 `revoked` · `change_history`(누가 발급 · 폐기했는지) |
 | 외부 키 발급 (#91) | `src/tools/issueExternalKey.ts` → `src/services/accessKeys.ts` | `access_key` · `key_application`. 화면 신청(`POST /api/key-applications`)과 같은 코드. DB 제약 때문에 신청 번호가 필수이고 `issued_by` 는 비운다 |
+| 라이선스 확인 (#98) | `src/tools/confirmLicense.ts` | `license_policy`(`confirmed` · 결정한 운영자 · 시각) · `change_history`. 뷰 `v_mp3_license` 로 화면 "내부 시연용" 안내와 외부 키 MP3 허용이 바로 바뀐다. 관리자 API #100 `PUT /admin/license` 와 같은 동작 |
 
 - 키 원문은 **표준 출력에만** 나오고, 안내는 표준 오류로 나온다 — `> 파일` 로 받으면 키만 남는다. 로그 · DB 에는 원문이 없다.
 - 비밀번호는 명령줄 인자로 받지 않는다(셸 기록 · 프로세스 목록에 남으므로). 자동화할 때만 환경변수 `ADMIN_PASSWORD`.
