@@ -35,21 +35,6 @@ function go(i: number) {
 const next = () => go(index.value + 1);
 const prev = () => go(index.value - 1);
 
-// (2026-11-03) 장마다 높이가 달라(윈도우 글꼴은 줄이 더 바뀐다) 넘길 때 창이 튀었다 — 앞 장과 새 장을 겹쳐 두고 높이를 부드럽게 옮긴다
-const stage = ref<HTMLElement | null>(null);
-function lockHeight() {
-  if (stage.value) stage.value.style.height = `${stage.value.offsetHeight}px`;
-}
-function growHeight(el: Element) {
-  const s = stage.value;
-  if (!s) return;
-  const h = (el as HTMLElement).offsetHeight;
-  requestAnimationFrame(() => { s.style.height = `${h}px`; });
-}
-function freeHeight() {
-  if (stage.value) stage.value.style.height = '';
-}
-
 function close() {
   // 앱 안에서 왔으면 그 화면으로, 주소로 바로 열었으면 1단계로
   const back = (window.history.state as { back?: string | null } | null)?.back;
@@ -92,8 +77,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
         </span>
       </div>
 
-      <div ref="stage" class="tour-stage">
-        <Transition :name="`slide-${dir}`" @before-leave="lockHeight" @enter="growHeight" @after-enter="freeHeight" @enter-cancelled="freeHeight">
+      <!-- (2026-11-03) 장마다 높이가 달라(윈도우 글꼴은 줄이 더 바뀐다) [다음] 버튼이 오르내렸다.
+           여섯 장의 제목 · 문장을 보이지 않게 같은 칸에 겹쳐 두어, 칸 높이가 가장 긴 장에 맞춰 늘 같다. 그림 상자 높이는 고정 -->
+      <div class="tour-stage">
+        <div v-for="s in slides" :key="`sizer-${s.title}`" class="tour-slide tour-sizer" aria-hidden="true">
+          <p class="h2 tour-title">{{ s.title }}</p>
+          <div><p v-for="l in s.lines" :key="l" class="body tour-line">{{ l }}</p></div>
+          <div class="pic" />
+        </div>
+        <Transition :name="`slide-${dir}`">
           <div :key="index" class="tour-slide" :data-test="`tour-slide-${index + 1}`">
             <!-- (168번) 제목 → 문장 → 그림이 차례로 떠오른다 -->
             <h2 id="tour-title" ref="titleEl" class="h2 tour-title rise" tabindex="-1">{{ slide.title }}</h2>
@@ -209,9 +201,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 }
 .tour-top { display: flex; align-items: center; justify-content: space-between; }
 .btn-x { min-width: 44px; min-height: 44px; padding: 6px 12px; }
-/* 앞 장과 새 장이 한 칸에 겹친다 — 높이는 lockHeight · growHeight 가 옮긴다 */
-.tour-stage { display: grid; align-items: start; transition: height .35s ease; }
+/* 앞 장 · 새 장 · 높이 맞춤용 여섯 장이 한 칸에 겹친다 */
+.tour-stage { display: grid; align-items: start; }
 .tour-stage > .tour-slide { grid-area: 1 / 1; }
+.tour-sizer { visibility: hidden; pointer-events: none; }
 .tour-slide { display: grid; gap: var(--spacing-8); justify-items: center; text-align: center; }
 .tour-title { margin: 0; outline: none; }
 .tour-line { margin: 0; }
@@ -231,7 +224,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 
 /* ── 그림(모형) 공통 ── */
 .pic {
-  position: relative; width: 100%; min-height: 220px; margin-top: var(--spacing-16); padding: var(--spacing-24);
+  position: relative; width: 100%; height: 260px; margin-top: var(--spacing-16); padding: var(--spacing-24);
   display: grid; gap: var(--spacing-16); justify-items: center; align-content: center;
   background: var(--color-canvas-cream); border: 1px solid var(--color-hairline); border-radius: var(--rounded-stadium);
   color: var(--color-ink-black); box-sizing: border-box; overflow: hidden;
@@ -382,7 +375,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 /* (2026-10-01 황송해 210번) 전에는 운영체제 동작 줄이기(@media prefers-reduced-motion)에 걸었다 — 이제 [움직임 줄이기]를 누른 창(.calm)에만 */
 .tour.calm .slide-next-enter-active, .tour.calm .slide-next-leave-active, .tour.calm .slide-prev-enter-active, .tour.calm .slide-prev-leave-active { transition: opacity .35s ease; }
 .tour.calm .slide-next-enter-from, .tour.calm .slide-next-leave-to, .tour.calm .slide-prev-enter-from, .tour.calm .slide-prev-leave-to { transform: none; }
-.tour.calm .dot::before, .tour.calm .tour-stage { transition: none; }
+.tour.calm .dot::before { transition: none; }
 .tour.calm .rise { animation-name: tour-fade-in; }
 .tour.calm .pic *, .tour.calm .pic *::before, .tour.calm .pic *::after { animation: none; }
 .tour.calm .drag, .tour.calm .flow-dot, .tour.calm .dl-arrow, .tour.calm .h-fly, .tour.calm .playhead, .tour.calm .pcur { display: none; }
