@@ -35,6 +35,21 @@ function go(i: number) {
 const next = () => go(index.value + 1);
 const prev = () => go(index.value - 1);
 
+// (2026-11-03) 장마다 높이가 달라(윈도우 글꼴은 줄이 더 바뀐다) 넘길 때 창이 튀었다 — 앞 장과 새 장을 겹쳐 두고 높이를 부드럽게 옮긴다
+const stage = ref<HTMLElement | null>(null);
+function lockHeight() {
+  if (stage.value) stage.value.style.height = `${stage.value.offsetHeight}px`;
+}
+function growHeight(el: Element) {
+  const s = stage.value;
+  if (!s) return;
+  const h = (el as HTMLElement).offsetHeight;
+  requestAnimationFrame(() => { s.style.height = `${h}px`; });
+}
+function freeHeight() {
+  if (stage.value) stage.value.style.height = '';
+}
+
 function close() {
   // 앱 안에서 왔으면 그 화면으로, 주소로 바로 열었으면 1단계로
   const back = (window.history.state as { back?: string | null } | null)?.back;
@@ -77,7 +92,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
         </span>
       </div>
 
-      <Transition :name="`slide-${dir}`" mode="out-in">
+      <div ref="stage" class="tour-stage">
+      <Transition :name="`slide-${dir}`" @before-leave="lockHeight" @enter="growHeight" @after-enter="freeHeight" @enter-cancelled="freeHeight">
         <div :key="index" class="tour-slide" :data-test="`tour-slide-${index + 1}`">
           <!-- (168번) 제목 → 문장 → 그림이 차례로 떠오른다 -->
           <h2 id="tour-title" ref="titleEl" class="h2 tour-title rise" tabindex="-1">{{ slide.title }}</h2>
@@ -116,7 +132,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
               <div class="inst-scene">
                 <div class="mini-staff">
                   <div class="lines"><i v-for="n in 5" :key="n" /></div>
-                  <span v-for="n in 6" :key="n" class="mnote" :style="{ left: `${6 + (n - 1) * 15}%`, top: `${[40, 28, 34, 18, 40, 24][n - 1]}%`, animationDelay: `${(n - 1) * 0.5}s` }"><span class="head" /></span>
+                  <span v-for="n in 6" :key="n" class="mnote" :style="{ left: `${6 + (n - 1) * 15}%`, top: `${[40, 28, 34, 18, 40, 24][n - 1]}%`, animationDelay: `calc(var(--loop) * ${(6 + (n - 1) * 15 - 3) / 100})` }"><span class="head" /></span>
                   <span class="playhead" />
                 </div>
                 <div class="inst-card">
@@ -158,6 +174,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
           </div>
         </div>
       </Transition>
+      </div>
 
       <!-- 점 표시(1/6) · 장 번호는 aria-live 로 읽힌다 -->
       <div class="dots" role="group" aria-label="장 고르기">
@@ -183,7 +200,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 <style scoped>
 .tour-tools { display: inline-flex; align-items: center; gap: var(--spacing-8); }
 .btn-calm { min-height: 44px; padding: 6px 16px; font-size: var(--text-small); }
-.tour-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(20, 20, 19, .4); overflow-y: auto; }
+.tour-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(20, 20, 19, .4); overflow-y: auto; scrollbar-gutter: stable; }
 .tour {
   --loop: 3.6s;
   width: min(640px, 100%); display: grid; gap: var(--spacing-16); padding: var(--spacing-32);
@@ -192,6 +209,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 }
 .tour-top { display: flex; align-items: center; justify-content: space-between; }
 .btn-x { min-width: 44px; min-height: 44px; padding: 6px 12px; }
+/* 앞 장과 새 장이 한 칸에 겹친다 — 높이는 lockHeight · growHeight 가 옮긴다 */
+.tour-stage { display: grid; align-items: start; transition: height .35s ease; }
+.tour-stage > .tour-slide { grid-area: 1 / 1; }
 .tour-slide { display: grid; gap: var(--spacing-8); justify-items: center; text-align: center; }
 .tour-title { margin: 0; outline: none; }
 .tour-line { margin: 0; }
@@ -359,7 +379,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 /* (2026-10-01 황송해 210번) 전에는 운영체제 동작 줄이기(@media prefers-reduced-motion)에 걸었다 — 이제 [움직임 줄이기]를 누른 창(.calm)에만 */
 .tour.calm .slide-next-enter-active, .tour.calm .slide-next-leave-active, .tour.calm .slide-prev-enter-active, .tour.calm .slide-prev-leave-active { transition: opacity .35s ease; }
 .tour.calm .slide-next-enter-from, .tour.calm .slide-next-leave-to, .tour.calm .slide-prev-enter-from, .tour.calm .slide-prev-leave-to { transform: none; }
-.tour.calm .dot::before { transition: none; }
+.tour.calm .dot::before, .tour.calm .tour-stage { transition: none; }
 .tour.calm .rise { animation-name: tour-fade-in; }
 .tour.calm .pic *, .tour.calm .pic *::before, .tour.calm .pic *::after { animation: none; }
 .tour.calm .drag, .tour.calm .flow-dot, .tour.calm .dl-arrow, .tour.calm .h-fly, .tour.calm .playhead, .tour.calm .pcur { display: none; }
