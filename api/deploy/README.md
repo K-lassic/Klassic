@@ -144,6 +144,37 @@ pwsh api/deploy/funnel.ps1 stop
 - proto_type(v0.1.1)은 9503 · 26101 을 쓴다. `api/` 는 **9603 · 26201**(`API_PUBLIC_PORT` · `API_ADMIN_PORT`)로 띄워서 둘이 같이 떠 있게 한다 (#20).
 - 발표에 쓸 쪽을 정하면 `start -Port <포트>` 로 Funnel 이 가리키는 곳만 바꾼다. 컨테이너는 끄지 않는다.
 
+## 엔진 자가 검사 — 재구성 이미지 사용 (#142)
+
+구조에서의 위치: 운영자의 `tools` 명령 → api model-api 이미지 → 읽기 전용 엔진 볼륨.
+필요한 것은 `api/`에서 빌드한 model-api 이미지와 설치 완료된 엔진 볼륨이다.
+`ENGINE_CHECK_IMAGE`가 비어 있으면 `MODEL_API_IMAGE`를 사용하고, 둘 다 없으면
+`klassic/model-api:0.2.2`를 선택한다. 기준판 이미지나 실행 중인 DB·서비스 키는 검사에 필요하지 않다.
+
+`api/`에서 Git Bash/Linux 셸로 실행한다. 임시 프로젝트·임시 볼륨 이름을 명시한다.
+
+```bash
+export ENGINES_VOLUME_NAME=klassic_issue138_fresh
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml build model-api
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml --profile tools config -q
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml --profile tools run --rm --no-deps engine-selftest
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml down
+unset ENGINES_VOLUME_NAME
+```
+
+Compose 전체를 해석하기 위한 로컬 `.env`는 필요하지만, 검사 컨테이너에는 DB 비밀번호·키를 전달하지 않는다.
+네트워크는 차단하고 엔진·루트 파일시스템은 읽기 전용이며, 임시 파일만 `/tmp`에 기록한다.
+마지막 JSON의 `ok=true`, 각 엔진의 `ok=true`, 종료 코드 0을 확인한다.
+`ENGINE_CHECK_IMAGE`에 별도 태그를 지정하려면 해당 재구성 이미지가 로컬에 먼저 있어야 한다.
+기존 `klassic/klassic-model-api:0.1.1` 이미지는 아래 예비 시연·롤백용으로 보존하며 삭제하지 않는다 (#145).
+
+2026-11-03 임시 프로젝트 `klassic-api-issue142`에서 `api/`로 빌드한 model-api 이미지와
+임시 엔진 볼륨 `klassic_issue138_fresh`로 확인했다. homr 약 3.5초, 정간보 약 14.6초,
+전체 약 18.1초에 모두 `ok=true`, 종료 코드 0이었다. UID 1000·읽기 전용 엔진 마운트를 확인했고,
+검사 이미지 명시 → 서비스 이미지 → 기본 이미지 순서의 설정 선택도 확인했다.
+전체 Compose를 `up -d --build --wait`로 실행해 상시 서비스 healthy와 브라우저 API활용 화면 표시를
+확인한 뒤 같은 프로젝트·환경 파일로 `down`했다. 잔여 컨테이너는 없고 엔진·DB 볼륨과 롤백 이미지는 보존했다.
+
 ## model-api 대역 (#49)
 
 재구성 model-api(#24 · #28~#31)가 발표까지 갖춰지지 않을 때를 대비해, **v0.1.1 이미지를 `model-api` 이름으로 `api/` 에 붙인다.** 코드는 고치지 않는다. 파일은 [compose.standin.yaml](compose.standin.yaml) · [model-standin.env](model-standin.env)(키 이름만) 두 개다.
@@ -154,7 +185,8 @@ web ──┐
 Nginx ┘
 ```
 
-필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`. proto_type 컨테이너는 떠 있지 않아도 된다.
+대역을 선택할 때만 필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`.
+위 #142의 재구성 엔진 자가 검사에는 이 이미지가 필요하지 않다. proto_type 컨테이너는 떠 있지 않아도 된다.
 
 **처음 한 번 — 서비스 키 만들기** (서버 PC · Git Bash · `api/` 폴더)
 
