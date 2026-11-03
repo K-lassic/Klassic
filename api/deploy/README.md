@@ -57,8 +57,8 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 ```powershell
 pwsh api/deploy/funnel.ps1 status             # 로그인 상태 · 공개 주소
-pwsh api/deploy/funnel.ps1 start              # 예비 시연: proto_type gateway(9503) 공개
-pwsh api/deploy/funnel.ps1 start -Port 9603   # 재구성: api/ 입구(Nginx)로 전환 (#48)
+pwsh api/deploy/funnel.ps1 start              # 재구성: api/ 입구(9603) 공개 — 기본값 (#139)
+pwsh api/deploy/funnel.ps1 start -Port 9503   # 예비 시연: proto_type gateway(9503) 공개 (proto_type 이 있을 때만)
 pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 ```
 
@@ -78,7 +78,7 @@ pwsh api/deploy/funnel.ps1 start -Port 9603
 pwsh api/deploy/check-public.ps1
 
 # 3. 되돌리기 · 다시 전환 — 시간을 잰다 (완료 기준 1분 안)
-pwsh api/deploy/funnel.ps1 start
+pwsh api/deploy/funnel.ps1 start -Port 9503
 pwsh api/deploy/funnel.ps1 start -Port 9603
 
 # 4. 평소에는 끈다
