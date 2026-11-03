@@ -3,9 +3,10 @@ import vue from '@vitejs/plugin-vue';
 import { resolve } from 'node:path';
 
 // 두 진입점: index.html(일반 사용자) · admin.html(관리자) — 관리자 코드가 사용자 번들에 들어가지 않는다(v0.1.1 research R13)
-// 개발 서버(npm run dev)만 쓰는 대상 주소 — 기본은 v0.1.1 대역(proto_type 9503 · 26101). api/ 로 붙이려면 9603 · 26201
-const devPublic = process.env.DEV_PUBLIC_TARGET ?? 'http://127.0.0.1:9503';
-const devAdmin = process.env.DEV_ADMIN_TARGET ?? 'http://127.0.0.1:26101';
+// 개발 서버(npm run dev)만 쓰는 대상 주소 — 기본은 api/ 입구(9603 · 26201, #139).
+// v0.1.1 예비 시연(proto_type 9503 · 26101)을 보려면 DEV_PUBLIC_TARGET · DEV_ADMIN_TARGET 으로 명시한다.
+const devPublic = process.env.DEV_PUBLIC_TARGET ?? 'http://127.0.0.1:9603';
+const devAdmin = process.env.DEV_ADMIN_TARGET ?? 'http://127.0.0.1:26201';
 
 export default defineConfig({
   plugins: [vue()],

@@ -57,8 +57,8 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 ```powershell
 pwsh api/deploy/funnel.ps1 status             # 로그인 상태 · 공개 주소
-pwsh api/deploy/funnel.ps1 start              # 예비 시연: proto_type gateway(9503) 공개
-pwsh api/deploy/funnel.ps1 start -Port 9603   # 재구성: api/ 입구(Nginx)로 전환 (#48)
+pwsh api/deploy/funnel.ps1 start              # 재구성: api/ 입구(9603) 공개 — 기본값 (#139)
+pwsh api/deploy/funnel.ps1 start -Port 9503   # 예비 시연: proto_type gateway(9503) 공개 (proto_type 이 있을 때만)
 pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 ```
 
@@ -78,7 +78,7 @@ pwsh api/deploy/funnel.ps1 start -Port 9603
 pwsh api/deploy/check-public.ps1
 
 # 3. 되돌리기 · 다시 전환 — 시간을 잰다 (완료 기준 1분 안)
-pwsh api/deploy/funnel.ps1 start
+pwsh api/deploy/funnel.ps1 start -Port 9503
 pwsh api/deploy/funnel.ps1 start -Port 9603
 
 # 4. 평소에는 끈다
@@ -399,6 +399,89 @@ unset ENGINES_VOLUME_NAME API_PUBLIC_PORT API_ADMIN_PORT SERVICE_API_KEY
 - 서버 PC 측정값이 나오면 크기 · 메모리를 그 값으로 바꾼다.
 - 실제 서비스는 여전히 기존 엔진으로 돈다고 함께 말한다. 적용을 마친 기능으로 소개하지 않는다.
 - 시험을 못 했거나 실패하면 코드 작업용 PC 결과만 말하거나 빼고, 시험하지 못한 항목을 그대로 밝힌다.
+
+## api 코드만으로 엔진 새로 설치 (#138)
+
+구조에서의 위치: 운영자의 `tools` 작업 → model-api의 `installer/` 이미지 → 외부 엔진 볼륨.
+설치기는 `/scripts/`에서 실행하며, 서비스 실행 중에는 같은 볼륨을 읽기 전용으로 사용한다.
+Audiveris는 이 설치기에 포함하지 않는다 (#102).
+
+### 빈 시험 볼륨에서 먼저 확인
+
+**운영 볼륨 이름을 쓰지 않는다. 설치기는 볼륨 이름 미지정과 `klassic_engines` 지정을 거부한다.**
+
+아래는 `api/`에서 Git Bash 또는 Linux 셸로 실행한다. Docker Compose와 인터넷 연결이 필요하고,
+`api/.env.example` 형식으로 작성한 로컬 `.env`가 있어야 한다. 음원은 Git LFS로 실제 파일을 받는다.
+**기존 `klassic_engines`에 시험 설치하지 않는다.** 프로젝트 이름만 바꾸어도 외부 엔진 볼륨은 분리되지 않으므로,
+`ENGINES_VOLUME_NAME`도 반드시 별도로 지정한다.
+
+```bash
+export ENGINES_VOLUME_NAME=klassic_issue138_fresh
+docker volume create "$ENGINES_VOLUME_NAME"
+docker compose -p klassic-api-issue138 --env-file .env -f compose.yaml --profile tools build engines-installer
+docker compose -p klassic-api-issue138 --env-file .env -f compose.yaml --profile tools run --rm --no-deps engines-installer
+
+# 두 엔진을 연결한 서비스와 사이트를 띄운다. 기존 서비스와 포트가 겹치면 먼저 별도로 지정한다.
+docker compose -p klassic-api-issue138 --env-file .env -f compose.yaml up -d --build --wait
+```
+
+사이트에서 오선보·정간보 예제를 각각 인식하고, 대체 악보가 아닌 실제 결과인지 확인한다.
+API 결과 기준은 `route=recognize`, `fallback=false`다. 검증이 끝나면 같은 명령 조건으로 정리한다.
+새 DB에는 서비스 키도 기존 「서비스 키 발급」 절차로 등록하고 `.env`의 `SERVICE_API_KEY`와 맞춘다.
+이 설치기는 엔진만 설치하며 DB 사용자·서비스 키를 만들지 않는다.
+`down -v`는 사용하지 않는다. 시험용 엔진 볼륨도 별도 확인 전에는 보존한다.
+
+```bash
+docker compose -p klassic-api-issue138 --env-file .env -f compose.yaml down
+unset ENGINES_VOLUME_NAME
+```
+
+새 PC의 정식 설치도 같은 순서이며, 검증 후 사용할 **빈** 엔진 볼륨 이름을 명시한다.
+기존 설치를 새 버전으로 덮어쓰거나 자동 교체하는 명령은 아니다. 컨테이너 내부 엔진 경로는 기본
+`/opt/gugak-engines`를 유지한다. 정간보 Python도 볼륨의 `.uv-python`에 설치하므로,
+설치할 때와 실행할 때 이 마운트 경로가 같아야 한다. 설치 결과 `homr/`, `jeongganbo/`는
+각 어댑터가 찾는 폴더 이름과 일치한다.
+
+### 고정 항목과 실패 처리
+
+- homr 0.7.0: `installer/locks/homr/uv.lock`을 `uv sync --frozen`으로 설치하고, ONNX 6개 파일의 크기·SHA-256을 검사한다.
+- 정간보: `e95045fce5ab151fc4b87d5be86c4ac5f7621f4c` 커밋, Python 3.8.20,
+  `Pipfile.lock`에서 옮긴 버전·해시가 있는 `requirements.lock.txt`를 사용한다.
+- 정간보 체크포인트 v1.0.0 압축 파일 SHA-256:
+  `f0e0d44a7ad54b7389b02f871e825d3ae439c5dda1a8f189916c727795a251bb`.
+  압축 해시를 확인한 다음 지정된 모델·설정·토크나이저 3개만 꺼내 개별 해시도 검사한다.
+- 각 엔진의 의존성 검사와 모델 로딩·해시 검사가 끝나야 `INSTALL_MANIFEST.json`을 기록한다.
+  재실행하면 잠금·버전·가중치를 확인하고 기존 설치를 유지한다. 같은 엔진의 동시 설치는 파일 잠금으로 거부한다.
+- 완료 표식이 없는 기존/부분 설치는 자동으로 건너뛰거나 덮어쓰지 않고 실패한다.
+  로그에서 원인을 확인한 뒤 **새 시험 볼륨 이름으로 다시 시도**한다. 운영 볼륨을 삭제해서 해결하지 않는다.
+- 설치기는 UID 1000, 읽기 전용 루트, 추가 권한 없이 실행하며 DB 비밀번호·API 키를 받지 않는다.
+  쓰기 범위는 엔진 볼륨과 일회성 `/tmp` 볼륨이다. 큰 패키지 다운로드가 RAM을 차지하지 않도록
+  `/tmp`는 tmpfs 대신 디스크 볼륨이며, `run --rm` 종료 때 해당 익명 볼륨을 정리한다.
+
+### 시간 · 디스크 기준
+
+2026-11-03 로컬 Docker Desktop/Linux amd64에서 빈 볼륨 설치는 **약 8분 31초**였다
+(이미지 빌드 제외, 네트워크 속도에 따라 달라짐). 설치 후 볼륨은 **6,001,166,154바이트, 약 5.59GiB**였다.
+기존에 검증된 의존성을 재현하므로 정간보는 CPU로 실행해도 CUDA 관련 패키지가 포함된다.
+CPU 전용 경량화는 별도 검증 대상이며 이 설치기에서 임의로 바꾸지 않았다.
+설치 중에는 이미지·다운로드 캐시 공간도 필요하다. 최종 볼륨 크기만큼만 남겨 두면 부족할 수 있으므로
+작업 전 최소 20GB의 여유 공간을 권장한다 (설치 중 최대 디스크 사용량은 별도 미측정).
+
+같은 임시 볼륨으로 전체 Compose를 빌드·실행해 healthy를 확인했다. 외부 API에서 오선보 1쪽(약 71초),
+정간보 PDF 2쪽(약 89초)이 모두 `route=recognize`, `fallback=false`로 완료됐다
+(로컬 환경의 접수부터 결과 생성까지, 서버 성능 보장값 아님).
+브라우저에서도 로그인 → 예시 선택 → 실제 결과 악보 표시 → 재생 시간 증가를 확인했다.
+설치기 재실행은 기존 설치를 유지했고, 아래 회귀 시험 7개도 통과했다. 실제 서버 볼륨은 변경하지 않았다.
+
+설치기의 손상 다운로드·링크 파일·부분 설치·잠금 변경 회귀 시험은 `api/`에서 실행한다.
+시험 컨테이너는 실제 엔진 볼륨이나 네트워크에 연결하지 않는다.
+
+```bash
+docker run --rm --network none --read-only --tmpfs /tmp \
+  -v "$(pwd)/services/model-api/installer/tests:/tests:ro" \
+  --entrypoint python klassic/engines-installer:0.2.2 \
+  -B -m unittest discover -s /tests -v
+```
 
 ## 백업 · 복원 (#97)
 

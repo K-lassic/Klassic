@@ -2,7 +2,7 @@
 
 사용자 화면(올리기 · 결과 · 편집 · 연주 · 내려받기 · API 안내) · 관리자 화면 · 정적 파일 서빙(Nginx).
 
-- 참고 코드: `proto_type/src/app/frontend` (Vue · Vite · TypeScript, 약 10,900줄 — 사용자 약 6,900줄 · 관리자 약 4,000줄 · 테스트 44개 파일)
+- 참고 코드: `proto_type/src/app/frontend` (Vue · Vite · TypeScript, 약 10,900줄 — 사용자 약 6,900줄 · 관리자 약 4,000줄 · 테스트 44개 파일) — 원본은 git 태그 `v0.1.1` 에 있다 (#143)
 - 계약: [../../contracts/web-api.yaml](../../contracts/web-api.yaml)
 - 공용 패키지: [../../packages/score-core/](../../packages/score-core/) (편집 · 연주에서 사용)
 
