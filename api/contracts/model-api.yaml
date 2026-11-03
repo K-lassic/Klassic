@@ -1,5 +1,5 @@
 # backend · 외부 사용자 ↔ model-api 계약 — 담당: 예은 · 리뷰: 팀장
-# 기준: proto_type v0.1.1. 자동 OpenAPI + 라우터·schemas.py·errors.py·호출부 대조.
+# 기준: v0.1.1 (근거 스냅샷 api/docs/reference/v0.1.1/, 원본은 git 태그 v0.1.1). 자동 OpenAPI + 라우터·schemas.py·errors.py·호출부 대조.
 openapi: 3.1.0
 info:
   title: K-lassic model-api 계약
