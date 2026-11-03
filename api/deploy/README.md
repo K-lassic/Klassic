@@ -456,7 +456,8 @@ docker run --rm --network none --read-only --tmpfs /tmp \
 **자동으로 돌지 않는다.** 사람이 정한 때 실행한다. 권장 시점: 발표 리허설 전 · 발표 직전 · 마이그레이션이나 큰 변경 전.
 
 - 담는 것: DB(`db.sql.gz`) · `storage` · `model-storage` · `MANIFEST.txt`(해시 · 커밋 · 행 수)
-- 담지 않는 것: `api/.env` 는 따로 보관한다. 엔진 볼륨은 다시 만들 수 있고, 음원은 저장소에 있다.
+- `-e` 를 주면 엔진 볼륨도 담는다 (#141): `engines.tar.gz` · `engines.sha256`(파일 해시 목록) · `engines.links`(링크 목록). `MANIFEST.txt` 에 두 목록의 해시와 볼륨 이름 · 파일 수 · 설치 기록(`INSTALL_MANIFEST.json`) 유무가 들어간다. 약 2.8GB · 6분이라 기본으로는 담지 않는다.
+- 담지 않는 것: `api/.env` 는 따로 보관한다. 음원은 저장소에 있다.
 - 비밀번호는 컨테이너 안 환경변수로만 쓴다. 명령줄 · 파일 이름 · 출력에 나오지 않는다.
 
 **백업** (서버 PC · Git Bash · `api/` 폴더) — 서비스를 멈추지 않는다. 기본 위치 `D:\klassic-backup\<시각>\`. 끝에 `완료:` 가 나오면 정상이다. 중간에 실패하면 `.incomplete` 폴더만 남고, 복원은 이 폴더를 거부한다.
@@ -479,7 +480,57 @@ API_PUBLIC_PORT=9623 API_ADMIN_PORT=26221 docker compose -p klassic-api-restore 
 
 **시험 결과 (2026-11-03, 임시 프로젝트):** 인식 · 내보내기 · 공유까지 만든 프로젝트를 백업해 다른 프로젝트에 복원했다. 행 수 일치, 같은 계정 로그인, 내 악보 · 결과 악보 · 내려받기 · 공유 악보 모두 200, DB 와 파일 일치. 틀린 비밀번호는 401. 덤프 · 기록에 비밀번호 없음.
 
-**시험하지 않은 것:** 실제 서비스 볼륨을 되돌리는 절차, 다른 PC 에서 복원, 큰 볼륨의 소요 시간.
+**시험하지 않은 것 (#97):** 실제 서비스 볼륨을 되돌리는 절차, 다른 PC 에서 복원. 큰 볼륨(엔진 6GB)의 소요 시간은 #141 에서 쟀다.
+
+### 엔진 볼륨 백업 · 복원 (#141)
+
+엔진 볼륨은 프로젝트 밖의 외부 볼륨이라 이름으로 고른다 (`-E`, 기본 `klassic_engines`). 백업은 볼륨을 **읽기 전용**으로만 연다.
+
+**백업** (서버 PC · Git Bash · `api/` 폴더) — 끝에 `완료:` 가 나오고, 그 위에 `엔진: 파일 <수> · 링크 <수>` 가 보이면 정상이다.
+
+```bash
+bash deploy/backup.sh -e
+```
+
+**엔진만 복원** — 실제 서비스(`klassic-api`)의 엔진을 잃었을 때 쓴다. **새 이름**의 볼륨에만 풀고, 파일 해시 · 링크 목록이 백업과 같아야 `완료:` 가 나온다. 이미 있는 볼륨(실제 `klassic_engines` 포함)은 거부한다.
+
+```bash
+bash deploy/restore.sh -i /d/klassic-backup/<시각> -E klassic_engines_restored
+```
+
+복원한 볼륨을 붙인다. model-api 가 Healthy 면 정상이다. 되돌리려면 같은 명령을 `ENGINES_VOLUME_NAME=` 없이 실행한다.
+
+```bash
+ENGINES_VOLUME_NAME=klassic_engines_restored docker compose up -d --wait model-api
+```
+
+- 새 프로젝트에 DB · 파일과 함께 복원할 때는 `-p <새 프로젝트>` 와 `-E <새 볼륨>` 을 같이 준다.
+- 해시가 다르면 `엔진 파일 해시가 백업과 다르다` 로 멈춘다. 그 볼륨은 쓰지 않고 이름을 확인한 뒤 지운다. 다시 할 때는 새 이름을 쓴다.
+- 엔진 백업이 없으면 #138 설치기로 새로 설치한다 (위 「api 코드만으로 엔진 새로 설치」).
+
+### 엔진 볼륨이 없을 때
+
+| 증상 | 근거 | 조치 |
+|---|---|---|
+| `docker compose up -d` 가 바로 `external volume "klassic_engines" not found` 로 끝난다 (끝 코드 1) | model-api 의 `engines` 볼륨이 `external: true` 라 Compose 가 새로 만들지 않는다. **컨테이너 · 네트워크를 하나도 만들지 않고** 멈춘다 | ① 엔진 백업이 있으면 「엔진만 복원」 → `ENGINES_VOLUME_NAME` 로 붙인다 ② 없으면 #138 설치기로 새 볼륨에 설치 |
+
+- `docker compose config` 는 볼륨이 있는지 검사하지 않아 통과한다. 이 증상은 `up` 에서만 보인다.
+- 엔진을 쓰지 않는 서비스만 이름을 지정해 띄우면(`up -d db`) 뜬다. 화면 · 인식은 model-api 가 있어야 한다.
+- 이름이 틀린 경우도 같은 문구다 (`ENGINES_VOLUME_NAME` 오타). 먼저 `docker volume ls` 로 이름을 본다.
+
+### #141 시험 결과 (2026-11-04, 코드 작업용 PC · 임시 프로젝트)
+
+| 확인 | 결과 |
+|---|---|
+| 엔진 없음 | `ENGINES_VOLUME_NAME=klassic_issue141_missing` 로 `up -d --wait` → `external volume "klassic_issue141_missing" not found` · 끝 코드 1 · 만든 것 없음. `up -d db` 는 뜸 · `config --quiet` 는 통과 |
+| 백업 `-e` | 시험 엔진 볼륨(`klassic_issue144_engines`, #144 에서 설치) — **6분 23초 · 2.8GB** (엔진 2.99GB 압축) · 파일 41,794 · 링크 1,057 · 두 엔진 설치 기록 있음 |
+| 복원 `-p` + `-E` | **4분 41초** · 엔진 파일 해시 · 링크 목록이 백업과 같음 · DB 행 수 일치 (계정 3 · 요청 4 · 업로드 4 · 공유 1) |
+| 복원한 엔진으로 기동 | 13초 뒤 모두 Healthy · 엔진 볼륨 읽기 전용 · 공개 점검 15개 통과 · 예시 3개와 PDF 직접 올리기 모두 `recognize` · 대체 아님 (9.2~10.3초) |
+| 거부 | 이미 있는 볼륨(`klassic_engines`) · 실제 서비스 프로젝트 · 엔진 없는 백업 · 인자 없음 — 모두 아무것도 만들지 않고 멈춤 |
+| 검사기가 불일치를 잡는가 | 해시를 일부러 틀린 작은 가짜 백업 → `엔진 파일 해시가 백업과 다르다` · 끝 코드 1. 맞는 해시로는 통과 |
+
+- 실제 `klassic_engines` 는 거부 시험에서 이름만 대조했고 열지 않았다.
+- 시험하지 않은 것: 실제 서비스 볼륨 백업 실행(필요한 시점에 사람이 정한다), 다른 PC 로 옮겨 복원, 서버 PC(노트북)에서의 소요 시간.
 
 ## 서버 PC 운영 (#47)
 
