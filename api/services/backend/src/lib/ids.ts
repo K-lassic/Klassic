@@ -26,6 +26,11 @@ function numberWith(prefix: string, now: Date): string {
   return `${prefix}-${mm}${dd}-${code}`;
 }
 
+/** #91 키 신청 번호 — `A-` + 무작위 10자 (web-api.yaml) */
+export function newApplicationNo(): string {
+  return `A-${Array.from(randomBytes(10), (b) => ALPHA[b % ALPHA.length]).join('')}`;
+}
+
 /** 접속 주소는 원문으로 저장하지 않는다 — 소금 친 SHA-256 (v0.1.1 과 같은 식) */
 export function hashAddr(ip: string | undefined): string {
   return sha256(`${env().ADDR_HASH_SALT}|${(ip ?? 'unknown').replace(/^::ffff:/, '')}`);
