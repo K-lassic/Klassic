@@ -219,6 +219,30 @@ docker compose stop model-api                                   # 끄기
 - 시험하지 않은 것: 최신 이미지의 브라우저 화면 · 소리, 사진 예시 밖의 품질 비교, 시간당 호출 한도 응답(혼잡 응답이 먼저 나옴), 외부 Funnel.
 - 임시 프로젝트 주의: `compose.standin.yaml` 까지 붙여 `down -v` 하면 `model-storage` 볼륨이 남는다. 시험이 끝나면 `-f compose.yaml` 로 지운다.
 
+## v0.2.1 배포 (2026-11-03)
+
+main `45cb4af` (#128 · #130 · #134 포함)로 model-api · web · admin · frontend 를 다시 빌드해 실제 서버에 올렸다. DB 마이그레이션이 없어 백업은 하지 않았다.
+
+- 이미지: `klassic/model-api:0.2.1` · `0.2.1-g45cb4af`, `klassic/backend:dev` · `klassic/frontend:dev`. 네 컨테이너 모두 이미지 Id 일치
+- 확인: model-api `version` 0.2.1 · `/v1/health` 200, 입구 `/` · `/api/v1/health` · `/api-docs` 200, 내부 경로 404, 예시 3개(아리랑 세마치 · 미뉴에트 · 타령), model-api `mem_limit` 4GiB (대기 721MiB)
+- 시험하지 않은 것: 브라우저 화면 · 인식 · 소리 (실제 DB 에 시험 데이터를 넣지 않으려고 #49 리허설에서 본다)
+
+**되돌리기** (서버 PC · Git Bash · `api/` 폴더) — 이전 이미지는 `model-api:0.2.0` · `backend:before-021` · `frontend:before-021` 에 남겨 두었다.
+
+```bash
+docker tag klassic/backend:before-021 klassic/backend:dev
+```
+
+```bash
+docker tag klassic/frontend:before-021 klassic/frontend:dev
+```
+
+```bash
+MODEL_API_IMAGE=klassic/model-api:0.2.0 docker compose up -d --force-recreate --no-deps --wait model-api web admin frontend
+```
+
+모든 서비스가 Healthy 면 정상이다. 끝나면 이미지 Id 를 대조한다.
+
 ## CPU 전용 엔진 볼륨 시험 (2026-11-02)
 
 model-api 는 정간보를 CPU 로만 돌리는데, 고정 목록에 GPU 패키지가 들어 있어 엔진 볼륨이 크다. [build-cpu-engines.sh](build-cpu-engines.sh) 로 GPU 패키지를 뺀 새 볼륨을 만들어 기존 볼륨과 비교했다. `services/model-api/README.md` 「CPU 전용 정간보 환경」 순서를 따랐다.
