@@ -22,11 +22,21 @@ export function errorBody(code: string, details: Record<string, unknown> = {}, r
   const codes = shared().errorCodes;
   const known = codes.gate_codes[code];
   const def = known ?? codes.gate_codes.INTERNAL_ERROR;
+  // #33: 용량 초과와 화소·긴 변 초과를 구분한다. 화면은 서버 문구를 그대로 사용한다.
+  const pixels = code === 'UPLOAD_TOO_LARGE' && details.reason === 'image_pixels';
+  const maxPixels = typeof details.max_pixels === 'number' ? details.max_pixels : null;
+  const maxEdge = typeof details.max_edge === 'number' ? details.max_edge : null;
+  const pixelLabel = maxPixels !== null && maxPixels % 10000 === 0 ? `${maxPixels / 10000}만 화소` : `${maxPixels}화소`;
+  const message = pixels && maxPixels !== null && maxEdge !== null
+    ? details.after_upscale === true
+      ? '사진이 너무 길어 인식할 수 없습니다. 악보를 쪽별로 나누어 올려 주세요.'
+      : `사진의 해상도가 너무 높습니다. 한 장당 ${pixelLabel} 이하, 긴 변 ${maxEdge}px 이하만 가능합니다.`
+    : def.message;
   return {
     error: {
       code: known ? code : 'INTERNAL_ERROR',
-      message: def.message,
-      fix: def.web_fix ?? def.fix, // 웹 전용 문구가 있으면 그것
+      message,
+      fix: pixels ? '사진 크기를 줄이거나 악보를 쪽별로 나누어 다시 올려 주세요.' : def.web_fix ?? def.fix,
       gate: def.gate,
       retry_after: retryAfter ? retryAfter.toISOString() : null,
       details,

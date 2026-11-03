@@ -65,6 +65,7 @@ COPY --from=score-core . /app/packages/score-core
 - 새 코드 이름은 영역 접두어 권장: `WEB_…` · `MODEL_…` (v0.1.1 코드 이름은 그대로 둔다 — 화면 · 시험이 이 이름을 쓴다).
 - 두 서비스가 함께 쓰게 된 코드는 `common.json` 으로 옮긴다 (두 담당 리뷰).
 - `upload-rules.json` 의 숫자 상한은 DB 처리 설정 판본이 있으면 그 값이 우선이다 (v0.1.1 과 같음). Nginx 업로드 상한(`deploy/nginx/proxy.conf` 210m)도 같이 본다.
+- #33 후속 사진 상한은 `kinds.image.max_pixels`(40000000)·`max_edge_px`(10000)다. 해당 DB 열은 없으므로 이 두 값은 공통 파일에서 읽는다. backend 접수와 model-api가 기존 작은 사진 확대 비율까지 반영해 같은 기준으로 검사한다. 자동 축소는 하지 않는다. 초과 시 `UPLOAD_TOO_LARGE`, `details.reason=image_pixels`와 기준·원본 크기를 반환하고, 여러 장은 `details.page`로 반려 쪽을 알린다. 이 규칙을 바꾸면 backend·model-api 이미지를 함께 다시 빌드한다.
 
 ## 업로드 공유 시험 파일 (`fixtures/upload/`, #44)
 

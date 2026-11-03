@@ -113,7 +113,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             await close_safe_midi()
             await app.state.db.close()
 
-    app = FastAPI(title="K-lassic model-api", version="0.2.0",
+    app = FastAPI(title="K-lassic model-api", version="0.2.1",
                   openapi_url="/v1/openapi.json", docs_url="/v1/docs", redoc_url=None,
                   dependencies=[Depends(reject_unknown_fields)], lifespan=lifespan)
     app.state.config = cfg
