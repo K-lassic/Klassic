@@ -166,8 +166,9 @@ describe('180 · 181 (2026-09-30 황송해)', () => {
   it('181 로그인 입력칸 세로(레이블 : 입력칸 한 줄씩) — 가입도 같은 배치', () => {
     const src = read('src/pages/S0Login.vue');
     expect(tpl('src/pages/S0Login.vue')).toContain('<div class="fields rows">');
-    expect(src).toContain('.form-band .fields.rows { grid-template-columns: 1fr;');
-    expect(src).toContain('.rows .field { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center;');
+    // (2026-11-03) 레이블 칸 150px 고정 → 가장 긴 레이블 너비(max-content), 칸끼리 같은 열
+    expect(src).toContain('.form-band .fields.rows { grid-template-columns: max-content minmax(0, 1fr); align-items: center;');
+    expect(src).toContain('.rows .field { display: contents; }');
   });
 });
 

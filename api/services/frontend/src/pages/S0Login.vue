@@ -113,9 +113,17 @@ async function submit() {
 .narrow { max-width: 640px; }
 .submit-row { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-8); text-align: center; }
 /* (2026-09-30 황송해 181번) 이메일 · 비밀번호(가입은 이름까지) 한 줄씩 위아래, 줄마다 레이블 왼쪽 · 입력칸 오른쪽. 좁은 화면은 레이블이 위로 */
-.form-band .fields.rows { grid-template-columns: 1fr; gap: var(--spacing-16); max-width: 520px; width: 100%; justify-self: center; }
-.rows .field { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: var(--spacing-16); }
-@media (max-width: 560px) { .rows .field { grid-template-columns: 1fr; gap: var(--spacing-8); } }
+/* (2026-11-03) 레이블 칸을 150px 고정 → 가장 긴 레이블 너비로. 칸끼리 같은 열에 맞추려고 .field 는 풀어 둔다 */
+.form-band .fields.rows { grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: var(--spacing-16); max-width: 420px; width: 100%; justify-self: center; }
+.rows .field { display: contents; }
+@media (max-width: 560px) {
+  .form-band .fields.rows { grid-template-columns: 1fr; }
+  .rows .field { display: grid; gap: var(--spacing-8); }
+}
+/* (2026-11-03) 버튼 · 사유 · 안내 문구가 32px + 문단 여백으로 멀었다 — 버튼 아래 줄은 8px 간격 */
+.form-band { gap: var(--spacing-8); }
+.form-band > p { margin: 0; }
+.submit-row { margin-top: var(--spacing-24); }
 .link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
 .tour-cta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-8); }
 </style>
