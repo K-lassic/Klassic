@@ -148,16 +148,20 @@ docker compose run --rm -it web node dist/tools/createOperator.js --login <아�
 docker compose run --rm web node dist/tools/issueServiceKey.js --operator <운영자 아이디>
 #    → api/.env 의 SERVICE_API_KEY= 뒤에 붙여 넣고
 docker compose up -d web          # web 을 다시 만들어야 새 값을 읽는다
+
+# 3) 외부 키 (#91) — 시험 · 시연용. 다른 키를 폐기하지 않고, 원문이 한 번만 나온다. --limit 이 없으면 처리 설정의 기본 한도
+docker compose run --rm -T web node dist/tools/issueExternalKey.js --name <이름> --email <메일> --limit 100
 ```
 
 | 도구 | 파일 | DB 에 남는 것 |
 |---|---|---|
 | 운영자 만들기 | `src/tools/createOperator.ts` | `account`(argon2id 해시) · `operator_account` · `account_role`(operator · user). 이미 가입한 계정이면 operator 역할만 더함 |
 | 서비스 키 발급 | `src/tools/issueServiceKey.ts` → `src/services/accessKeys.ts` | `access_key`(SHA-256 해시 + 앞 8글자, 원문 없음) · 이전 서비스 키 `revoked` · `change_history`(누가 발급 · 폐기했는지) |
+| 외부 키 발급 (#91) | `src/tools/issueExternalKey.ts` → `src/services/accessKeys.ts` | `access_key` · `key_application`. 화면 신청(`POST /api/key-applications`)과 같은 코드. DB 제약 때문에 신청 번호가 필수이고 `issued_by` 는 비운다 |
 
 - 키 원문은 **표준 출력에만** 나오고, 안내는 표준 오류로 나온다 — `> 파일` 로 받으면 키만 남는다. 로그 · DB 에는 원문이 없다.
 - 비밀번호는 명령줄 인자로 받지 않는다(셸 기록 · 프로세스 목록에 남으므로). 자동화할 때만 환경변수 `ADMIN_PASSWORD`.
-- 외부 키 발급(예시 홈페이지 · 키 신청, P2)은 `services/accessKeys.ts` 에 `issueExternalKey` 로 더한다 (시간당 호출 한도 필수 — DB 제약).
+- API 안내 `/api/api-docs` · 키 신청의 공개 주소는 `PUBLIC_API_URL` 이다. `api/.env` 의 `PUBLIC_BASE_URL` 에 Funnel 주소를 넣고 `docker compose up -d web` 하면 `<주소>/api` 로 나온다 (#91).
 
 ### 장애 조치 (증상 → 근거 → 조치)
 

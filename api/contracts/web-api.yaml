@@ -742,6 +742,8 @@ paths:
                   key_prefix: { type: string, description: 앞 8글자 (`gk_` 포함) }
                   call_limit_per_hour: { type: integer }
         "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
 
   # ===========================================================================
   # 관리자 API (/admin) — 외부 비공개 · 운영자 쿠키 `gugak_admin` (P3)
