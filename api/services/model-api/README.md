@@ -269,7 +269,7 @@ Docker healthcheck는 `/health`의 `status=ok`·`db=ok`와 **실제 FluidSynth �
 | `SOUNDFONTS_DIR` | `/app/shared/soundfonts` |
 | `JEONGGANBO_DEVICE` | `cpu` (현재 검증 범위) |
 | `MODEL_LOAD_TIMEOUT_SECONDS` | 엔진별 120초, 최대 600초 |
-| `MODEL_API_IMAGE` | 로컬 검증 태그 `klassic/model-api:issue24-local` |
+| `MODEL_API_IMAGE` | 기본 `klassic/model-api:0.2.0`. 이전 로컬 태그 `issue24-local` 은 되돌리기용으로 남긴다 |
 
 아래는 `api/`에서 실행한다. 새 프로젝트를 쓴다면 DB 초기화 대상·볼륨을 먼저 확인한다.
 
