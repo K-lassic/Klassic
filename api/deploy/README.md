@@ -328,6 +328,36 @@ unset ENGINES_VOLUME_NAME API_PUBLIC_PORT API_ADMIN_PORT SERVICE_API_KEY
 - 실제 서비스는 여전히 기존 엔진으로 돈다고 함께 말한다. 적용을 마친 기능으로 소개하지 않는다.
 - 시험을 못 했거나 실패하면 코드 작업용 PC 결과만 말하거나 빼고, 시험하지 못한 항목을 그대로 밝힌다.
 
+## 백업 · 복원 (#97)
+
+**자동으로 돌지 않는다.** 사람이 정한 때 실행한다. 권장 시점: 발표 리허설 전 · 발표 직전 · 마이그레이션이나 큰 변경 전.
+
+- 담는 것: DB(`db.sql.gz`) · `storage` · `model-storage` · `MANIFEST.txt`(해시 · 커밋 · 행 수)
+- 담지 않는 것: `api/.env` 는 따로 보관한다. 엔진 볼륨은 다시 만들 수 있고, 음원은 저장소에 있다.
+- 비밀번호는 컨테이너 안 환경변수로만 쓴다. 명령줄 · 파일 이름 · 출력에 나오지 않는다.
+
+**백업** (서버 PC · Git Bash · `api/` 폴더) — 서비스를 멈추지 않는다. 기본 위치 `D:\klassic-backup\<시각>\`. 끝에 `완료:` 가 나오면 정상이다. 중간에 실패하면 `.incomplete` 폴더만 남고, 복원은 이 폴더를 거부한다.
+
+```bash
+bash deploy/backup.sh
+```
+
+**복원 시험** — 새 프로젝트에 되살린다. 실제 서비스 이름(`klassic-api`)과 이미 볼륨이 있는 프로젝트는 스크립트가 거부한다. 끝에 `완료:` 가 나오면 정상이다.
+
+```bash
+bash deploy/restore.sh -p klassic-api-restore -i /d/klassic-backup/<시각>
+```
+
+**복원한 프로젝트 띄우기** — 실제 서비스와 포트가 겹치지 않게 바꾼다. 모든 서비스가 Healthy 면 정상이다.
+
+```bash
+API_PUBLIC_PORT=9623 API_ADMIN_PORT=26221 docker compose -p klassic-api-restore -f compose.yaml up -d --wait
+```
+
+**시험 결과 (2026-11-03, 임시 프로젝트):** 인식 · 내보내기 · 공유까지 만든 프로젝트를 백업해 다른 프로젝트에 복원했다. 행 수 일치, 같은 계정 로그인, 내 악보 · 결과 악보 · 내려받기 · 공유 악보 모두 200, DB 와 파일 일치. 틀린 비밀번호는 401. 덤프 · 기록에 비밀번호 없음.
+
+**시험하지 않은 것:** 실제 서비스 볼륨을 되돌리는 절차, 다른 PC 에서 복원, 큰 볼륨의 소요 시간.
+
 ## 서버 PC 운영 (#47)
 
 서버 PC = 팀장 노트북(Windows · Docker Desktop · WSL2). 코드 작업은 다른 PC 에서 하므로, **서버 PC 설정을 바꾸면 이 표에 남긴다.**
