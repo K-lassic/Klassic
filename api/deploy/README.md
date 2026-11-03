@@ -152,7 +152,7 @@ sed -i '/^SERVICE_API_KEY=/d' .env; printf '\nSERVICE_API_KEY=%s\n' "$KEY" >> .e
 grep -c '^SERVICE_API_KEY=gk_' .env   # 1 이 나오면 정상
 ```
 
-**기본 구성으로 만들기 (서버 PC, #86)** — `api/.env` 에 두 줄을 더하면 `api/` 폴더에서 `-f` 없이 써도 대역이 유지된다. 비밀값이 아니다.
+**대역을 기본으로 되돌릴 때만 (서버 PC, #86)** — 2026-11-03 부터 기본은 재구성판이고 이 두 줄은 지웠다. `api/.env` 에 두 줄을 더하면 `api/` 폴더에서 `-f` 없이 써도 대역이 유지된다. 비밀값이 아니다.
 
 ```bash
 cd /c/project/Klassic/api
@@ -171,7 +171,7 @@ docker compose stop model-api                                   # 끄기
 ```
 
 - `web` 까지 다시 만들어야 새 서비스 키를 읽는다 — 위 `up -d` 가 함께 처리한다.
-- **`COMPOSE_FILE` 이 없는 PC 에서는 `-f compose.yaml -f deploy/compose.standin.yaml` 을 붙인다.** 안 붙이면 재구성판 model-api 가 대역을 밀어낸다. 재구성판은 #29 · #30 · #31 전까지 인식 · 렌더링이 없어서, 오류 없이 모든 악보가 대체 악보로 끝난다. `COMPOSE_FILE` 은 `api/` 폴더에서만 읽힌다.
+- **대역을 쓰려면 `-f compose.yaml -f deploy/compose.standin.yaml` 을 붙인다.** 안 붙이면 재구성판이 뜬다. `COMPOSE_FILE` 은 `api/` 폴더에서만 읽힌다.
 - 이 실수는 `check-public.ps1` 의 「인식 · 렌더링 경로」 줄이 잡는다. 재구성판도 `/api/v1/health` 200 · 엔진 `ready` 라서 상태만으로는 알 수 없다.
 - 대역은 재구성판 서비스 정의 위에 합쳐진다. 재구성판 값이 섞이지 않게 `!reset` · `!override` 를 쓴다 (Docker Compose 2.24 이상).
 - **재구성 model-api 로 교체:** #29 · #30 · #31 이 끝난 뒤 `api/.env` 의 두 줄을 지우고 `docker compose up -d --build model-api`. 서비스 이름 · 포트가 같아 backend · Nginx 는 고칠 것이 없다.
@@ -209,11 +209,14 @@ docker compose stop model-api                                   # 끄기
 | 서비스 키 | 폐기 403 `AUTH_KEY_REVOKED` · 틀림 · 없음 401 |
 | 대역으로 되돌리기 | **21초** |
 
-- 메모리: 인식 · 렌더링 중 최대 2.29GiB (대기 때 약 0.7GiB). 재구성판에는 아직 `mem_limit` 이 없다. 렌더링 2건 동시 값을 재지 않았으므로 #49 에서 재고 정한다.
+- 메모리: 인식 · 렌더링 순차 최대 2.29GiB, 렌더링 6건 요청을 동시에 넣으면 최대 3.35GiB (대기 때 약 0.7GiB). 재구성판에는 아직 `mem_limit` 이 없다. 측정값 + 여유로 4g 를 권장한다.
 - 대역과 비교: 예시 4개의 마디 수 · 음표 수 · 음높이 순서가 모두 같다. 인식 시간도 비슷하다 (재구성 22.8~28.0초 · 대역 17.9~25.1초).
 - 동시 사용: 웹 인식은 `web_concurrency_share` = 1 이라 한 건씩 처리한다. 3건 67.5초 · 6건 135.5초, 모두 대체 없이 완료. 대기 상한은 쪽당 180초라 한 건 약 22초면 9건째부터 시간 초과로 대체될 수 있다 (추정).
 - 같은 접속 주소 한도: 동시 1건 · 시간당 10건 (`web_max_active_per_client` · `web_hourly_request_cap`). 같은 공용 주소를 쓰는 사람들은 이 값을 함께 쓴다. 측정은 주소를 나눠서 했다.
-- 시험하지 않은 것: 재구성판의 브라우저 화면 · 소리, 사진 예시 밖의 품질 비교, 장애 시험(#45), 외부 Funnel.
+- 2026-11-02 실제 서버에서 재구성판으로 인식 · 편집 · 4형식 · 공유 · 소리를 확인했다. 2026-11-03 main `0303bca` (#122 · #124 포함) 로 재시험해 통과했고 실제 서버 기본으로 올렸다.
+- 외부 키 흐름: 접수 → 상태 → 결과 → 파일 2개 성공, 다른 키 404 · 키 없음 401. 렌더링 동시 6건 18.3초. 대역 복귀 14초.
+- 재배포 확인: 이미지를 다시 빌드해도 `up -d` 가 web · admin · frontend 를 다시 만들지 않은 일이 두 번 있었다 (원인 미조사). `docker inspect <컨테이너> --format '{{.Image}}'` 를 이미지 Id 와 대조하고, 다르면 `docker compose up -d --force-recreate --no-deps --wait <서비스>`.
+- 시험하지 않은 것: 최신 이미지의 브라우저 화면 · 소리, 사진 예시 밖의 품질 비교, 시간당 호출 한도 응답(혼잡 응답이 먼저 나옴), 외부 Funnel.
 - 임시 프로젝트 주의: `compose.standin.yaml` 까지 붙여 `down -v` 하면 `model-storage` 볼륨이 남는다. 시험이 끝나면 `-f compose.yaml` 로 지운다.
 
 ## CPU 전용 엔진 볼륨 시험 (2026-11-02)
@@ -263,7 +266,7 @@ docker compose up -d model-api
 **전제**
 - 발표 판본 결정(#49)과 리허설을 먼저 끝낸다. 이 시험은 그 뒤 시간이 남을 때만 하고, 발표 당일에는 하지 않는다.
 - 실제 서비스는 건드리지 않는다. 임시 프로젝트로 띄우고 포트는 9703 · 26301 을 쓴다. `klassic_engines` 와 실제 DB · storage 볼륨은 그대로다.
-- 서버 PC 의 `api/.env` 에 `COMPOSE_FILE` 이 있으므로 `-f compose.yaml` 을 꼭 붙인다. 안 붙이면 대역이 뜬다.
+- 서버 PC 의 `api/.env` 에서 `COMPOSE_FILE` 을 지웠지만, 다시 넣었을 때도 대역이 뜨지 않게 `-f compose.yaml` 을 붙인다.
 - 시험 중에는 model-api 가 2개 돌아 서버 PC 메모리를 더 쓴다. 실제 서비스를 쓰는 시간과 겹치지 않게 한다.
 
 **실행** (서버 PC · Git Bash · `api/` 폴더) — 코드 작업용 PC 에서 같은 순서로 기동 · 키 발급 · 공개 점검까지 확인했다. 전체 화면 흐름은 아직 해 보지 않았다.
@@ -338,6 +341,7 @@ unset ENGINES_VOLUME_NAME API_PUBLIC_PORT API_ADMIN_PORT SERVICE_API_KEY
 | 2026-11-01 | 전원 연결 시 절전 | 5시간 뒤 | **안 함** | 설정 → 시스템 → 전원 → 화면 및 절전 |
 | 2026-11-01 | 덮개 닫기(전원 연결) | 절전 | **아무것도 안 함** | 제어판 → 전원 옵션 → 덮개를 닫으면 |
 | 2026-11-02 | `api/.env` `COMPOSE_FILE` | 없음 | **대역을 기본 구성으로** (#86) | `api/.env` 의 두 줄 삭제 |
+| 2026-11-03 | `api/.env` `COMPOSE_FILE` | 대역이 기본 | **두 줄 삭제 — 재구성판이 기본** (#87) | 「model-api 대역」 절차로 두 줄을 다시 넣는다 |
 | 2026-11-01 | Windows 업데이트 | 중지 안 함 | **11/05 까지 일시 중지** | 설정 → Windows 업데이트 → 업데이트 재개 |
 | 2026-11-01 | Tailscale Run unattended | 꺼짐 | **켜짐** (`ForceDaemon: true` 확인) | 작업 표시줄 Tailscale 앱 Preferences |
 
@@ -350,7 +354,7 @@ unset ENGINES_VOLUME_NAME API_PUBLIC_PORT API_ADMIN_PORT SERVICE_API_KEY
 
 ```bash
 # api/ — 시연 서비스 (Docker Desktop 이 뜨면 restart 정책으로 돌아온다. 안 돌아온 것만 띄운다)
-# api/.env 의 COMPOSE_FILE 로 대역이 함께 뜬다 (#86 · 「model-api 대역」)
+# 재구성 model-api 가 함께 뜬다 (#87). 대역은 「model-api 대역」 참고
 cd api && docker compose up -d
 
 # proto_type — 예비 시연 · 코드 작업 중 필요할 때만
