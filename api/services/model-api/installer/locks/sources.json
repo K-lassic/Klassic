@@ -1,0 +1,16 @@
+{
+  "homr": {"version": "0.7.0", "python": "3.11"},
+  "jeongganbo": {
+    "repository": "https://github.com/MALerLab/jeongganbo-omr.git",
+    "commit": "e95045fce5ab151fc4b87d5be86c4ac5f7621f4c",
+    "python": "3.8.20",
+    "version": "jeongganbo-omr@e95045f+ckpt-v1.0.0",
+    "checkpoint_url": "https://github.com/MALerLab/jeongganbo-omr/releases/download/v1.0.0/checkpoints.tar.gz",
+    "checkpoint_sha256": "f0e0d44a7ad54b7389b02f871e825d3ae439c5dda1a8f189916c727795a251bb",
+    "files": {
+      "checkpoints/best/model.pt": {"sha256": "af7fd9b8837c58a093bbd3a78b000261b2588c578b7041a98cbd46323e34010a", "bytes": 73811777},
+      "checkpoints/best/config.yaml": {"sha256": "343743b274e8ae2366c528d366a493f8392617b22939be7f7cef3f9616c6cc7c", "bytes": 858},
+      "checkpoints/best/tokenizer.txt": {"sha256": "eaa62fd833a3ee97ffeb0d3570d26d450b8e110622ba0875aea84e71f393df07", "bytes": 1212}
+    }
+  }
+}
