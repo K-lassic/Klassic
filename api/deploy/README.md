@@ -451,6 +451,50 @@ docker run --rm --network none --read-only --tmpfs /tmp \
   -B -m unittest discover -s /tests -v
 ```
 
+## proto_type 없는 새 환경 시험 (#144, 2026-11-04)
+
+새로 클론한 저장소에서 `proto_type/` 을 지운 뒤 `api/` 만으로 빌드 · 기동 · 엔진 설치 · 인식 · 내보내기 · 공유 · 외부 키까지 돌렸다. **원본 폴더와 실제 서비스 볼륨은 건드리지 않았다.**
+
+**구성**
+
+| 항목 | 값 |
+|---|---|
+| 코드 | main `4a74780` (#150 ~ #153 병합 후) 새 클론, 사본에서만 `proto_type/` 삭제 |
+| PC | 코드 작업용 PC (Ryzen 5 7500F · Docker 6코어 · 31GiB · amd64 · GPU 없음). **서버 PC 측정값이 아니다** |
+| 프로젝트 · 포트 | `-p klassic-standalone-test -f compose.yaml` · 9713 · 26311 |
+| `.env` | 임시 값으로 새로 만듦 (비밀값은 무작위 생성, 시험 뒤 삭제) · 이미지 태그 `issue144` 로 분리 |
+| 엔진 | 빈 볼륨 `klassic_issue144_engines` 에 #138 설치기로 새로 설치 |
+| DB | 새 볼륨 — 마이그레이션 → 운영자 · 서비스 키 · 외부 키 · 라이선스 승인 모두 이 임시 DB 에서만 |
+
+**결과 — 모두 통과**
+
+| 확인 | 결과 |
+|---|---|
+| 런타임 경로의 `proto_type` | **0건** — `api/` 안 59건은 모두 주석 · 문서 · 시험 주석 (compose 머리 주석, `vite.config.ts` 주석, 마이그레이션 머리말 등) |
+| 이미지 빌드 | backend · frontend · model-api · api-demo · engines-installer 5개 성공 (빌드 캐시 재사용, 25초 · 27초) |
+| 엔진 설치 (#138) | 3분 6초 · homr 23초 · 정간보 160초 · 두 엔진 `INSTALL_MANIFEST.json` 생성 · 볼륨 6,001,168,548 B (#138 기록과 2,394 B 차이) |
+| 기동 | 23초 뒤 db · web · admin · model-api · frontend 모두 Healthy |
+| 공개 점검 `check-public.ps1 -Local` | 15개 모두 통과 (인식 · 렌더링 경로가 재구성판임을 확인) |
+| 예시 3개 인식 | 아리랑 세마치 9.2초 · 미뉴에트 8.1초 · 타령 PDF 2쪽 8.1초 — 모두 `route=recognize` · `fallback=false` · `trust` (homr 0.7.0 · `jeongganbo-omr@e95045f+ckpt-v1.0.0`) |
+| 직접 올리기 (타령 PDF) | upload-check 통과 → 7.1초 · `recognize` · 대체 아님 |
+| 4형식 (오선보 · 정간보, 전조 +2 편집) | MIDI · MusicXML 바로, PDF 1.2~2.2초 (`verovio 5.7.0-7135340`), MP3 2.6~3.1초 (`fluidsynth 2.3.1+lame3.100`) — 파일 머리 확인 |
+| 라이선스 승인 전 MP3 | 웹 내보내기에 「팀 내부 시연용」 안내가 붙음 · 도구 상태 「외부 키 MP3 보류」 |
+| 공유 | 공유하기 200 → 다른 계정의 공유 목록에 1건 · 공유 악보 받기 200 |
+| 외부 키 (승인 후) | 키 없음 401 · 접수 202 → 7.3초 완료 · `recognize` · 대체 아님 · MusicXML · MIDI · MP3 파일 3개 받음 · 다른 키로 상태 조회 404 · `/api/v1/shared-scores` 200 |
+| model-api 메모리 | 웹 흐름 중 최대 1.958GiB (`mem_limit` 4g, 2초 간격 `docker stats`) |
+
+**발견한 것**
+
+- **외부 키 결과의 파일 주소에 포트가 빠진다.** `http://127.0.0.1/api/v1/files/<token>` 처럼 나온다 (입구가 9713 인데 포트 없음). Nginx 가 `proxy_set_header Host $host` 로 넘겨 포트가 떨어지고, model-api 가 `request.url_for` 로 주소를 만든다. 공개 주소(Funnel HTTPS 443)는 기본 포트라 영향이 없을 것으로 보지만 (추정), 로컬 · 임시 프로젝트 · 9603 직접 접속에서는 주소를 그대로 열 수 없다. `$http_host` 로 바꾸는 방안을 별도 이슈로 검토한다. 이번 시험은 주소의 경로만 떼어 받았다.
+- Git Bash 에서 임시 폴더(`AppData\Local\Temp\...`) 아래 사본을 빌드하면 Compose 5.6 의 bake 가 `--allow=fs.read=...` 권한을 요구하며 멈췄다. 같은 명령이 PowerShell 에서는 되고, 원래 저장소 경로에서는 Git Bash 로도 된다. 경로 문제로 보이며 프로젝트 코드와는 관계없다 (추정).
+- `compose run` 뒤에 이름 없는 빈 볼륨 2개가 남았다 (위 「CPU 전용 엔진 볼륨 시험」 7번과 같은 현상).
+
+**선행 이슈 상태:** #138 · #139 · #140 · #143 완료(병합). **#141 (엔진 볼륨 백업) · #142 (engine-selftest 이미지) 는 열린 채로 시험했다.** `engine-selftest` 는 아직 v0.1.1 이미지(`klassic/klassic-model-api:0.1.1`, `pull_policy: never`)를 쓰므로 그 이미지가 없는 PC 에서는 실행되지 않는다 (추정 — 이 PC 에는 이미지가 있어 확인하지 못함). 기본 서비스 · 설치기와는 관계없다.
+
+**시험하지 않은 것:** 브라우저 화면 · 소리 (#49 범위), 외부 Funnel, 동시 사용, 빌드 캐시 없는 빌드 시간, 엔진 볼륨 백업 · 복원 (#141).
+
+**정리:** 컨테이너 · 네트워크와 `klassic-standalone-test_*` 볼륨 3개는 지웠다. 남은 것 — 빈 익명 볼륨 2개, 이미지 `*:issue144` 5개, 새로 설치한 엔진 볼륨 `klassic_issue144_engines` (6.0GB, 서버 전환이나 #141 시험에 다시 쓸 수 있어 남김).
+
 ## 백업 · 복원 (#97)
 
 **자동으로 돌지 않는다.** 사람이 정한 때 실행한다. 권장 시점: 발표 리허설 전 · 발표 직전 · 마이그레이션이나 큰 변경 전.
