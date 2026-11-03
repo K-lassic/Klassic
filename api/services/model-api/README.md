@@ -1,5 +1,19 @@
 # model-api (담당: 예은 @yeeun5364)
 
+## 외부 API 예시 홈페이지·공유 악보 — #93
+
+구조에서의 위치: 브라우저 `/demo/` → 외부 키를 보관한 별도 예시 서버 → model-api 공유 악보·MP3 API → DB 공개 뷰·backend 공유 저장소·기존 렌더러다. `proto_type/`·인식 엔진·가중치는 수정하지 않는다. #128(0.2.1) 후속 수정과 구분해 이번 서비스 버전 후보는 0.2.2이며 제출 전 해당 PR 병합 상태·최신 main을 대조한다.
+
+- `GET /v1/shared-scores`는 계약의 정렬·1~50개 페이지·offset·has_more를 제공한다. 목록과 `GET /v1/shared-scores/{share_no}/score`는 키·UC12·기존 한도를 적용하며 작성자·원 요청·파일 위치는 반환하지 않는다.
+- backend `storage` 볼륨을 `/shared-scores`에 읽기 전용으로 붙인다. `SHARED_SCORES_DIR`로 경로를 재정의할 수 있으며 API는 `shared/<공유 번호>/score.musicxml`만 읽는다. 다른 요청 경로·절대 경로·링크·없는 파일은 404다. 거둠·관리자 내림·만료·정리된 악보도 제외한다.
+- 등록은 `api/`에서 `docker compose --profile tools run --rm shared-seed --confirm-rights`로 명시 실행한다. 도구만 공유 볼륨에 쓸 수 있다. 이용 조건을 확인한 MusicXML만 manifest로 지정하며 기본 후보는 프로젝트에서 만든 아리랑 한 곡이다. 출처 미확인 사진·국립국악원 PDF를 자동 등록하지 않는다. 서버 시작 시 자동 공개하지 않는다.
+- 기존 예시는 건너뛰고 내림·거둠·파일 유실 상태를 자동 복구해 재공개하지 않는다. DB 실패 시 이번에 만든 폴더를 되돌린다. 기존 2037-12-31 예시 보관 방식과 DB 파일 위치 기록을 유지한다.
+- `--profile demo` 서버는 Node 내장 기능만 쓰고 외부 키는 서버 환경변수로만 받는다. 실행·Nginx 연결 요구·장애 대응은 [demo/README.md](demo/README.md)를 따른다. Nginx 설정은 팀장 담당으로 수정하지 않았다.
+
+`tests/run_demo_live.ps1`는 `klassic_issue93` DB·`/storage/issue93`·`klassic_issue93_shared_test` 볼륨을 요구한다. 시험에서 임시 외부 키·공유 악보와 DB 제약을 만족하는 비활성 운영자를 사용해 MP3 허용·보류를 모의하고 원래 값으로 복원한다. 운영의 실제 라이선스 승인을 대신하지 않는다.
+
+로컬 Linux 검증: 현재 main 기준 model-api 전체 **308개 통과·건너뜀 0·Ruff 통과**, 데모 Node HTTP 시험 **8개 통과**, 두 검토용 이미지 빌드·Compose 검사 통과다. #128이 아직 미병합이므로 그 PR의 추가 시험은 이 브랜치에 포함되지 않았으며 제출 전 통합 검증이 필요하다. 기존 Starlette 사용 중단 예고 경고 1건이 있다. 실제 격리 DB에서 외부 키의 목록·MusicXML·공유 숨김 4종·공유 볼륨 쓰기 거부·키 없는 브라우저 응답·실제 FluidSynth MP3(741040B, 30.8초, RMS 455.39)·정책 변경 후 보류·공유 거둠 차단을 확인했다. 시드 도구는 첫 실행 1개 등록·재실행 1개 건너뜀을 확인했다. 시험 정책·키·운영자·공유 파일은 정리하고 기존 #45 시험 컨테이너 healthy를 복원했다. 실제 Nginx·Funnel·브라우저 재생·동시 렌더링 최대 메모리는 미검증이며 #91·#98·팀장 Nginx 연결 후 별도 확인한다. 데모 컨테이너의 완료 직후 단일 관측 메모리 29.55MiB는 최대 사용량이 아니므로 자원 한도 근거로 사용하지 않는다.
+
 ## 계약·장애 시험과 준비 실패 결과 보존 — #45
 
 구조에서의 위치: 엔진 없는 ASGI 계약 검사 → 읽기 전용 `api/contracts/model-api.yaml` 대조, 별도 실제 시험 → 임시 DB·저장소·설치 엔진과 HTTP 경로다. 운영에 오류 주입 API를 추가하지 않는다.
@@ -269,7 +283,7 @@ Docker healthcheck는 `/health`의 `status=ok`·`db=ok`와 **실제 FluidSynth �
 | `SOUNDFONTS_DIR` | `/app/shared/soundfonts` |
 | `JEONGGANBO_DEVICE` | `cpu` (현재 검증 범위) |
 | `MODEL_LOAD_TIMEOUT_SECONDS` | 엔진별 120초, 최대 600초 |
-| `MODEL_API_IMAGE` | 기본 `klassic/model-api:0.2.0`. 이전 로컬 태그 `issue24-local` 은 되돌리기용으로 남긴다 |
+| `MODEL_API_IMAGE` | 기본 후보 `klassic/model-api:0.2.2`. 기존 0.2.0·0.2.1 및 검증한 이전 이미지는 되돌리기용으로 보존 |
 
 아래는 `api/`에서 실행한다. 새 프로젝트를 쓴다면 DB 초기화 대상·볼륨을 먼저 확인한다.
 

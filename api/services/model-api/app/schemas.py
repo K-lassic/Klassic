@@ -154,3 +154,27 @@ class InstrumentItem(BaseModel):
 class InstrumentsResponse(BaseModel):
     api_version: Literal["v1"]
     items: list[InstrumentItem]
+
+
+class SharedScoreItem(BaseModel):
+    share_no: str
+    title: str
+    score_type: Literal['staff', 'jeongganbo']
+    likes: int
+    example: bool
+    shared_at: str | None
+
+
+class SharedScoresResponse(BaseModel):
+    api_version: Literal['v1']
+    sort: Literal['likes', 'recent']
+    has_more: bool
+    items: list[SharedScoreItem]
+
+
+class SharedScoreResponse(BaseModel):
+    api_version: Literal['v1']
+    share_no: str
+    title: str
+    score_type: Literal['staff', 'jeongganbo']
+    musicxml: str

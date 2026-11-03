@@ -1,0 +1,10 @@
+{
+  "examples": [
+    {
+      "id": "demo-arirang-semachi",
+      "title": "아리랑 · 세마치장단",
+      "score_type": "staff",
+      "file": "templates/arirang-semachi-v1.musicxml"
+    }
+  ]
+}

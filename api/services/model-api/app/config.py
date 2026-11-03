@@ -31,6 +31,7 @@ class Config:
     orphan_retention_h: int = 24
     jeongganbo_device: str = "cpu"
     storage_dir: Path = Path("/storage")
+    shared_scores_dir: Path = Path("/shared-scores")
     assets_dir: Path = Path("/app/services/model-api/assets")
 
     @property
@@ -62,13 +63,14 @@ def load_config() -> Config:
         orphan_retention_h=int(os.environ.get("ORPHAN_RETENTION_HOURS", "24")),
         jeongganbo_device=os.environ.get("JEONGGANBO_DEVICE", "cpu"),
         storage_dir=Path(os.environ.get("STORAGE_DIR", "/storage")),
+        shared_scores_dir=Path(os.environ.get("SHARED_SCORES_DIR", "/shared-scores")),
         assets_dir=Path(os.environ.get("ASSETS_DIR", "/app/services/model-api/assets")),
     )
     if not 1 <= cfg.db_attempts <= 10 or not 0 <= cfg.db_retry_seconds <= 30:
         raise ValueError("DB 재시도 설정 범위를 확인하십시오")
     if not 1 <= cfg.model_load_timeout_s <= 600 or not 1 <= cfg.db_port <= 65535:
         raise ValueError("포트·모델 로딩 제한 범위를 확인하십시오")
-    for path in (cfg.shared_dir, cfg.engines_dir, cfg.soundfonts_dir, cfg.storage_dir, cfg.assets_dir):
+    for path in (cfg.shared_dir, cfg.engines_dir, cfg.soundfonts_dir, cfg.storage_dir, cfg.assets_dir, cfg.shared_scores_dir):
         if not path.is_absolute():
             raise ValueError("자원 경로는 절대 경로여야 합니다")
     if cfg.jeongganbo_device != "cpu":

@@ -113,7 +113,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             await close_safe_midi()
             await app.state.db.close()
 
-    app = FastAPI(title="K-lassic model-api", version="0.2.0",
+    app = FastAPI(title="K-lassic model-api", version="0.2.2",
                   openapi_url="/v1/openapi.json", docs_url="/v1/docs", redoc_url=None,
                   dependencies=[Depends(reject_unknown_fields)], lifespan=lifespan)
     app.state.config = cfg
@@ -226,6 +226,8 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
     app.include_router(render_router)
     app.include_router(performance_router)
     app.include_router(catalog_router)
+    from app.routers.shared_scores import router as shared_scores_router
+    app.include_router(shared_scores_router)
 
     original_openapi = app.openapi
 
@@ -236,7 +238,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
         for path, operations in schema.get("paths", {}).items():
             for operation in operations.values():
                 if isinstance(operation, dict):
-                    protected = any(part in path for part in ("/internal/", "/omr/", "/render/", "/performances")) or path == "/v1/instruments"
+                    protected = any(part in path for part in ("/internal/", "/omr/", "/render/", "/performances", "/shared-scores")) or path == "/v1/instruments"
                     operation["security"] = [{"ApiKey": []}] if protected else []
         return schema
 

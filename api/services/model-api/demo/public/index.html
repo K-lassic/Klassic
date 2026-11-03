@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>K-lassic · 우리 음악을 배경으로</title>
+  <link rel="stylesheet" href="./style.css"><script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header><a href="./" class="brand">K-lassic <span>API 활용 예시</span></a></header>
+  <main>
+    <p class="eyebrow">우리 음악을 배경으로</p>
+    <h1>오늘의 공간에,<br>국악 한 곡.</h1>
+    <p class="intro">공유된 악보를 고르고 국악기 음색으로 들어보세요.</p>
+    <section class="player" aria-labelledby="player-title">
+      <h2 id="player-title">나만의 배경음악</h2>
+      <form id="music-form">
+        <label for="score">곡</label><select id="score" required disabled><option value="">목록을 불러오는 중입니다</option></select>
+        <label for="instrument">악기</label><select id="instrument" required disabled><option value="">악기를 불러오는 중입니다</option></select>
+        <button id="prepare" type="submit" disabled>음악 준비하기</button>
+      </form>
+      <p id="status" role="status" aria-live="polite">공유 악보를 확인하고 있습니다.</p>
+      <audio id="audio" controls loop preload="none" hidden aria-label="선택한 곡 재생"></audio>
+      <button id="reload" type="button">목록 다시 불러오기</button>
+    </section>
+    <p class="note">음악은 준비가 끝난 뒤 재생 버튼을 누르면 시작됩니다.<br>음원 이용 조건에 따라 재생이 제한될 수 있습니다.</p>
+  </main>
+  <footer>K-lassic의 외부 API를 활용한 예시 페이지입니다.</footer>
+</body>
+</html>
