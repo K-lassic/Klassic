@@ -22,7 +22,7 @@ services:
   model-api:
     <<: *engine-runtime
     init: true
-    image: ${MODEL_API_IMAGE:-klassic/model-api:0.2.1}
+    image: ${MODEL_API_IMAGE:-klassic/model-api:0.2.2}
     build:
       context: .
       additional_contexts:
@@ -57,20 +57,88 @@ services:
       PURGE_INTERVAL_SECONDS: ${PURGE_INTERVAL_SECONDS:-600}
       ORPHAN_RETENTION_HOURS: ${ORPHAN_RETENTION_HOURS:-24}
       STORAGE_DIR: /storage
+      SHARED_SCORES_DIR: /shared-scores
     depends_on:
       db: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
+      shared-storage-init: {condition: service_completed_successfully}
     tmpfs:
       - /tmp:rw,nosuid,nodev,mode=1777
     volumes:
       - *engine-volume
       - model-storage:/storage
+      # #93 최소권한: 사용자 원본이 있는 storage 전체 대신 shared/ 하위만 읽는다.
+      - type: volume
+        source: storage
+        target: /shared-scores
+        read_only: true
+        volume:
+          subpath: shared
+          nocopy: true
       - type: bind
         source: ../../shared/soundfonts
         target: /app/shared/soundfonts
         read_only: true
         bind:
           create_host_path: false
+
+  shared-storage-init:
+    # 빈 볼륨에도 subpath가 먼저 생기도록 하는 일회성 준비 작업. DB·네트워크는 사용하지 않는다.
+    image: ${MODEL_API_IMAGE:-klassic/model-api:0.2.2}
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    network_mode: none
+    entrypoint: [python, -m, app.tools.init_shared_storage]
+    healthcheck: {disable: true}
+    volumes:
+      - storage:/storage
+
+  demo:
+    profiles: [demo]
+    build:
+      context: ./demo
+    image: ${DEMO_IMAGE:-klassic/api-demo:0.2.2}
+    init: true
+    restart: unless-stopped
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      DEMO_API_BASE: ${DEMO_API_BASE:-http://model-api:9543}
+      DEMO_API_KEY: ${DEMO_API_KEY:-}
+      DEMO_PORT: "26102"
+    expose: ["26102"]
+    depends_on:
+      model-api: {condition: service_healthy}
+
+  shared-seed:
+    profiles: [tools]
+    image: ${MODEL_API_IMAGE:-klassic/model-api:0.2.2}
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    entrypoint: [python, -m, app.tools.seed_shared_examples]
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:?DB_NAME 이 필요합니다}
+      DB_USER: ${DB_USER:?DB_USER 가 필요합니다}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 가 필요합니다}
+      SHARED_SCORES_DIR: /shared-scores
+    volumes:
+      - type: volume
+        source: storage
+        target: /shared-scores
+        volume:
+          subpath: shared
+          nocopy: true
+    depends_on:
+      db: {condition: service_healthy}
+      shared-storage-init: {condition: service_completed_successfully}
 
   engine-selftest:
     <<: *engine-runtime
@@ -102,6 +170,8 @@ services:
           create_host_path: false
 
 volumes:
+  # backend Compose의 같은 이름·정의와 공유한다(include 병합 시 동일 자원).
+  storage:
   model-storage:
   engines:
     # 새 빈 볼륨을 자동 생성하지 않는다. 기존 설치 결과만 읽는다.

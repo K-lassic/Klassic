@@ -250,7 +250,9 @@ def test_instruments_and_openapi_auth(client):
     for path in ("/v1/instruments", "/v1/performances", "/v1/performances/{request_no}/result"):
         assert next(iter(spec["paths"][path].values()))["security"] == [{"ApiKey": []}]
     assert spec["paths"]["/v1/files/{token}"]["get"]["security"] == []
-    assert "/v1/shared-scores" not in spec["paths"]
+    # #93에서 공유 악보를 추가했다. 목록·악보도 같은 키 인증 명세를 제공한다.
+    assert spec["paths"]["/v1/shared-scores"]["get"]["security"] == [{"ApiKey": []}]
+    assert spec["paths"]["/v1/shared-scores/{share_no}/score"]["get"]["security"] == [{"ApiKey": []}]
 
 
 def test_token_signature_expiry_secret_and_malformed(monkeypatch):
