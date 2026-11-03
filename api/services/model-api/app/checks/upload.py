@@ -187,6 +187,10 @@ def _maybe_upscale(pg: PageImage, spec: dict) -> None:
 class ResourceLimit(ValueError):
     """#33 압축 해제·픽셀 디코딩 전에 자원 상한을 넘긴 입력."""
 
+    def __init__(self, reason, *, details=None):
+        super().__init__(reason)
+        self.details = details or {}
+
 
 def _open_image(data: bytes, spec: dict | None = None) -> tuple[int, int] | None:
     """끝까지 풀어 본다(잘린 파일도 잡는다). 성공하면 (가로, 세로)."""
@@ -198,8 +202,13 @@ def _open_image(data: bytes, spec: dict | None = None) -> tuple[int, int] | None
             spec = spec or {"upscale_below_short_edge_px": 650, "upscale_to_short_edge_px": 1000}
             below, target = spec.get("upscale_below_short_edge_px"), spec.get("upscale_to_short_edge_px")
             scale = target / min(w, h) if below and target and min(w, h) < below else 1
-            if max(w, h) * scale > 10000 or w * h * scale * scale > 40_000_000:
-                raise ResourceLimit("image_pixels")
+            max_edge = int(spec.get("max_edge_px", 10000))
+            max_pixels = int(spec.get("max_pixels", 40_000_000))
+            if max(w, h) * scale > max_edge or w * h * scale * scale > max_pixels:
+                raise ResourceLimit("image_pixels", details={
+                    "max_edge": max_edge, "max_pixels": max_pixels, "width": w, "height": h,
+                    "after_upscale": scale > 1,
+                })
             im.verify()  # 구조·CRC
         with Image.open(io.BytesIO(data)) as im:
             im.load()  # 픽셀까지 풀기
@@ -371,8 +380,8 @@ def _check_upload(
         elif kind == "image":
             try:
                 wh = _open_image(data, spec)
-            except ResourceLimit:
-                return _fail("size", kind=kind, reason="image_pixels", max_edge=10000, max_pixels=40_000_000, **where(i))
+            except ResourceLimit as exc:
+                return _fail("size", kind=kind, reason="image_pixels", **exc.details, **where(i))
             if wh is None:
                 return _fail("corrupted", kind=kind, format=fmt, **where(i))
             sizes.append(wh)

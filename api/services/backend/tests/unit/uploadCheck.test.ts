@@ -2,6 +2,7 @@
 import '../helpers/env.js';
 import { describe, expect, it } from 'vitest';
 import { checkUpload } from '../../src/web/uploadCheck.js';
+import { errorBody } from '../../src/web/errors.js';
 import { MIDI, PDF, makePng } from '../helpers/files.js';
 
 const png = (name = 'a.png', w = 1000, h = 900) => ({ originalName: name, data: makePng(w, h) });
@@ -53,5 +54,35 @@ describe('업로드 검사 (G1)', () => {
 
   it('PDF 는 여기서 끝내지 않고 model-api 검사로 넘긴다', () => {
     expect(checkUpload([{ originalName: 'b.pdf', data: PDF }], 'staff')).toMatchObject({ ok: true, kind: 'pdf', remoteCheck: true });
+  });
+
+  it.each([
+    [8000, 5000, true], [8000, 5001, false], [8000, 6000, false],
+    [10000, 700, true], [10001, 700, false], [300, 3000, true], [300, 4000, false],
+  ])('#33 사진 %i×%i: 공통 화소·긴 변·기존 확대 기준으로 접수 여부 %s', (w, h, ok) => {
+    const verdict = checkUpload([png('sized.png', w, h)], 'staff');
+    expect(verdict.ok).toBe(ok);
+    if (!ok) {
+      expect(verdict).toMatchObject({ code: 'UPLOAD_TOO_LARGE', details: {
+        reason: 'image_pixels', max_pixels: 40000000, max_edge: 10000, width: w, height: h,
+      } });
+    }
+  });
+
+  it('#33 여러 장의 화소 초과는 해당 쪽을 알리고 용량 초과와 다른 안내를 준다', () => {
+    const verdict = checkUpload([png(), png('large.png', 8000, 6000)], 'staff');
+    expect(verdict.details.page).toBe(2);
+    const error = errorBody(verdict.code!, verdict.details).error;
+    expect(error.message).toContain('해상도');
+    expect(error.message).toContain('4000만 화소');
+    expect(error.message).toContain('10000px');
+    expect(error.fix).toContain('다시 올려');
+    expect(errorBody('UPLOAD_TOO_LARGE', { max_bytes: 20971520 }).error.message).not.toContain('해상도');
+  });
+
+  it('#33 확대 후 상한을 넘는 긴 사진은 쪽별로 나누도록 안내한다', () => {
+    const verdict = checkUpload([png('long.png', 300, 4000)], 'staff');
+    expect(verdict.details.after_upscale).toBe(true);
+    expect(errorBody(verdict.code!, verdict.details).error.message).toContain('쪽별로 나누어');
   });
 });

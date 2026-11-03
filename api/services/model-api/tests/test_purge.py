@@ -7,7 +7,7 @@ import time
 import pytest
 
 from app.config import Config
-from app.jobs.purge import purge_once, remove_request
+from app.jobs.purge import clear_tmp, purge_once, remove_request
 
 API = "R-1102-ABCDEFGH"
 WEB = "R-1102-BCDEFGHJ"
@@ -131,3 +131,48 @@ def test_other_purge_instance_and_active_job_are_skipped(tmp_path):
     db.acquired = True
     assert asyncio.run(purge_once(db, cfg, active={API}))["requests"] == 0
     assert path.exists() and not db.purged
+
+
+def age_tree(root):
+    for path in [*root.rglob("*"), root]:
+        os.utime(path, (time.time()-7200,)*2, follow_symlinks=False)
+
+
+def test_abandoned_tmp_tree_removed_without_following_symlinks(tmp_path):
+    cfg = Config(storage_dir=tmp_path / "store")
+    temp = cfg.storage_dir / "tmp"
+    old = folder(temp, "klassic-recognize-abandoned")
+    nested = folder(old, "nested")
+    outside = folder(tmp_path, "outside")
+    (nested / "external").symlink_to(outside, target_is_directory=True)
+    age_tree(old)
+    # 루트의 링크 자체도 정리 대상에서 제외한다.
+    direct_link = temp / "external"
+    direct_link.symlink_to(outside, target_is_directory=True)
+    assert clear_tmp(cfg) == 1
+    assert not old.exists() and direct_link.is_symlink()
+    assert (outside / "original.png").read_bytes() == b"test-data"
+    assert clear_tmp(cfg) == 0  # 재실행해도 안전하다.
+
+
+def test_tmp_tree_with_recent_nested_file_is_preserved(tmp_path):
+    cfg = Config(storage_dir=tmp_path)
+    old = folder(tmp_path / "tmp", "gugak-mp3-active")
+    nested = folder(old, "nested")
+    age_tree(old)
+    (nested / "original.png").write_bytes(b"still-active")
+    fresh = folder(tmp_path / "tmp", "new-recognition")
+    assert clear_tmp(cfg) == 0
+    assert old.exists() and fresh.exists()
+
+
+def test_failed_tmp_tree_does_not_block_other_cleanup(tmp_path, monkeypatch):
+    cfg = Config(storage_dir=tmp_path)
+    old = folder(tmp_path / "tmp", "failed")
+    age_tree(old)
+    expired = tmp_path / "tmp" / "expired"
+    expired.write_bytes(b"old")
+    os.utime(expired, (time.time()-7200,)*2)
+    monkeypatch.setattr("app.jobs.purge.shutil.rmtree", lambda path: (_ for _ in ()).throw(PermissionError()))
+    assert clear_tmp(cfg) == 1
+    assert old.exists() and not expired.exists()

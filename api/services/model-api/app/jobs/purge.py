@@ -54,16 +54,44 @@ def orphan_candidates(cfg, known):
 
 
 def clear_tmp(cfg):
+    """1시간 지난 임시 항목을 정리한다. 새 하위 파일이 있는 폴더와 링크는 보존한다."""
     root = cfg.storage_dir / "tmp"
     if root.is_symlink() or root.resolve().parent != cfg.storage_dir.resolve():
         raise ValueError("임시 저장 루트 밖 정리 금지")
     count = 0
+    cutoff = time.time() - 3600
     if root.is_dir():
         for path in root.iterdir():
-            if not path.is_symlink() and path.is_file() and path.stat().st_mtime < time.time() - 3600:
-                path.unlink()
+            try:
+                if path.is_symlink() or path.stat().st_mtime >= cutoff:
+                    continue
+                if path.is_file():
+                    path.unlink()
+                elif path.is_dir():
+                    # 폴더 mtime만으로는 그 안에서 사용 중인 파일을 구별할 수 없다.
+                    # 링크는 순회하지 않으며 rmtree도 링크 대상은 지우지 않는다.
+                    if not _tmp_tree_expired(path, cutoff):
+                        continue
+                    if path.resolve().parent != root.resolve():
+                        raise ValueError("임시 저장 루트 밖 정리 금지")
+                    shutil.rmtree(path)
+                else:
+                    continue
                 count += 1
+            except FileNotFoundError:
+                pass  # 작업자가 먼저 정리한 항목이다.
+            except OSError as exc:
+                log.warning("purge_tmp_failed error_type=%s", type(exc).__name__)
     return count
+
+
+def _tmp_tree_expired(folder, cutoff):
+    for path in folder.iterdir():
+        if path.lstat().st_mtime >= cutoff:
+            return False
+        if not path.is_symlink() and path.is_dir() and not _tmp_tree_expired(path, cutoff):
+            return False
+    return True
 
 
 async def purge_once(db, cfg, *, active=()):

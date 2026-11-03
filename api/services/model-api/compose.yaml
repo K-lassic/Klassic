@@ -22,12 +22,14 @@ services:
   model-api:
     <<: *engine-runtime
     init: true
-    image: ${MODEL_API_IMAGE:-klassic/model-api:0.2.0}
+    image: ${MODEL_API_IMAGE:-klassic/model-api:0.2.1}
     build:
       context: .
       additional_contexts:
         shared: ../../shared
     restart: unless-stopped
+    # #33·#49: 렌더링 6건 동시 최대 3.35GiB 실측에 여유를 더함(2026-11-03 팀장 전달).
+    mem_limit: 4g
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]

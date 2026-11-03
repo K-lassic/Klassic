@@ -1,6 +1,6 @@
 [project]
 name = "klassic-model-api"
-version = "0.2.0"
+version = "0.2.1"
 description = "K-lassic model-api 기반 서비스"
 requires-python = ">=3.11,<3.12"
 dependencies = [
