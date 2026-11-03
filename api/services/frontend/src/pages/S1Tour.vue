@@ -245,8 +245,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 
 /* 1 소개 */
 .flow { position: relative; display: flex; align-items: flex-end; justify-content: space-between; width: min(360px, 100%); }
-.flow-line { position: absolute; left: 12%; right: 12%; top: 26px; height: 3px; border-radius: 2px; background: var(--color-dust-taupe); }
-.flow-dot { position: absolute; top: -5px; left: 0; width: 13px; height: 13px; border-radius: var(--rounded-circle); background: var(--color-gold); animation: intro-dot var(--loop) ease-in-out infinite; }
+/* (2026-11-03) 처음부터 선이 다 그려져 흐린 아이콘 위로 비쳤다 — 선은 점 뒤로 그어지고, 아이콘은 점이 닿을 때 나타난다 */
+.flow-line { position: absolute; left: 12%; right: 12%; top: 26px; height: 3px; }
+.flow-line::before { content: ""; position: absolute; inset: 0; border-radius: 2px; background: var(--color-dust-taupe); transform-origin: left; animation: intro-line var(--loop) linear infinite; }
+.flow-dot { position: absolute; top: -5px; left: 0; width: 13px; height: 13px; border-radius: var(--rounded-circle); background: var(--color-gold); animation: intro-dot var(--loop) linear infinite; }
 .tile { position: relative; z-index: 1; display: grid; justify-items: center; gap: 4px; padding: 8px; border-radius: var(--rounded-sm); background: var(--color-canvas-cream); color: var(--color-primary); animation: intro-lit var(--loop) ease-in-out infinite; }
 .t2 { animation-name: intro-lit2; }
 .t3 { animation-name: intro-lit3; }
@@ -316,14 +318,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 
 @keyframes tour-rise-in { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-/* 1 소개 — 한 바퀴 3.6초 */
-@keyframes intro-dot { 0%, 8% { left: 0; opacity: 0; } 12% { opacity: 1; } 75% { left: calc(100% - 13px); opacity: 1; } 85%, 100% { left: calc(100% - 13px); opacity: 0; } }
-@keyframes intro-lit { 0% { transform: scale(1); opacity: .35; } 8%, 20% { transform: scale(1.18); opacity: 1; } 32%, 90% { transform: scale(1); opacity: 1; } 100% { opacity: .35; } }
-@keyframes intro-lit2 { 0%, 32% { transform: scale(1); opacity: .35; } 40%, 52% { transform: scale(1.18); opacity: 1; } 62%, 90% { transform: scale(1); opacity: 1; } 100% { opacity: .35; } }
-@keyframes intro-lit3 { 0%, 64% { transform: scale(1); opacity: .35; } 72%, 84% { transform: scale(1.18); opacity: 1; } 92% { transform: scale(1); opacity: 1; } 100% { opacity: .35; } }
-@keyframes intro-wave { 0%, 70% { opacity: 0; } 76% { opacity: 1; } 96%, 100% { opacity: 0; } }
-@keyframes intro-wave2 { 0%, 76% { opacity: 0; } 82% { opacity: 1; } 98%, 100% { opacity: 0; } }
-@keyframes intro-wave3 { 0%, 82% { opacity: 0; } 88% { opacity: 1; } 100% { opacity: 0; } }
+/* 1 소개 — 한 바퀴 3.6초. 점은 8% → 75% 를 같은 빠르기로 가서 사진(8%) · 악보(41%) · 소리(75%)에 닿는다 */
+@keyframes intro-dot { 0%, 8% { left: 0; opacity: 0; } 10% { opacity: 1; } 75% { left: calc(100% - 13px); opacity: 1; } 85%, 100% { left: calc(100% - 13px); opacity: 0; } }
+@keyframes intro-line { 0%, 8% { transform: scaleX(0); opacity: 1; } 75%, 90% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes intro-lit { 0%, 4% { transform: scale(.6); opacity: 0; } 10% { transform: scale(1.18); opacity: 1; } 16%, 90% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes intro-lit2 { 0%, 38% { transform: scale(.6); opacity: 0; } 44% { transform: scale(1.18); opacity: 1; } 50%, 90% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes intro-lit3 { 0%, 71% { transform: scale(.6); opacity: 0; } 77% { transform: scale(1.18); opacity: 1; } 83%, 90% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes intro-wave { 0%, 78% { opacity: 0; } 82% { opacity: 1; } 96%, 100% { opacity: 0; } }
+@keyframes intro-wave2 { 0%, 82% { opacity: 0; } 86% { opacity: 1; } 98%, 100% { opacity: 0; } }
+@keyframes intro-wave3 { 0%, 86% { opacity: 0; } 90% { opacity: 1; } 100% { opacity: 0; } }
 
 /* 2 올리기 */
 @keyframes up-drag {
@@ -388,6 +391,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 .tour.calm .tile { animation: rm-lit1 var(--loop) ease-in-out infinite; }
 .tour.calm .t2 { animation-name: rm-lit2; }
 .tour.calm .t3 { animation-name: rm-lit3; }
+.tour.calm .flow-line::before { animation: rm-line var(--loop) ease-in-out infinite; }
 .tour.calm .w1 { animation: intro-wave var(--loop) ease-out infinite; }
 .tour.calm .w2 { animation: intro-wave2 var(--loop) ease-out infinite; }
 .tour.calm .w3 { animation: intro-wave3 var(--loop) ease-out infinite; }
@@ -414,9 +418,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 .tour.calm .h-on { animation: rm-hon var(--loop) ease-in-out infinite; }
 /* 동작 줄이기용 — 위치 · 크기 변화 없이 투명도 · 색만 */
 @keyframes tour-fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes rm-lit1 { 0% { opacity: .35; } 8%, 90% { opacity: 1; } 100% { opacity: .35; } }
-@keyframes rm-lit2 { 0%, 32% { opacity: .35; } 40%, 90% { opacity: 1; } 100% { opacity: .35; } }
-@keyframes rm-lit3 { 0%, 64% { opacity: .35; } 72%, 92% { opacity: 1; } 100% { opacity: .35; } }
+@keyframes rm-lit1 { 0%, 4% { opacity: 0; } 12%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes rm-lit2 { 0%, 38% { opacity: 0; } 46%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes rm-lit3 { 0%, 71% { opacity: 0; } 79%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes rm-line { 0%, 4% { opacity: 0; } 12%, 90% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes rm-done { 0%, 78% { opacity: 0; } 84%, 94% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes rm-inst { 0% { opacity: 0; } 5%, 30% { opacity: 1; } 35%, 100% { opacity: 0; } }
 @keyframes rm-pitch { 0%, 28% { background: var(--color-ink-black); box-shadow: none; } 32%, 92% { background: var(--color-primary); box-shadow: 0 0 0 4px var(--color-gold); } 100% { background: var(--color-ink-black); box-shadow: none; } }
