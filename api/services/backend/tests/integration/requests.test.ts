@@ -302,14 +302,14 @@ describe.skipIf(!HAS_DB)('예시 악보', () => {
     const u = await loggedInAgent(app, 'ex-list');
     const list = await u.get('/api/examples');
     expect(list.status).toBe(200);
-    expect(list.body.items.map((e: { id: string }) => e.id)).toEqual(['arirang-semachi-staff', 'arirang-98-staff', 'minuet-staff', 'taryeong-gayageum-jeongganbo']);
+    expect(list.body.items.map((e: { id: string }) => e.id)).toEqual(['arirang-semachi-staff', 'minuet-staff', 'taryeong-gayageum-jeongganbo']);
     expect(list.body.items[0]).toEqual({ id: 'arirang-semachi-staff', title: '아리랑 세마치 (오선보)', score_type: 'staff' });
     expect(JSON.stringify(list.body)).not.toMatch(/\.(png|jpe?g|pdf)/);
   });
 
   it('미리보기 · 목록 밖 id 와 경로 문자는 404', async () => {
     const u = await loggedInAgent(app, 'ex-bad');
-    for (const id of ['arirang-semachi-staff', 'arirang-98-staff', 'minuet-staff', 'taryeong-gayageum-jeongganbo']) {
+    for (const id of ['arirang-semachi-staff', 'minuet-staff', 'taryeong-gayageum-jeongganbo']) {
       const th = await u.get(`/api/examples/${id}/thumb`);
       expect(th.status).toBe(200);
       expect(th.headers['content-type']).toMatch(/image\/jpeg/);
@@ -321,8 +321,8 @@ describe.skipIf(!HAS_DB)('예시 악보', () => {
     }
   });
 
-  it('사진 예시 3개는 실제 파일 그대로 보통 올리기와 같은 검사를 통과해 접수되고, 예시 id 가 남는다', async () => {
-    for (const id of ['arirang-semachi-staff', 'arirang-98-staff', 'minuet-staff']) {
+  it('사진 예시 2개는 실제 파일 그대로 보통 올리기와 같은 검사를 통과해 접수되고, 예시 id 가 남는다', async () => {
+    for (const id of ['arirang-semachi-staff', 'minuet-staff']) {
       const u = await loggedInAgent(app, 'ex-up');
       const up = await u.post('/api/requests/example').send({ example_id: id });
       expect(up.status, id).toBe(202);
