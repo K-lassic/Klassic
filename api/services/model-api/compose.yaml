@@ -22,7 +22,7 @@ services:
   model-api:
     <<: *engine-runtime
     init: true
-    image: ${MODEL_API_IMAGE:-klassic/model-api:issue24-local}
+    image: ${MODEL_API_IMAGE:-klassic/model-api:0.2.0}
     build:
       context: .
       additional_contexts:
