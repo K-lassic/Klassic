@@ -14,6 +14,7 @@ $apiRoot = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 $args93 = @('--env-file',(Resolve-Path $EnvFile).Path,'-p',$Project,'-f','compose.yaml','-f',(Resolve-Path $OverrideFile).Path)
 $restore = @('--env-file',(Resolve-Path $RestoreEnvFile).Path,'-p',$Project,'-f','compose.yaml','-f',(Resolve-Path $RestoreOverrideFile).Path)
 New-Item -ItemType Directory -Force -Path $ReportDirectory | Out-Null
+$ReportDirectory = (Resolve-Path -LiteralPath $ReportDirectory).Path
 $keyFile = Join-Path (Resolve-Path $ReportDirectory).Path 'demo-key.env'
 if (Test-Path -LiteralPath $keyFile) { throw '이전 시험 키 파일을 먼저 확인하십시오' }
 $testSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'container_shared_demo_smoke.py'))

@@ -8,7 +8,8 @@
 //     external — 외부 사용자용 (시간당 호출 한도 필수 · 키 신청 번호와 연결). 예시 홈페이지(P2)도 이것을 쓴다
 //   v0.1.1 참고: backend/src/admin/keys.ts (POST /admin/service-key) · web/keyApplications.ts
 import type { PoolConnection } from 'mysql2/promise';
-import { one, tx } from '../db/pool.js';
+import { one, signalMessage, tx } from '../db/pool.js';
+import { newApplicationNo } from '../lib/ids.js';
 import { newAccessKey } from '../lib/keys.js';
 import { addHistory } from './history.js';
 
@@ -50,5 +51,41 @@ export async function issueServiceKey(operatorId: number): Promise<IssuedKey> {
   });
 }
 
-// 외부 키 발급(예시 홈페이지 · 키 신청 P2)은 여기에 issueExternalKey(operatorId, { callLimitPerHour, applicationNo }) 로 더한다.
-//   DB 제약: key_kind = 'external' 이면 call_limit_per_hour 필수 (chk_key_limit_required)
+export interface KeyApplicationInput {
+  name: string; organization: string; contactEmail: string; purpose: string;
+  /** 시간당 호출 한도 — DB 제약 chk_key_limit_required 로 외부 키에는 필수 */
+  callLimitPerHour: number;
+  clientAddrHash: string;
+  accountId: number | null;
+}
+export interface IssuedExternalKey { keyId: number; raw: string; prefix: string; applicationNo: string; callLimitPerHour: number }
+
+/** G11 신청 빈도 초과 (DB 트리거가 거절) — 부른 쪽이 다시 시도할 시각을 안내한다 */
+export class ApplicationRateLimited extends Error {}
+
+/**
+ * #91 외부 키 발급 — access_key 와 key_application 을 한 트랜잭션으로 넣는다. 화면 신청과 명령줄 도구가 같이 쓴다.
+ * DB 제약 chk_key_origin: 외부 키는 신청 번호가 필수이고 issued_by 는 비어 있어야 한다.
+ * 원문은 돌려주기만 하고 저장하지 않는다.
+ */
+export async function issueExternalKey(a: KeyApplicationInput): Promise<IssuedExternalKey> {
+  const key = newAccessKey();
+  const applicationNo = newApplicationNo();
+  try {
+    return await tx(async (conn) => {
+      const [k] = await conn.query(
+        "INSERT INTO access_key (key_kind, key_hash, key_prefix, application_no, call_limit_per_hour) VALUES ('external', ?, ?, ?, ?)",
+        [key.hash, key.prefix, applicationNo, a.callLimitPerHour]);
+      const keyId = Number((k as { insertId: number }).insertId);
+      await conn.query(
+        `INSERT INTO key_application (key_id, applicant_name, affiliation, contact_email, purpose, consent_given, client_addr_hash, account_id)
+         VALUES (?, ?, ?, ?, ?, TRUE, ?, ?)`,
+        [keyId, a.name.slice(0, 100), a.organization.slice(0, 200), a.contactEmail.slice(0, 254), a.purpose.slice(0, 1000),
+         a.clientAddrHash, a.accountId]);
+      return { keyId, raw: key.raw, prefix: key.prefix, applicationNo, callLimitPerHour: a.callLimitPerHour };
+    });
+  } catch (e) {
+    if (signalMessage(e)?.startsWith('G11')) throw new ApplicationRateLimited();
+    throw e;
+  }
+}

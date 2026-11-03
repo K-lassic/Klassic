@@ -50,6 +50,15 @@ class ApiError(Exception):
             self.gate = entry["gate"]
             self.message = message or entry["message"]
             self.fix = entry["fix"]
+            if code == "UPLOAD_TOO_LARGE" and self.details.get("reason") == "image_pixels":
+                pixels, edge = self.details.get("max_pixels"), self.details.get("max_edge")
+                if isinstance(pixels, int) and isinstance(edge, int):
+                    label = f"{pixels // 10000}만 화소" if pixels % 10000 == 0 else f"{pixels}화소"
+                    self.message = message or (
+                        "사진이 너무 길어 인식할 수 없습니다. 악보를 쪽별로 나누어 올려 주세요."
+                        if self.details.get("after_upscale") else
+                        f"사진의 해상도가 너무 높습니다. 한 장당 {label} 이하, 긴 변 {edge}px 이하만 가능합니다.")
+                    self.fix = "사진 크기를 줄이거나 악보를 쪽별로 나누어 다시 올려 주세요."
         else:
             self.http = http or _RENDER_HTTP.get(code, 500)
             self.gate = None

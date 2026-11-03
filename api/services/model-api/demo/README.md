@@ -31,6 +31,8 @@ docker compose -f compose.yaml -f services/model-api/demo/compose.local.yaml --p
 
 - `/demo/api/music`: 곡·선율 국악기 목록을 1분 캐시한다. 타악기는 선택에서 제외하고 빈 목록·API 장애를 안내한다.
 - `/demo/api/bgm?share=<번호>&inst=<악기 코드>`: 목록의 선택만 허용한다. 공유 악보를 매번 조회해 거둠·만료를 확인하고 외부 키의 렌더링 호출로 MP3 정책을 검사한다.
+- 악기 선택은 첫 번째 선율 성부(0번)에만 적용한다. 장구를 포함한 나머지 성부는 원래 악기·음표·장단을 유지하며 성부를 복제하지 않는다.
+- 기본 아리랑 예시는 데모용 사본을 등록한다. 선율은 원본과 같고 장구 음표의 연주 세기만 80%로 낮췄다. 원본 템플릿은 변경하지 않는다.
 - 완성 MP3는 장기 캐시하지 않는다. 동일한 진행 중 요청만 합치고 서로 다른 작업은 최대 2개로 제한한다. 초과 시 429·`Retry-After: 5`를 반환하며 upstream 429도 재시도 시간을 전달한다.
 - API JSON은 최대 6MiB, MP3는 최대 20MiB로 읽기 크기와 시간을 제한한다. API 리다이렉트는 따라가지 않아 다른 호스트로 키를 전달하지 않는다.
 - 정적 파일은 지정된 세 파일만 제공하고 동적 제목은 브라우저에서 `textContent`로 표시한다. 서버 오류 원문을 브라우저로 전달하지 않는다.
@@ -39,7 +41,7 @@ docker compose -f compose.yaml -f services/model-api/demo/compose.local.yaml --p
 ## 검증·운영
 
 ```powershell
-docker run --rm -v "${PWD}/services/model-api/demo:/app:ro" -w /app node:22.21.1-bookworm-slim node --test tests/server.test.mjs
+docker run --rm -v "${PWD}/services/model-api:/app:ro" -w /app node:22.21.1-bookworm-slim node --test demo/tests/server.test.mjs
 ```
 
 실제 검사는 model-api의 `tests/run_demo_live.ps1`를 격리 `klassic_issue93` DB·시험 볼륨에서만 실행한다. 임시 외부 키·시험 운영자 기록으로 정책을 모의하며 이후 원래 정책과 파일·키를 정리한다. 운영 이용 허가를 대신하는 절차가 아니다.

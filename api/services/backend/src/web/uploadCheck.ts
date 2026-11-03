@@ -3,6 +3,7 @@
 //   구조에서의 위치: requests.ts 가 파일을 저장하기 전에 부른다. 반려하면 요청 행을 만들지 않는다.
 //     PDF 는 형식 · 용량 · 악보 종류만 여기서 보고 나머지는 model-api 검사기에 맡긴다(remoteCheck → uploadInspect.ts). 코드는 model-api 와 같다.
 //   v0.1.1 web/uploadCheck.ts 에서 달라진 점: 사용자가 올릴 수 있는 사진 · PDF 만 검사한다.
+//   #33 후속: 사진 화소·긴 변도 shared 기준(자동 확대 후 크기 포함)으로 검사해 접수 뒤 대체 악보가 되는 것을 막는다.
 //     MIDI · MusicXML 은 형식 단계에서 반려되므로 구조 검사(fast-xml-parser · fflate · @tonejs/midi)는 옮기지 않았다.
 import { shared, type UploadKindRule } from '../config/shared.js';
 
@@ -145,6 +146,18 @@ export function checkUpload(files: UploadInput[], scoreType: string | undefined)
   const rule = rules.kinds.image;
   for (const [n, f] of files.entries()) {
     if (f.data.length > rule.max_bytes) return reject('UPLOAD_TOO_LARGE', 'image', { max_bytes: rule.max_bytes, actual_bytes: f.data.length, ...where(n + 1) });
+  }
+  for (const [n, size] of sizes.entries()) {
+    const edge = Math.min(size.w, size.h);
+    const below = rule.upscale_below_short_edge_px, target = rule.upscale_to_short_edge_px;
+    const scale = below && target && edge < below ? target / edge : 1;
+    if ((rule.max_edge_px !== undefined && Math.max(size.w, size.h) * scale > rule.max_edge_px)
+      || (rule.max_pixels !== undefined && size.w * size.h * scale * scale > rule.max_pixels)) {
+      return reject('UPLOAD_TOO_LARGE', 'image', {
+        reason: 'image_pixels', max_edge: rule.max_edge_px, max_pixels: rule.max_pixels,
+        width: size.w, height: size.h, after_upscale: scale > 1, ...where(n + 1),
+      });
+    }
   }
   // 짧은 변 300px 미만만 반려. 650px 미만은 model-api 가 인식할 때 늘려 읽는다 (upload-rules.json upscale_below_short_edge_px)
   const min = rule.min_short_edge_px ?? 300;

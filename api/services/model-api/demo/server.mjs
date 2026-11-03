@@ -101,11 +101,12 @@ export function createDemo({ apiBase, apiKey, fetchImpl = fetch, now = Date.now,
       inflight.set(key, (async () => {
         const score = await json(`/v1/shared-scores/${share}/score`);
         if (typeof score.musicxml !== 'string' || !score.musicxml) throw new Failure(502, 'API_INVALID', '악보를 읽지 못했습니다.');
-        const parts = Math.max(1, (score.musicxml.match(/<(?:[\w.-]+:)?score-part\b/g) ?? []).length);
+        const parts = Math.max(1, (score.musicxml.match(/<(?:[\w.-]+:)?score-part(?=[\s>])/g) ?? []).length);
         if (parts > 64) throw new Failure(502, 'SCORE_TOO_COMPLEX', '성부 수가 너무 많아 재생할 수 없습니다.');
         const form = new FormData();
         form.append('score', new Blob([score.musicxml], { type: 'application/vnd.recordare.musicxml+xml' }), 'score.musicxml');
-        form.append('instruments', JSON.stringify({ mode: 'custom', tracks: Array.from({ length: parts }, (_, part) => ({ part, instrument })) }));
+        // 악기 선택은 첫 선율(0번 성부)만 바꾼다. 장구 등 나머지 성부는 원래 악기·장단을 유지한다.
+        form.append('instruments', JSON.stringify({ mode: 'custom', tracks: [{ part: 0, instrument }] }));
         const audio = await upstream('/v1/render/mp3', { method: 'POST', body: form }, 20 * 1024 * 1024);
         if (audio.type === 'application/json') {
           let body;

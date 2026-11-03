@@ -1,6 +1,7 @@
 // #93 데모의 실제 HTTP 경로: 외부 키 비노출·MP3 정책·호출 병합·응답 상한·경로 검증.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createDemo } from '../server.mjs';
 
 const KEY = 'test-private-key-do-not-expose';
@@ -59,7 +60,33 @@ test('chosen shared MusicXML is rendered with server-held key and returns MP3', 
   assert.equal(await response.text(), 'ID3-test-audio');
   const form = calls.at(-1).options.body;
   assert.equal(await form.get('score').text(), XML);
-  assert.equal(JSON.parse(form.get('instruments')).tracks[0].instrument, 'gayageum');
+  assert.deepEqual(JSON.parse(form.get('instruments')), { mode: 'custom', tracks: [{ part: 0, instrument: 'gayageum' }] });
+});
+
+test('changing instruments only assigns the first part and preserves the original janggu score', async (t) => {
+  const xml = await readFile(new URL('../../assets/templates/arirang-semachi-demo.musicxml', import.meta.url), 'utf8');
+  const { get, calls } = await fixture(t, { score: () => json({ musicxml: xml }) });
+  for (const instrument of ['gayageum', 'daegeum']) {
+    const response = await get(`/demo/api/bgm?share=${SHARE}&inst=${instrument}`);
+    assert.equal(response.status, 200);
+    const form = calls.at(-1).options.body;
+    assert.equal(await form.get('score').text(), xml);
+    assert.deepEqual(JSON.parse(form.get('instruments')), { mode: 'custom', tracks: [{ part: 0, instrument }] });
+  }
+});
+
+test('demo Arirang keeps the melody and janggu rhythm while reducing janggu dynamics to 80 percent', async () => {
+  const original = await readFile(new URL('../../assets/templates/arirang-semachi-v1.musicxml', import.meta.url), 'utf8');
+  const demo = await readFile(new URL('../../assets/templates/arirang-semachi-demo.musicxml', import.meta.url), 'utf8');
+  const part = (xml, id) => xml.match(new RegExp(`<part id="${id}">[\\s\\S]*?</part>`))[0];
+  assert.equal(part(demo, 'P1'), part(original, 'P1'));
+  const originalDrums = part(original, 'P2'), demoDrums = part(demo, 'P2');
+  assert.equal(demoDrums.replace(/dynamics="[\d.]+"/g, ''), originalDrums.replace(/dynamics="[\d.]+"/g, ''));
+  const dynamics = (xml) => [...xml.matchAll(/dynamics="([\d.]+)"/g)].map((m) => Number(m[1]));
+  assert.ok(dynamics(originalDrums).length > 0);
+  assert.deepEqual(dynamics(demoDrums), dynamics(originalDrums).map((v) => Number((v * 0.8).toFixed(4))));
+  const manifest = JSON.parse(await readFile(new URL('../../assets/shared-examples.json', import.meta.url), 'utf8'));
+  assert.equal(manifest.examples[0].file, 'templates/arirang-semachi-demo.musicxml');
 });
 
 test('subsequent audio requests recheck withdrawn scores and MP3 policy without stale cache', async (t) => {

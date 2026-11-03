@@ -60,6 +60,12 @@ export async function exec(sql: string, params: unknown[] = []): Promise<ResultS
   return res;
 }
 
+/** #91 DB 트리거 SIGNAL 의 문구 — 다른 오류면 null */
+export function signalMessage(e: unknown): string | null {
+  const err = e as { sqlState?: string; sqlMessage?: string };
+  return err?.sqlState === '45000' ? (err.sqlMessage ?? '') : null;
+}
+
 /** 한 트랜잭션으로 묶는다 — 실패하면 모두 되돌린다 */
 export async function tx<T>(fn: (conn: PoolConnection) => Promise<T>): Promise<T> {
   const conn = await getPool().getConnection();
