@@ -17,7 +17,7 @@ docker compose --profile demo up -d model-api demo
 
 ## Nginx 연결 — 팀장 담당
 
-서버는 `0.0.0.0:26102`에서 **`/demo` 접두사를 유지한 요청**을 받는다. Nginx의 `/demo`·`/demo/*`를 `http://demo:26102`로 넘기되 접두사를 제거하면 안 된다. `/demo`는 `/demo/`로 이동하며 `GET /health`는 내부 준비 확인용이다. 프로필이 꺼져 있을 때 Nginx가 실패하지 않게 연결 방식도 고려해야 한다. `deploy/nginx/`는 수정하지 않았다.
+서버는 `0.0.0.0:26102`에서 **`/demo` 접두사를 유지한 요청**을 받는다. Nginx의 `/demo`·`/demo/*`를 `http://demo:26102`로 넘기되 접두사를 제거하면 안 된다. `/demo`는 `/demo/`로 이동하며 `GET /health`는 내부 준비 확인용이다. 팀장 PR #137이 main에 병합되어 이 연결이 포함됐다. 프로필이 꺼져 있을 때도 Nginx는 실행되며 데모 경로에 503 안내를 반환한다. 이 PR은 해당 설정을 main에서 병합하며 직접 작성하지 않는다.
 
 코드 작업 PC에서만 화면을 열려면 다음 로컬 override를 사용한다.
 

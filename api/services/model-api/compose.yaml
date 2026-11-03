@@ -61,19 +61,39 @@ services:
     depends_on:
       db: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
+      shared-storage-init: {condition: service_completed_successfully}
     tmpfs:
       - /tmp:rw,nosuid,nodev,mode=1777
     volumes:
       - *engine-volume
       - model-storage:/storage
-      # #93: backend가 작성한 공유 악보를 읽는다. API는 shared/<번호>/score.musicxml만 허용한다.
-      - storage:/shared-scores:ro
+      # #93 최소권한: 사용자 원본이 있는 storage 전체 대신 shared/ 하위만 읽는다.
+      - type: volume
+        source: storage
+        target: /shared-scores
+        read_only: true
+        volume:
+          subpath: shared
+          nocopy: true
       - type: bind
         source: ../../shared/soundfonts
         target: /app/shared/soundfonts
         read_only: true
         bind:
           create_host_path: false
+
+  shared-storage-init:
+    # 빈 볼륨에도 subpath가 먼저 생기도록 하는 일회성 준비 작업. DB·네트워크는 사용하지 않는다.
+    image: ${MODEL_API_IMAGE:-klassic/model-api:0.2.2}
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    network_mode: none
+    entrypoint: [python, -m, app.tools.init_shared_storage]
+    healthcheck: {disable: true}
+    volumes:
+      - storage:/storage
 
   demo:
     profiles: [demo]
@@ -110,9 +130,15 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 가 필요합니다}
       SHARED_SCORES_DIR: /shared-scores
     volumes:
-      - storage:/shared-scores
+      - type: volume
+        source: storage
+        target: /shared-scores
+        volume:
+          subpath: shared
+          nocopy: true
     depends_on:
       db: {condition: service_healthy}
+      shared-storage-init: {condition: service_completed_successfully}
 
   engine-selftest:
     <<: *engine-runtime

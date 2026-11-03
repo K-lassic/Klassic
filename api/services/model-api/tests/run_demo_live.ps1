@@ -18,6 +18,7 @@ $ReportDirectory = (Resolve-Path -LiteralPath $ReportDirectory).Path
 $keyFile = Join-Path (Resolve-Path $ReportDirectory).Path 'demo-key.env'
 if (Test-Path -LiteralPath $keyFile) { throw '이전 시험 키 파일을 먼저 확인하십시오' }
 $testSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'container_shared_demo_smoke.py'))
+$initSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '../app/tools/init_shared_storage.py'))
 $prepared = $false
 $demoStarted = $false
 Push-Location $apiRoot
@@ -26,9 +27,13 @@ try {
     if ($LASTEXITCODE -ne 0 -or $resolved.services.'model-api'.environment.DB_NAME -ne 'klassic_issue93' -or
         $resolved.services.'model-api'.environment.STORAGE_DIR -ne '/storage/issue93' -or
         $resolved.volumes.'issue93-shared'.name -ne 'klassic_issue93_shared_test' -or
-        @($resolved.services.'shared-seed'.volumes | Where-Object { $_.target -eq '/shared-scores' -and $_.source -eq 'issue93-shared' }).Count -ne 1) {
+        @($resolved.services.'model-api'.volumes | Where-Object { $_.target -eq '/shared-scores' -and $_.source -eq 'issue93-shared' -and $_.volume.subpath -eq 'shared' -and $_.read_only }).Count -ne 1 -or
+        @($resolved.services.'shared-seed'.volumes | Where-Object { $_.target -eq '/shared-scores' -and $_.source -eq 'issue93-shared' -and $_.volume.subpath -eq 'shared' }).Count -ne 1 -or
+        @($resolved.services.'shared-storage-init'.volumes | Where-Object { $_.target -eq '/storage' -and $_.source -eq 'issue93-shared' }).Count -ne 1) {
         throw '격리 DB·저장소·공유 시험 볼륨 구성이 아닙니다'
     }
+    docker compose @args93 run --rm --no-deps shared-storage-init
+    if ($LASTEXITCODE -ne 0) { throw '공유 폴더 준비 실패' }
     docker compose @args93 up -d --no-deps model-api
     if ($LASTEXITCODE -ne 0) { throw '시험 model-api 기동 실패' }
     $container = docker compose @args93 ps -q model-api
@@ -68,6 +73,9 @@ try {
         if ($LASTEXITCODE -ne 0) { Write-Warning '시험 데이터 정리 실패 — 격리 DB와 시험 파일 확인 필요' }
     }
     Remove-Item -LiteralPath $keyFile -ErrorAction SilentlyContinue
+    # 이전 이미지에는 새 준비 모듈이 없을 수 있어, 복원할 볼륨에는 현재 소스를 stdin으로 실행한다.
+    $initSource | docker compose @restore run --rm -T --no-deps --entrypoint python shared-storage-init -
+    if ($LASTEXITCODE -ne 0) { Write-Warning '복원 환경 공유 폴더 준비 실패' }
     docker compose @restore up -d --no-deps model-api
     Pop-Location
 }

@@ -8,6 +8,7 @@ import pytest
 
 from app.db import utcnow
 from app.services.shared_scores import read_shared, shared_path
+from app.tools.init_shared_storage import prepare_shared
 from app.tools.seed_shared_examples import load_examples, seed_examples
 from test_contract_matrix import check, contract as contract
 from test_performances import client as client
@@ -21,7 +22,7 @@ def install(client, monkeypatch):
     api, app, db, _ = client
     cfg = replace(app.state.config, shared_scores_dir=app.state.config.storage_dir / 'shared-volume')
     app.state.config = cfg
-    path = cfg.shared_scores_dir / f'shared/{NO}/score.musicxml'
+    path = cfg.shared_scores_dir / f'{NO}/score.musicxml'
     path.parent.mkdir(parents=True)
     path.write_text(XML)
     row = dict(share_no=NO, title='예시 곡', score_type='staff', like_count=4, is_example=1,
@@ -87,11 +88,51 @@ def test_shared_paths_refuse_other_request_and_symlink(tmp_path):
     for uri in ['../secret', '/secret', 'api/R-1103-ABCDEFGH/result.musicxml', f'shared/{NO}/../secret']:
         with pytest.raises(ValueError):
             shared_path(root, NO, uri)
-    directory = root/'shared'/NO
+    directory = root/NO
     directory.mkdir(parents=True)
     (directory/'score.musicxml').symlink_to(outside)
     with pytest.raises(ValueError):
         read_shared(root, NO, f'shared/{NO}/score.musicxml')
+
+
+def test_shared_subpath_maps_backend_uri_without_exposing_siblings(tmp_path):
+    root = tmp_path/'shared'
+    path = shared_path(root, NO, f'shared/{NO}/score.musicxml')
+    assert path == root/NO/'score.musicxml'
+    assert 'shared/shared' not in str(path)
+    with pytest.raises(ValueError):
+        shared_path(root, NO, f'{NO}/score.musicxml')
+    with pytest.raises(ValueError):
+        shared_path(root, NO, 'requests/private/original.png')
+
+
+def test_init_shared_empty_volume_repeat_and_preserve_private_files(tmp_path):
+    private = tmp_path/'requests'/'private'
+    private.mkdir(parents=True)
+    (private/'original.png').write_bytes(b'private')
+    shared = prepare_shared(tmp_path)
+    assert shared == tmp_path/'shared' and shared.is_dir()
+    (shared/'keep').write_text('keep')
+    assert prepare_shared(tmp_path) == shared
+    assert (private/'original.png').read_bytes() == b'private'
+    assert (shared/'keep').read_text() == 'keep'
+
+
+@pytest.mark.parametrize('kind', ['root_link', 'shared_link', 'shared_file'])
+def test_init_shared_refuses_links_and_non_directory(tmp_path, kind):
+    root, outside = tmp_path/'store', tmp_path/'outside'
+    outside.mkdir()
+    if kind == 'root_link':
+        root.symlink_to(outside, target_is_directory=True)
+    else:
+        root.mkdir()
+        if kind == 'shared_link':
+            (root/'shared').symlink_to(outside, target_is_directory=True)
+        else:
+            (root/'shared').write_text('keep')
+    with pytest.raises((ValueError, FileExistsError)):
+        prepare_shared(root)
+    assert list(outside.iterdir()) == []
 
 
 class SeedDB:

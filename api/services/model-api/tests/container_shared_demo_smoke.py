@@ -79,8 +79,8 @@ async def main():
             await db.execute('DELETE FROM access_key WHERE key_id=%s', (state['key_id'],))
             await db.execute('DELETE FROM operator_account WHERE operator_id=%s', (state['operator'],))
             await db.execute('DELETE FROM shared_score WHERE share_id=%s', (row['share_id'],))
-            path = cfg.shared_scores_dir/'shared'/row['share_no']
-            if path.resolve().parent != (cfg.shared_scores_dir.resolve()/'shared') or path.is_symlink():
+            path = cfg.shared_scores_dir/row['share_no']
+            if path.resolve().parent != cfg.shared_scores_dir.resolve() or path.is_symlink():
                 raise RuntimeError('시험 폴더 경로 범위 초과')
             if path.is_dir():
                 shutil.rmtree(path)
