@@ -11,7 +11,7 @@
 #     2. gate_codes 항목마다 http · gate · message · fix 가 있다 (응답 모양 — INTERFACES §2)
 #     3. --compare <v0.1.1 error-codes.json> 을 주면, 합친 결과의 코드 · 값이 v0.1.1 과 같다
 #
-#   사용: python api/shared/check_errors.py [--compare proto_type/src/app/shared/error-codes.json]
+#   사용: python api/shared/check_errors.py [--compare api/docs/reference/v0.1.1/error-codes.json]  (#140 · 기본 비교 기준은 스냅샷)
 #   끝 코드: 0 = 통과 · 1 = 문제 있음
 # =============================================================================
 import argparse
@@ -75,11 +75,14 @@ def compare(merged: dict, base_path: pathlib.Path) -> list[str]:
     return problems
 
 
+SNAPSHOT_ERROR_CODES = pathlib.Path(__file__).resolve().parent.parent / "docs/reference/v0.1.1/error-codes.json"
+
+
 def main() -> int:
     # Windows 콘솔(cp949)에서도 멈추지 않게 — 출력할 수 없는 글자는 ? 로 바꾼다
     sys.stdout.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(description="api/shared/errors/*.json 점검")
-    ap.add_argument("--compare", type=pathlib.Path, help="비교할 v0.1.1 error-codes.json")
+    ap.add_argument("--compare", type=pathlib.Path, default=SNAPSHOT_ERROR_CODES, help="비교할 v0.1.1 error-codes.json (기본: 근거 스냅샷)")
     args = ap.parse_args()
 
     merged, problems = merge({n: load(n) for n in FILES})
