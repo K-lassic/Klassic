@@ -4,7 +4,7 @@
 
 악보 문서(ScoreDoc) 파싱 · 편집 연산(`applyOps`) · MIDI/MusicXML 내보내기. 백엔드(내보내기)와 프론트(편집 · 연주)가 함께 쓴다.
 
-- 참고 코드: `proto_type/src/app/packages/score-core` (약 1,400줄 · 시험 7개 파일) — v0.1.1 소스를 그대로 옮겼다 (#18)
+- 참고 코드: `proto_type/src/app/packages/score-core` (약 1,400줄 · 시험 7개 파일) — v0.1.1 소스를 그대로 옮겼다 (#18) — 원본은 git 태그 `v0.1.1` 에 있다 (#143)
 - 담당은 #18 조정안 A 로 황송해. 공개 함수 · 타입을 바꾸면 백엔드와 프론트를 함께 깨뜨리므로 PR 에 팀장(@majoongcheon)을 리뷰어로 넣는다 (`.github/CODEOWNERS`).
 
 ## 무엇
