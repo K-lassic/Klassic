@@ -224,4 +224,29 @@ describe('169~172 로그인 화면', () => {
     expect(b.router.currentRoute.value.query).toMatchObject({ tab: 'signup', next: '/' });
     expect(b.w.find('#auth-name').exists()).toBe(true);
   });
+  it('(2026-11-03) 가입 화면: 부제 · 권한 안내 · 빈 칸 사유 없음, 비밀번호 8자 미만이면 칸 아래 안내', async () => {
+    const { w } = await mountLogin('/login?tab=signup');
+    expect(w.get('h1').text()).toBe('가입하기');
+    expect(w.text()).not.toContain('이메일로 바로 가입합니다');
+    expect(w.text()).not.toContain("'사용자' 권한");
+    expect(w.get('label[for="auth-pw"]').text()).toBe('비밀번호');
+    expect(w.find('#auth-why').exists()).toBe(false);
+    await w.get('#auth-email').setValue('a@b.c');
+    await w.get('#auth-pw').setValue('1234567');
+    expect(w.get('[data-test="pw-short"]').text()).toBe('비밀번호를 8자 이상 입력해 주십시오');
+    expect(w.get('#auth-pw').attributes('aria-invalid')).toBe('true');
+    expect(w.find('#auth-why').exists()).toBe(false);
+    expect(w.get('[data-test="submit-row"] button').attributes('aria-disabled')).toBe('true');
+    await w.get('#auth-pw').setValue('12345678');
+    expect(w.find('[data-test="pw-short"]').exists()).toBe(false);
+    // 이름만 남으면 버튼 아래에 사유
+    expect(w.get('#auth-why').text()).toBe('사유: 이름을 넣어 주십시오');
+  });
+  it('(2026-11-03) 로그인 화면은 빈 칸 사유 그대로 · 8자 안내 없음', async () => {
+    const { w } = await mountLogin('/login');
+    expect(w.get('#auth-why').text()).toBe('사유: 이메일과 비밀번호를 넣어 주십시오');
+    await w.get('#auth-email').setValue('a@b.c');
+    await w.get('#auth-pw').setValue('123');
+    expect(w.find('[data-test="pw-short"]').exists()).toBe(false);
+  });
 });

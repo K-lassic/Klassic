@@ -32,8 +32,8 @@ describe('173 · 174 큰 눈썹 제목', () => {
     expect(a).not.toContain('내 프로그램에서 국악보 인식');
     expect(a).toContain('<h1 class="eyebrow eyebrow-title">API활용</h1>');
     const l = tpl('src/pages/S0Login.vue');
-    expect(l).toContain('<h1 v-if="tab === \'login\'" class="eyebrow eyebrow-title">로그인</h1>');
-    expect(l).toContain('<span class="eyebrow eyebrow-title">가입하기</span>');
+    // (2026-11-03) 가입 화면 부제 "이메일로 바로 가입합니다" 를 빼고 두 화면 모두 눈썹 제목이 h1
+    expect(l).toContain('<h1 class="eyebrow eyebrow-title">{{ tab === \'login\' ? \'로그인\' : \'가입하기\' }}</h1>');
     expect(read('src/styles/styleguide.css')).toContain('.eyebrow.eyebrow-title { font: 700 28px/1.2 var(--font-sans);');
     // #92: 스타일가이드 견본 HTML 에도 같은 클래스가 있는지는 뺐다 — 견본은 api/ 로 옮기지 않았다 (logo203 과 같음, #46)
   });
