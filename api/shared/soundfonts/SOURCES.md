@@ -74,7 +74,7 @@ MIT 고지 원문: 같은 폴더의 `FluidR3_GM.COPYING.txt`(원본 COPYING 그�
 - 내려받을 때 사용 목적을 `비상업용 / 교육용` 으로 신고했다. 페이지에 상업 이용을 금지하는 문구는 없지만, 상용화할 때는 신고 내용을 다시 확인한다.
 - 공공기관이 후원하는 것처럼 보이게 표시하지 않는다 (제1유형 금지 사항).
 - 확인한 곳: [공공누리 제1유형](https://www.kogl.or.kr/info/licenseType1.do) · [국악기 디지털 음원](https://www.gugak.go.kr/digitaleum/front/monotone/list.do)
-- 판단은 2026-11-03 사용자(팀장)가 확정했다. DB `license_policy.confirmed` 는 아직 0 이다. 바꾸면 화면의 "팀 내부 시연용" 안내가 없어지고 외부 API 도 MP3 를 준다.
+- 판단은 2026-11-03 사용자(팀장)가 확정했다. **DB `license_policy.confirmed` 는 2026-11-03 운영자 `admin_jsg` 가 1로 바꿨다** (`confirmLicense --confirm`, `change_history` 기록). 그 뒤 화면의 "팀 내부 시연용" 안내가 사라졌고 외부 API 는 MP3 를 준다. 되돌리기는 `confirmLicense --withhold`.
 
 ## 3. gugak.sf2 가 없을 때 (파일을 지웠거나 다른 서버)
 
