@@ -242,9 +242,10 @@ describe('169~172 로그인 화면', () => {
     // 이름만 남으면 버튼 아래에 사유
     expect(w.get('#auth-why').text()).toBe('사유: 이름을 넣어 주십시오');
   });
-  it('(2026-11-03) 로그인 화면은 빈 칸 사유 그대로 · 8자 안내 없음', async () => {
+  it('(2026-11-04) 로그인 화면도 빈 칸 사유 없음(버튼만 막힘) · 8자 안내 없음', async () => {
     const { w } = await mountLogin('/login');
-    expect(w.get('#auth-why').text()).toBe('사유: 이메일과 비밀번호를 넣어 주십시오');
+    expect(w.find('#auth-why').exists()).toBe(false);
+    expect(w.get('[data-test="submit-row"] button').attributes('aria-disabled')).toBe('true');
     await w.get('#auth-email').setValue('a@b.c');
     await w.get('#auth-pw').setValue('123');
     expect(w.find('[data-test="pw-short"]').exists()).toBe(false);

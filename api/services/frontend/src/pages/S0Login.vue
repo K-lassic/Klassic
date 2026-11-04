@@ -41,8 +41,10 @@ const submitReason = computed(() => {
   return null;
 });
 // (2026-11-03 황송해) 가입 화면은 빈 칸 · 비밀번호 길이 사유를 버튼 아래에 보이지 않는다 — 길이는 비밀번호 칸 아래에 알린다
+// (2026-11-04 황송해) 로그인 화면도 빈 칸 사유는 보이지 않는다 — 버튼만 막는다
 const shownReason = computed(() => {
   if (tab.value === 'signup' && !locked.value && (!form.email || form.password.length < 8)) return null;
+  if (tab.value === 'login' && !locked.value && (!form.email || !form.password)) return null;
   return submitReason.value;
 });
 
@@ -136,6 +138,7 @@ async function submit() {
 .form-band { gap: var(--spacing-8); }
 .form-band > p { margin: 0; }
 .submit-row { margin-top: var(--spacing-24); }
-.link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+/* (2026-11-04 황송해) 로그인 ↔ 가입하기 링크는 주황 — 글자라서 대비가 되는 진한 주황(--color-signal-orange)을 쓴다 */
+.link { background: none; border: 0; padding: 0; font: inherit; color: var(--color-signal-orange); text-decoration: underline; cursor: pointer; }
 .tour-cta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-8); }
 </style>
