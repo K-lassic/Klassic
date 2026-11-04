@@ -136,6 +136,12 @@ class GugakPlayer {
   /** 첫 음원을 불러온다(처음 [재생] 때 또는 preload 때 한 번) — gugak.sf2, 없으면 FluidR3. 실패해도 예외를 던지지 않는다. */
   ensureReady(): Promise<boolean> {
     if (this.readyP) return this.readyP;
+    // (#161) https 도 localhost 도 아닌 주소(예: 휴대폰으로 http://PC-IP 접속)에서는 브라우저가 audioWorklet 을 막는다 —
+    // 음원(22MB)을 받기 전에 알리고, 브라우저 탓이 아니라 주소 탓임을 문구로 밝힌다. readyP 에 담지 않아 [재생] 때마다 다시 알린다
+    if (window.isSecureContext === false) {
+      this.emit('error', '이 주소에서는 소리를 낼 수 없습니다. https 주소나 이 컴퓨터(localhost)에서 열어 주세요. 악보 보기와 내려받기는 그대로 쓸 수 있습니다.');
+      return Promise.resolve(false);
+    }
     this.readyP = (async () => {
       this.emit('loading');
       try {

@@ -31,11 +31,21 @@ const nextPath = computed(() => {
 function switchTab(t: Tab) { tab.value = t; gate.value = null; locked.value = false; }
 watch(() => route.query.tab, (q) => { if (tabOf(q) !== tab.value) switchTab(tabOf(q)); });
 
+/** 가입 화면에서 비밀번호를 넣기 시작했지만 8자가 안 됨 — 칸 아래에 알린다 */
+const pwShort = computed(() => tab.value === 'signup' && form.password.length > 0 && form.password.length < 8);
 const submitReason = computed(() => {
   if (locked.value) return '잠금이 풀린 뒤 누를 수 있습니다';
   if (!form.email || !form.password) return '이메일과 비밀번호를 넣어 주십시오';
-  if (tab.value === 'signup' && (form.password.length < 8 || !form.name.trim())) return '비밀번호 8자 이상과 이름을 넣어 주십시오';
+  if (tab.value === 'signup' && form.password.length < 8) return '비밀번호를 8자 이상 넣어 주십시오';
+  if (tab.value === 'signup' && !form.name.trim()) return '이름을 넣어 주십시오';
   return null;
+});
+// (2026-11-03 황송해) 가입 화면은 빈 칸 · 비밀번호 길이 사유를 버튼 아래에 보이지 않는다 — 길이는 비밀번호 칸 아래에 알린다
+// (2026-11-04 황송해) 로그인 화면도 빈 칸 사유는 보이지 않는다 — 버튼만 막는다
+const shownReason = computed(() => {
+  if (tab.value === 'signup' && !locked.value && (!form.email || form.password.length < 8)) return null;
+  if (tab.value === 'login' && !locked.value && (!form.email || !form.password)) return null;
+  return submitReason.value;
 });
 
 async function submit() {
@@ -61,11 +71,8 @@ async function submit() {
     <div class="wrap narrow">
       <div class="page-head">
         <!-- (169번) 로그인 화면의 제목 문구는 뺐다. (174번) 큰 눈썹 제목 — 로그인 화면은 이것이 h1, 가입 화면은 눈썹 "가입하기" + h1 -->
-        <h1 v-if="tab === 'login'" class="eyebrow eyebrow-title">로그인</h1>
-        <template v-else>
-          <span class="eyebrow eyebrow-title">가입하기</span>
-          <h1 class="h2">이메일로 바로 가입합니다</h1>
-        </template>
+        <!-- (2026-11-03 황송해) 가입 화면의 "이메일로 바로 가입합니다" 는 뺐다 — 두 화면 모두 큰 눈썹 제목이 h1 -->
+        <h1 class="eyebrow eyebrow-title">{{ tab === 'login' ? '로그인' : '가입하기' }}</h1>
         <p>악보 올리기 · 듣기 · 편집 · 내려받기와 API 접근 키 신청은 로그인해야 쓸 수 있습니다. API활용 안내는 로그인 없이 볼 수 있습니다.</p>
         <!-- (2026-09-30 황송해 165번, SD_02 §4-7) 처음 온 사람은 로그인 전에 [체험하기]로 1~4단계를 본다 -->
         <p class="tour-cta"><span>처음 오셨습니까?</span> <RouterLink class="btn btn-secondary" :to="{ name: 'tour' }" data-test="tour-open">체험하기</RouterLink></p>
@@ -81,8 +88,12 @@ async function submit() {
               <input id="auth-email" v-model="form.email" class="input" type="email" autocomplete="username" required />
             </div>
             <div class="field">
-              <label for="auth-pw">{{ tab === 'signup' ? '비밀번호 (8자 이상)' : '비밀번호' }}</label>
-              <input id="auth-pw" v-model="form.password" class="input" type="password" :autocomplete="tab === 'signup' ? 'new-password' : 'current-password'" required />
+              <label for="auth-pw">비밀번호</label>
+              <input
+                id="auth-pw" v-model="form.password" class="input" type="password" :autocomplete="tab === 'signup' ? 'new-password' : 'current-password'" required
+                :aria-invalid="pwShort ? 'true' : undefined" :aria-describedby="pwShort ? 'auth-pw-hint' : undefined"
+              />
+              <span v-if="pwShort" id="auth-pw-hint" class="small field-hint" aria-live="polite" data-test="pw-short">비밀번호를 8자 이상 입력해 주십시오</span>
             </div>
             <div v-if="tab === 'signup'" class="field">
               <label for="auth-name">이름</label>
@@ -91,13 +102,13 @@ async function submit() {
           </div>
           <!-- (171번) 버튼은 입력 띠 안 가운데, 막힌 이유는 그 아래 -->
           <div class="submit-row" data-test="submit-row">
-            <button type="submit" class="btn btn-primary" :aria-disabled="submitReason ? 'true' : undefined" :aria-describedby="submitReason ? 'auth-why' : undefined">
+            <button type="submit" class="btn btn-primary" :aria-disabled="submitReason ? 'true' : undefined" :aria-describedby="shownReason ? 'auth-why' : pwShort ? 'auth-pw-hint' : undefined">
               {{ busy ? '확인하는 중…' : tab === 'login' ? '로그인' : '가입하기' }}
             </button>
-            <span v-if="submitReason" id="auth-why" class="small muted">사유: {{ submitReason }}</span>
+            <span v-if="shownReason" id="auth-why" class="small muted">사유: {{ shownReason }}</span>
           </div>
+          <!-- (2026-11-03 황송해) "가입하면 '사용자' 권한으로 … 이메일 인증은 하지 않습니다." 는 뺐다 -->
           <template v-if="tab === 'signup'">
-            <p class="small muted">가입하면 '사용자' 권한으로 바로 로그인됩니다. 이메일 인증은 하지 않습니다.</p>
             <p class="small muted" data-test="to-login">이미 계정이 있으십니까? <RouterLink class="link" :to="otherTo">로그인</RouterLink></p>
           </template>
           <!-- (172번) 안내 문구 · "가입하기"는 가입 화면 링크 -->
@@ -113,9 +124,21 @@ async function submit() {
 .narrow { max-width: 640px; }
 .submit-row { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-8); text-align: center; }
 /* (2026-09-30 황송해 181번) 이메일 · 비밀번호(가입은 이름까지) 한 줄씩 위아래, 줄마다 레이블 왼쪽 · 입력칸 오른쪽. 좁은 화면은 레이블이 위로 */
-.form-band .fields.rows { grid-template-columns: 1fr; gap: var(--spacing-16); max-width: 520px; width: 100%; justify-self: center; }
-.rows .field { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: var(--spacing-16); }
-@media (max-width: 560px) { .rows .field { grid-template-columns: 1fr; gap: var(--spacing-8); } }
-.link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+/* (2026-11-03) 레이블 칸을 150px 고정 → 가장 긴 레이블 너비로. 칸끼리 같은 열에 맞추려고 .field 는 풀어 둔다 */
+.form-band .fields.rows { grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: var(--spacing-16); max-width: 420px; width: 100%; justify-self: center; }
+.rows .field { display: contents; }
+/* 비밀번호 8자 안내 — 입력칸 바로 아래 같은 열 */
+.field-hint { grid-column: 2; margin-top: calc(-1 * var(--spacing-8)); color: var(--color-primary); font-weight: 700; }
+@media (max-width: 560px) {
+  .form-band .fields.rows { grid-template-columns: 1fr; }
+  .rows .field { display: grid; gap: var(--spacing-8); }
+  .field-hint { grid-column: auto; margin-top: 0; }
+}
+/* (2026-11-03) 버튼 · 사유 · 안내 문구가 32px + 문단 여백으로 멀었다 — 버튼 아래 줄은 8px 간격 */
+.form-band { gap: var(--spacing-8); }
+.form-band > p { margin: 0; }
+.submit-row { margin-top: var(--spacing-24); }
+/* (2026-11-04 황송해) 로그인 ↔ 가입하기 링크는 주황 — 글자라서 대비가 되는 진한 주황(--color-signal-orange)을 쓴다 */
+.link { background: none; border: 0; padding: 0; font: inherit; color: var(--color-signal-orange); text-decoration: underline; cursor: pointer; }
 .tour-cta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-8); }
 </style>

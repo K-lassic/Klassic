@@ -165,6 +165,8 @@ defineExpose({ play, stop: () => player.stop() });
     </div>
     <button v-if="canChange" type="button" class="btn btn-secondary" :aria-disabled="expired ? 'true' : undefined" @click="!expired && emit('openPicker')">악기 바꾸기</button>
     <!-- (2026-09-30 55번) 상태 글 줄(.status.small)은 뺐다 — 보관 만료는 [재생]이 막히고 aria-label 로 알린다 -->
+    <!-- (#161) 연주기 오류만은 다시 보인다 — 안 보이면 말없이 소리만 안 난다(안전하지 않은 주소 · 음원 못 받음 · 소리로 못 바꿈) -->
+    <p v-if="message" class="status small" role="status" data-test="player-error">{{ message }}</p>
   </div>
 </template>
 
@@ -196,6 +198,7 @@ defineExpose({ play, stop: () => player.stop() });
 .player.dock .now { order: 2; flex: 0 1 auto; }
 .player.dock .rate { order: 3; }
 .player.dock .vol { order: 4; }
+.player.dock .status { order: 5; }
 .vol { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .vol-range { width: 110px; height: 44px; accent-color: var(--color-primary); cursor: pointer; }
 .vol-val { min-width: 52px; font-variant-numeric: tabular-nums; color: var(--color-charcoal); }

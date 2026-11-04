@@ -5,22 +5,28 @@
 #   구조에서의 위치: 서버 PC Git Bash → docker compose → db 컨테이너(mariadb-dump) · 볼륨 storage · model-storage
 #     → 백업 폴더(기본 D:\klassic-backup\<시각>\). 서비스 · 볼륨은 바꾸지 않는다 (읽기 전용).
 #   담는 것: db.sql.gz · storage.tar.gz · model-storage.tar.gz · MANIFEST.txt(해시 · 판본 · 행 수)
-#   담지 않는 것: api/.env 비밀값 · 엔진 볼륨(다시 만들 수 있음) · 음원(저장소에 있음)
+#     -e 를 주면 엔진 볼륨도 담는다 (#141): engines.tar.gz · engines.sha256(파일 해시 목록) · engines.links(링크 목록).
+#     엔진은 약 6GB 라 기본으로는 담지 않는다. 엔진 볼륨은 프로젝트 밖 외부 볼륨이라 이름(-E, 기본 klassic_engines)으로 고른다.
+#   담지 않는 것: api/.env 비밀값 · 음원(저장소에 있음)
 #   비밀번호는 컨테이너 안 환경변수로만 쓴다 — 명령줄 · 파일 이름 · 출력에 나오지 않는다.
 #   자동 실행은 하지 않는다. 사람이 필요한 때 실행한다 (deploy/README.md 「백업 · 복원」).
 #
-#   사용 (api/ 폴더): bash deploy/backup.sh [-p 프로젝트] [-o 백업 위치]
+#   사용 (api/ 폴더): bash deploy/backup.sh [-p 프로젝트] [-o 백업 위치] [-e [-E 엔진 볼륨]]
 # =============================================================================
 set -euo pipefail
 export MSYS_NO_PATHCONV=1   # Git Bash 가 컨테이너 안 경로(/from)를 Windows 경로로 바꾸지 않게
 
 PROJECT=klassic-api
 OUT_ROOT=/d/klassic-backup
-while getopts 'p:o:' opt; do
+WITH_ENGINES=0
+ENGINES_VOL=klassic_engines
+while getopts 'p:o:eE:' opt; do
   case "$opt" in
     p) PROJECT=$OPTARG ;;
     o) OUT_ROOT=$OPTARG ;;
-    *) echo "사용: bash deploy/backup.sh [-p 프로젝트] [-o 백업 위치]" >&2; exit 2 ;;
+    e) WITH_ENGINES=1 ;;
+    E) ENGINES_VOL=$OPTARG ;;
+    *) echo "사용: bash deploy/backup.sh [-p 프로젝트] [-o 백업 위치] [-e [-E 엔진 볼륨]]" >&2; exit 2 ;;
   esac
 done
 
@@ -29,6 +35,9 @@ COMPOSE=(docker compose -p "$PROJECT" -f compose.yaml)
 DB_IMAGE=mariadb:12.0.2
 
 "${COMPOSE[@]}" ps --status running --services 2>/dev/null | grep -qx db || { echo "$PROJECT 의 db 가 실행 중이 아니다" >&2; exit 1; }
+if [ "$WITH_ENGINES" = 1 ]; then
+  docker volume inspect "$ENGINES_VOL" >/dev/null 2>&1 || { echo "엔진 볼륨 $ENGINES_VOL 이 없다 — -E 로 이름을 고른다" >&2; exit 1; }
+fi
 
 STAMP=$(date +%Y%m%d-%H%M%S)
 DEST="$OUT_ROOT/$STAMP"
@@ -57,6 +66,16 @@ echo "[2/4] 사용자 파일 백업"
 backup_volume storage storage.tar.gz
 backup_volume model-storage model-storage.tar.gz
 
+# #141 엔진 볼륨 — 읽기 전용으로 열어 묶고, 파일 해시 · 링크 목록을 따로 남긴다 (복원 뒤 대조용)
+if [ "$WITH_ENGINES" = 1 ]; then
+  echo "[2+/4] 엔진 볼륨 백업 ($ENGINES_VOL) — 몇 분 걸린다"
+  docker run --rm -v "$ENGINES_VOL:/from:ro" "$DB_IMAGE" tar -C /from --numeric-owner -cf - . | gzip -c > "$WORK/engines.tar.gz"
+  gzip -t "$WORK/engines.tar.gz"
+  docker run --rm -v "$ENGINES_VOL:/from:ro" -w /from "$DB_IMAGE" sh -c 'find . -type f -print0 | sort -z | xargs -0 sha256sum' > "$WORK/engines.sha256"
+  docker run --rm -v "$ENGINES_VOL:/from:ro" -w /from "$DB_IMAGE" sh -c 'find . -type l -printf "%p -> %l\n" | sort' > "$WORK/engines.links"
+  echo "  엔진: 파일 $(wc -l < "$WORK/engines.sha256") · 링크 $(wc -l < "$WORK/engines.links")"
+fi
+
 echo "[3/4] 기록"
 ROWS=$("${COMPOSE[@]}" exec -T db sh -c 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb -uroot -N "$MARIADB_DATABASE" -e "SELECT CONCAT(\"account=\",(SELECT COUNT(*) FROM account),\" score_request=\",(SELECT COUNT(*) FROM score_request),\" upload_file=\",(SELECT COUNT(*) FROM upload_file),\" shared_score=\",(SELECT COUNT(*) FROM shared_score))"')
 {
@@ -65,7 +84,15 @@ ROWS=$("${COMPOSE[@]}" exec -T db sh -c 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec
   echo "git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
   echo "db_image=$DB_IMAGE"
   echo "rows=$ROWS"
-  (cd "$WORK" && sha256sum ./*.gz)
+  if [ "$WITH_ENGINES" = 1 ]; then
+    echo "engines_volume=$ENGINES_VOL"
+    echo "engines_files=$(wc -l < "$WORK/engines.sha256") engines_links=$(wc -l < "$WORK/engines.links")"
+    # 설치기(#138)로 만든 볼륨이면 엔진별 설치 기록이 있다 — 판본 확인용
+    for e in homr jeongganbo; do
+      if grep -q " \./$e/INSTALL_MANIFEST.json\$" "$WORK/engines.sha256"; then echo "engines_${e}_manifest=있음"; else echo "engines_${e}_manifest=없음"; fi
+    done
+  fi
+  (cd "$WORK" && sha256sum ./*.gz $( [ "$WITH_ENGINES" = 1 ] && echo ./engines.sha256 ./engines.links ))
 } > "$WORK/MANIFEST.txt"
 
 echo "[4/4] 확인"

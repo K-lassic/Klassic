@@ -1,10 +1,10 @@
 # =============================================================================
 # #4 화면(frontend) ↔ backend 계약 — K-lassic Web API
 #   담당: 팀장(@majoongcheon) · 리뷰: 황송해(@SonghaeHwang)
-#   1차 내용 = proto_type v0.1.1 과 동일. 근거 자료:
-#     - proto_type/src/app/docs/INTERFACES.md §1·§2·§4·§4-A·§5 (v0.1.1 "구속력 있는" 인터페이스 약속)
-#     - proto_type/src/app/backend/src/web/*.ts · auth/accounts.ts · admin/*.ts (실제 라우터)
-#     - proto_type/src/app/frontend/src/types/api.ts (화면이 기대하는 응답 모양)
+#   1차 내용 = v0.1.1 과 동일. 근거 자료 (#140 · 스냅샷 api/docs/reference/v0.1.1/, 원본은 git 태그 v0.1.1):
+#     - INTERFACES.md §1·§2·§4·§4-A·§5 (v0.1.1 "구속력 있는" 인터페이스 약속) → docs/reference/v0.1.1/INTERFACES.md
+#     - backend 라우터(web · auth · admin) 원본 → 태그 v0.1.1 의 proto_type/src/app/backend/src/ (스냅샷 없음, 확인 시 git show)
+#     - 화면이 기대하는 응답 모양 → docs/reference/v0.1.1/api.ts
 #   바꾸는 내용은 `contract` 라벨 이슈 → PR(상대 담당 리뷰) → 병합 후 구현.
 #   우선순위 표시(x-priority): P1 발표 필수 · P2 여유 있으면 · P3 발표 이후 (#5 기능 목록과 같음)
 # =============================================================================

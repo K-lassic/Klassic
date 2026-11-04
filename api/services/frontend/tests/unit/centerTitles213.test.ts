@@ -65,14 +65,16 @@ describe('213 제목 가운데', () => {
     expect(s1).toMatch(/<figure v-if="chosenExample" class="example-chosen"[^>]*>\s*<img :src="exampleThumbUrl\(chosenExample\)"/);
     expect(s1).toContain('.example-chosen { margin: 0; justify-self: center;');
   });
-  it('218 탭 아이콘은 장구 허리 마크(사용자 · 관리자 화면)', () => {
+  it('218 탭 아이콘은 로고 마크(사용자 · 관리자 화면) — #165 K 마크로 바꿈', () => {
     for (const f of ['index.html', 'admin.html']) {
       const h = read(f);
       expect(h).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
       expect(h).toContain('<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />');
       expect(h).toContain('<link rel="apple-touch-icon" href="/apple-touch-icon.png" />');
     }
-    expect(read('public/favicon.svg')).toContain('M0 0A96 96 0 0 0 192 0H144A48 48 0 0 1 48 0ZM0 202A96 96 0 0 1 192 202H144A48 48 0 0 0 48 202Z');
-    expect(read('public/favicon.svg')).toContain('fill="#1b2a4a"');
+    // 탭 아이콘 마크와 머리 메뉴 마크는 같은 모양
+    const mark = read('src/App.vue').match(/class="brand-mark"[^>]*><path fill="currentColor" d="([^"]+)"/)![1];
+    expect(read('public/favicon.svg')).toContain(`<path fill="#7f4f29" d="${mark}"/>`);
+    expect(read('public/favicon.svg')).not.toContain('#1b2a4a');
   });
 });

@@ -1,0 +1,361 @@
+{
+  "$comment": "사유 코드 원본 — specs/001-gugak-score-conversion/contracts/error-codes.md §3~§6 와 같아야 한다. 웹 화면 문구와 API 문구는 같은 코드에서 나온다(SC-015). web_fix 가 있으면 웹 서비스(/api)는 그 문구를 fix 로 쓴다(2026-09-29 사진·PDF 입력 결정 뒤로는 웹·API 가 같은 파일을 받아 web_fix 를 쓰는 코드가 없다). G12 는 FR-062(웹 사용자 요청 한도)로 새로 생긴 게이트. 2026-09-29 황송해 결정(여러 쪽 · PDF 확인 불가): UPLOAD_TOO_MANY_FILES 는 'PDF 여러 개 또는 PDF 와 사진 섞음'으로 뜻이 바뀌었고, UPLOAD_TOO_MANY_PAGES(10쪽 넘음) · UPLOAD_CHECK_UNAVAILABLE(웹이 모델 API 에 닿지 않아 PDF 확인 불가, 503) 를 새로 두었다. 일부 쪽 실패 안내는 status_codes PAGES_PARTIAL. PDF_FIRST_PAGE_ONLY 는 기록용으로 남기고 더는 내지 않는다.",
+  "api_version": "v1",
+  "gate_codes": {
+    "UPLOAD_TOO_MANY_FILES": {
+      "http": 400,
+      "api_http": 422,
+      "gate": "G1",
+      "message": "PDF 한 개 또는 사진 여러 장으로 올려 주십시오.",
+      "fix": "PDF 를 두 개 이상 올리거나 PDF 와 사진을 섞어 올릴 수 없습니다. PDF 한 개, 또는 사진(PNG·JPG(JPEG)·WEBP) 여러 장으로 다시 올려 주십시오."
+    },
+    "UPLOAD_TOO_MANY_PAGES": {
+      "http": 400,
+      "api_http": 422,
+      "gate": "G1",
+      "message": "한 번에 10쪽까지 올릴 수 있습니다.",
+      "fix": "사진은 10장까지, PDF 는 10쪽까지 한 번에 올릴 수 있습니다. 나눠서 따로 올려 주십시오."
+    },
+    "UPLOAD_UNSUPPORTED_TYPE": {
+      "http": 415,
+      "gate": "G1",
+      "message": "받을 수 없는 파일 형식입니다.",
+      "fix": "PNG·JPG(JPEG)·WEBP 악보 사진이나 PDF 한 개로 다시 올려 주십시오. MIDI·MusicXML은 받지 않습니다."
+    },
+    "UPLOAD_CORRUPTED": {
+      "http": 422,
+      "gate": "G1",
+      "message": "파일을 열 수 없습니다. 파일이 손상되었을 수 있습니다.",
+      "fix": "원본 파일을 다시 저장하거나 다시 찍어서 올려 주십시오. PDF는 암호를 풀어 저장한 뒤 올려 주십시오."
+    },
+    "UPLOAD_MUSICXML_UNREADABLE": {
+      "http": 422,
+      "gate": "G1",
+      "message": "악보 내용을 읽을 수 없는 MusicXML입니다.",
+      "fix": "악보 프로그램에서 MusicXML로 다시 내보낸 뒤 올려 주십시오."
+    },
+    "UPLOAD_TOO_LARGE": {
+      "http": 413,
+      "gate": "G1",
+      "message": "허용 용량을 넘었습니다.",
+      "fix": "사진·PDF를 20MB 이하로 줄여 올려 주십시오."
+    },
+    "UPLOAD_RESOLUTION_TOO_LOW": {
+      "http": 422,
+      "gate": "G1",
+      "message": "더 선명한 사진이 필요합니다.",
+      "fix": "사진 크기가 너무 작습니다(300픽셀 미만). 가로·세로 모두 300픽셀 이상인 사진으로 다시 찍어 올려 주십시오. 300~649픽셀 사진은 서비스가 키워서 읽습니다."
+    },
+    "UPLOAD_SCORE_TYPE_REQUIRED": {
+      "http": 400,
+      "api_http": 422,
+      "gate": "G1",
+      "message": "악보 종류(정간보/오선보)를 골라 주십시오.",
+      "fix": "올리기 전에 정간보인지 오선보인지 골라 주십시오."
+    },
+    "UPLOAD_CHECK_UNAVAILABLE": {
+      "http": 503,
+      "gate": "G1",
+      "message": "지금은 PDF 를 확인할 수 없습니다. 잠시 뒤 다시 올리거나 사진으로 올려 주십시오.",
+      "fix": "잠시 뒤 다시 올리거나, 악보를 사진(PNG·JPG(JPEG)·WEBP)으로 찍어 올려 주십시오."
+    },
+    "AUTH_KEY_MISSING": {
+      "http": 401,
+      "gate": "G2",
+      "message": "접근 키가 없습니다.",
+      "fix": "X-API-Key 머리글에 발급받은 키를 넣어 주십시오."
+    },
+    "AUTH_KEY_INVALID": {
+      "http": 401,
+      "gate": "G2",
+      "message": "접근 키가 맞지 않습니다.",
+      "fix": "키를 다시 확인하거나 'API활용' 메뉴에서 새로 신청해 주십시오."
+    },
+    "AUTH_KEY_REVOKED": {
+      "http": 403,
+      "gate": "G2",
+      "message": "폐기된 접근 키입니다.",
+      "fix": "'API활용' 메뉴에서 새 키를 신청해 주십시오."
+    },
+    "AUTH_SERVICE_KEY_REQUIRED": {
+      "http": 403,
+      "gate": "G2",
+      "message": "서비스 전용 키만 쓸 수 있는 내부 기능입니다.",
+      "fix": "외부 키로는 부를 수 없습니다. 공개된 엔드포인트를 써 주십시오."
+    },
+    "RATE_LIMIT_EXCEEDED": {
+      "http": 429,
+      "gate": "G3",
+      "message": "호출 한도를 넘었습니다.",
+      "fix": "안내된 시각 뒤에 다시 시도해 주십시오."
+    },
+    "SERVER_BUSY": {
+      "http": 429,
+      "gate": "G3",
+      "message": "지금 처리할 수 있는 한도를 넘었습니다.",
+      "fix": "안내된 시각 뒤에 다시 시도해 주십시오."
+    },
+    "VALIDATION_ERROR": {
+      "http": 422,
+      "gate": null,
+      "message": "입력값이 약속한 형식과 맞지 않습니다.",
+      "fix": "details.errors 에 적힌 항목(loc·msg)을 고쳐 다시 보내 주십시오."
+    },
+    "MIDI_UNAVAILABLE": {
+      "http": 409,
+      "gate": null,
+      "message": "이 악보는 MIDI 로 바꾸지 못했습니다.",
+      "fix": "MusicXML 로 받아 주십시오."
+    },
+    "SERVICE_NOT_READY": {
+      "http": 503,
+      "gate": null,
+      "message": "서버가 아직 준비 중입니다.",
+      "fix": "잠시 뒤 다시 시도해 주십시오."
+    },
+    "RESULT_EXPIRED": {
+      "http": 410,
+      "gate": "G4",
+      "message": "보관 기간(24시간)이 지나 결과가 지워졌습니다.",
+      "fix": "악보를 다시 올려 주십시오."
+    },
+    "REQUEST_NOT_FOUND": {
+      "http": 404,
+      "gate": null,
+      "message": "요청을 찾을 수 없습니다.",
+      "fix": "요청 번호를 확인하거나 악보를 다시 올려 주십시오."
+    },
+    "MY_SCORE_FROM_SHARED": {
+      "http": 403,
+      "gate": null,
+      "message": "공유 악보로 만든 악보는 지울 수 없습니다.",
+      "fix": "공유 악보에서 만든 악보는 보관 기간(24시간)이 지나면 저절로 정리됩니다."
+    },
+    "ADMIN_NETWORK_DENIED": {
+      "http": 403,
+      "gate": "G5",
+      "message": "관리자 화면은 내부망에서만 열 수 있습니다.",
+      "fix": "팀 서버 내부망에서 접속해 주십시오."
+    },
+    "ADMIN_LOGIN_REQUIRED": {
+      "http": 401,
+      "gate": "G5",
+      "message": "로그인이 필요합니다.",
+      "fix": "운영자 계정으로 로그인해 주십시오."
+    },
+    "ADMIN_LOGIN_FAILED": {
+      "http": 401,
+      "gate": "G5",
+      "message": "아이디나 비밀번호가 맞지 않습니다.",
+      "fix": "다시 입력해 주십시오."
+    },
+    "ADMIN_LOCKED": {
+      "http": 423,
+      "gate": "G5",
+      "message": "로그인 실패가 많아 잠시 잠겼습니다.",
+      "fix": "안내된 시각 뒤에 다시 시도해 주십시오."
+    },
+    "SETTINGS_INVALID_VALUE": {
+      "http": 422,
+      "gate": "G6",
+      "message": "저장할 수 없는 값입니다.",
+      "fix": "0·음수를 넣지 않았는지, 경계 순서가 맞는지 확인해 주십시오."
+    },
+    "SETTINGS_UNKNOWN_ENGINE": {
+      "http": 422,
+      "gate": "G6",
+      "message": "등록되지 않았거나 꺼진 모델 이름입니다.",
+      "fix": "'모델' 탭에서 등록·사용 중인 모델만 순서에 넣어 주십시오."
+    },
+    "APPLICATION_MISSING_FIELD": {
+      "http": 422,
+      "gate": "G10",
+      "message": "빠진 항목이 있습니다.",
+      "fix": "이름·소속·연락 이메일·사용 목적을 모두 적어 주십시오."
+    },
+    "APPLICATION_CONSENT_REQUIRED": {
+      "http": 422,
+      "gate": "G10",
+      "message": "개인정보 수집·이용에 동의해 주십시오.",
+      "fix": "안내를 읽고 동의에 표시해 주십시오."
+    },
+    "APPLICATION_RATE_LIMITED": {
+      "http": 429,
+      "gate": "G11",
+      "message": "잠시 뒤에 다시 신청해 주십시오.",
+      "fix": "안내된 시각 뒤에 다시 신청해 주십시오."
+    },
+    "WEB_ACTIVE_REQUEST_EXISTS": {
+      "http": 429,
+      "gate": "G12",
+      "message": "지금 처리 중인 악보가 있습니다.",
+      "fix": "앞 악보의 결과가 나온 뒤에 다시 올려 주십시오."
+    },
+    "WEB_HOURLY_LIMIT": {
+      "http": 429,
+      "gate": "G12",
+      "message": "한 시간에 올릴 수 있는 횟수를 넘었습니다.",
+      "fix": "안내된 시각 뒤에 다시 올려 주십시오."
+    },
+    "MODEL_NOT_FOUND": {
+      "http": 404,
+      "gate": null,
+      "message": "등록되지 않은 모델입니다.",
+      "fix": "모델 이름을 확인해 주십시오."
+    },
+    "MODEL_INVALID": {
+      "http": 422,
+      "gate": "G6",
+      "message": "모델 정보를 저장할 수 없습니다.",
+      "fix": "이름·종류·연결 정보를 확인해 주십시오."
+    },
+    "OLLAMA_UNAVAILABLE": {
+      "http": 502,
+      "gate": null,
+      "message": "공유 Ollama 서버에 연결할 수 없습니다.",
+      "fix": "관리자에게 Ollama 서버 확인을 요청해 주십시오(직접 ollama serve 를 실행하지 않습니다)."
+    },
+    "BAD_REQUEST": {
+      "http": 400,
+      "gate": null,
+      "message": "요청 형식이 맞지 않습니다.",
+      "fix": "입력값을 확인해 주십시오."
+    },
+    "INTERNAL_ERROR": {
+      "http": 500,
+      "gate": null,
+      "message": "서버 안에서 문제가 생겼습니다.",
+      "fix": "잠시 뒤 다시 시도해 주십시오."
+    },
+    "AUTH_LOGIN_REQUIRED": {
+      "http": 401,
+      "gate": "G13",
+      "message": "로그인이 필요합니다.",
+      "fix": "가입하거나 로그인한 뒤 다시 해 주십시오."
+    },
+    "AUTH_FORBIDDEN": {
+      "http": 403,
+      "gate": "G13",
+      "message": "이 기능을 쓸 권한이 없습니다.",
+      "fix": "이 기능을 쓸 수 있는 계정으로 로그인해 주십시오."
+    },
+    "SIGNUP_INVALID": {
+      "http": 400,
+      "gate": "G14",
+      "message": "가입 정보를 확인해 주십시오.",
+      "fix": "이메일 형식, 비밀번호 8자 이상, 이름을 확인해 주십시오."
+    },
+    "SIGNUP_EMAIL_TAKEN": {
+      "http": 409,
+      "gate": "G14",
+      "message": "이미 가입한 이메일입니다.",
+      "fix": "로그인하거나 다른 이메일로 가입해 주십시오."
+    },
+    "SIGNUP_RATE_LIMITED": {
+      "http": 429,
+      "gate": "G14",
+      "message": "가입 요청이 너무 많습니다.",
+      "fix": "다시 할 수 있는 시각 뒤에 가입해 주십시오."
+    },
+    "LOGIN_FAILED": {
+      "http": 401,
+      "gate": "G15",
+      "message": "이메일 또는 비밀번호가 맞지 않습니다.",
+      "fix": "다시 입력해 주십시오. 5번 틀리면 10분 동안 잠깁니다."
+    },
+    "LOGIN_LOCKED": {
+      "http": 423,
+      "gate": "G15",
+      "message": "잠시 로그인할 수 없습니다.",
+      "fix": "비밀번호가 여러 번 맞지 않아 잠겼습니다. 다시 할 수 있는 시각 뒤에 로그인해 주십시오."
+    },
+    "LOGIN_ALREADY_ACTIVE": {
+      "http": 409,
+      "gate": "G15",
+      "message": "이미 다른 곳에서 로그인된 상태입니다.",
+      "fix": "로그인한 기기에서 로그아웃한 뒤 다시 로그인해 주십시오. 그 기기를 쓰지 않고 있다면 10분 뒤 다시 로그인할 수 있습니다."
+    },
+    "ALREADY_LOGGED_IN": {
+      "http": 409,
+      "gate": "G15",
+      "message": "이미 로그인되어 있습니다.",
+      "fix": "다른 계정으로 로그인하려면 먼저 로그아웃해 주십시오."
+    },
+    "ADMIN_FORBIDDEN": {
+      "http": 403,
+      "gate": "G13",
+      "message": "관리자 권한이 없습니다.",
+      "fix": "운영자 역할이 있는 계정으로 로그인해 주십시오."
+    },
+    "ADMIN_SELF_PROTECTED": {
+      "http": 409,
+      "gate": "G16",
+      "message": "자기 계정의 운영자 역할은 빼거나 사용 중지할 수 없습니다.",
+      "fix": "다른 운영자에게 부탁해 주십시오."
+    },
+    "ADMIN_LAST_OPERATOR": {
+      "http": 409,
+      "gate": "G16",
+      "message": "사용 중인 운영자가 이 계정 하나뿐입니다.",
+      "fix": "다른 계정에 먼저 운영자 역할을 준 뒤 다시 해 주십시오."
+    },
+    "ROLE_NOT_ASSIGNABLE": {
+      "http": 400,
+      "gate": "G16",
+      "message": "계정에 줄 수 없는 역할입니다.",
+      "fix": "계정에는 사용자(user)·운영자(operator) 역할만 줄 수 있습니다."
+    },
+    "ACCOUNT_NOT_FOUND": {
+      "http": 404,
+      "gate": null,
+      "message": "계정을 찾을 수 없습니다.",
+      "fix": "계정 목록에서 다시 골라 주십시오."
+    }
+  },
+  "fallback_reasons": {
+    "$comment": "DB(score_request.fallback_reason)는 SD_03 소문자 6종. API·화면은 대문자 코드. NO_NOTES 는 recognition_failed + engine_attempt.outcome='no_notes' 로 구분한다(D-4).",
+    "RECOGNITION_FAILED": {
+      "db": "recognition_failed",
+      "message": "악보를 인식하지 못했습니다."
+    },
+    "TIMEOUT": {
+      "db": "timeout",
+      "message": "처리 시간이 너무 오래 걸렸습니다."
+    },
+    "ENGINE_DOWN": {
+      "db": "engine_stopped",
+      "message": "인식 엔진이 멈췄습니다."
+    },
+    "NO_NOTES": {
+      "db": "recognition_failed",
+      "message": "악보에서 음표를 찾지 못했습니다."
+    },
+    "NO_SCORE_STRUCTURE": {
+      "db": "no_structure",
+      "message": "악보 구조를 찾지 못했습니다.",
+      "retry_hint": "악보 사진을 다시 올려 보십시오."
+    },
+    "UNTRUSTED_RESULT": {
+      "db": "distrust",
+      "message": "인식 결과를 믿기 어렵습니다."
+    },
+    "USER_REQUEST": {
+      "db": "user_request",
+      "message": "요청하신 대로 대체 악보로 바꿨습니다."
+    }
+  },
+  "status_codes": {
+    "RECOMMEND_UNAVAILABLE": "추천 없이 기본 국악기 구성으로 연주합니다.",
+    "RENDER_FAILED": "만들지 못했습니다. 다시 시도해 주십시오.",
+    "RENDER_TIMEOUT": "시간이 너무 오래 걸려 멈췄습니다. 다시 시도해 주십시오.",
+    "RENDERER_MISSING": "서버에 렌더러가 설치되지 않아 만들 수 없습니다. MIDI·MusicXML은 받을 수 있습니다.",
+    "ENGINE_DOWN": "모델 API 서버가 응답하지 않습니다. MIDI·MusicXML은 받을 수 있습니다.",
+    "ORIGINAL_INSTRUMENTS_UNAVAILABLE": "원래 악기 정보가 없어 기본 국악기로 연주합니다.",
+    "JEONGGANBO_NOTE": "정간보 : 우리 전통 음악을 적는 악보.",
+    "JEONGGANBO_SCOPE": "현재 「2021 정악보」 형식을 기준으로 인식합니다.",
+    "STAFF_NOTE": "오선보 : 오선 위에 음표를 그려 음의 높이와 길이를 나타내는 악보.",
+    "LICENSE_UNCONFIRMED": "음원 라이선스 확인 전이라 MP3는 팀 내부 시연용으로만 제공합니다.",
+    "PDF_FIRST_PAGE_ONLY": "PDF 첫 쪽만 변환했습니다 (전체 {pages}쪽)",
+    "PAGES_PARTIAL": "{pages}쪽 중 {converted}쪽 변환했습니다 (못 읽은 쪽: {failed_pages}쪽)"
+  }
+}

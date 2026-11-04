@@ -43,8 +43,10 @@ describe('화면 다듬기(소스 · 부품)', () => {
     expect(mount(C3ResultBand, { props: { band: 'trust', variant: 'short' } }).text()).toBe('');
     expect(mount(C3ResultBand, { props: { band: 'caution', variant: 'short' } }).text()).toContain('주의');
   });
-  it('55 C5 상태 글 줄(.status.small) 없음', () => {
-    expect(read('src/components/C5PlayerBar.vue')).not.toMatch(/class="status small"/);
+  it('55 C5 상태 글 줄(.status.small) 없음 — (#161) 연주기 오류 문구 한 줄만 예외', () => {
+    const src = read('src/components/C5PlayerBar.vue');
+    expect(src.match(/class="status small"/g) ?? []).toHaveLength(1);
+    expect(src).toMatch(/<p v-if="message" class="status small" role="status"/);
   });
   it('58 · 59 C4: 준비 중 안내 · [다시 추천받기] · [기본으로 되돌리기] 없음 — (2026-11-02) 추천 조합 칸도 없음', () => {
     const catalog = { default_set: ['gayageum'], gugak: [{ id: 'gayageum', name: '가야금', group: 'gugak', percussion: false }], others: [] } as unknown as InstrumentCatalog;

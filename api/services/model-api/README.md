@@ -37,9 +37,17 @@ PR 브랜치 `9904125`를 별도 `klassic-api-issue93` 프로젝트·DB·파일 
 
 시험 정책을 원래 상태로 복구하고 임시 키·운영자·공유 파일·기록을 정리했다. `docker compose down`으로 컨테이너·네트워크를 정리하고 데이터 볼륨은 보존했다. 실제 운영 서버의 키·정책 적용, Funnel/LTE 경유 확인과 최종 청감은 #49에서 남는다. 이번 추가 작업은 검증 기록이며 구현 코드는 변경하지 않았다.
 
+### #93 완료 기준 재확인 — 2026-11-04
+
+main `3b6b96e`에서 별도 프로젝트 `klassic-api-issue93-final`·DB `klassic_issue93`·저장소 `/storage/issue93`로 재검증했다. 전체 Compose를 빌드·기동해 상시 서비스 healthy를 확인했고, 데모 서버 시험 10개가 통과했다. 외부 키의 곡 목록·악보 조회·실제 MP3 생성(741040B, 30.8초, RMS 314.82), 공유 숨김 4종·거둠·정책 변경 후 차단, 공유 저장소 쓰기 거부가 통과했다. 예시 등록은 첫 실행 1개 추가, 두 번째 실행 1개 건너뜀이었다.
+
+Nginx 입구 `http://127.0.0.1:9743/demo/`에서 아리랑과 선율 악기 6종이 표시되고, 가야금·대금 각각 음악 준비 후 브라우저 재생 시간이 진행됐다(길이 약 30.8초·30.6초, readyState=4, 오디오 오류 없음). 정적 파일·곡 목록 응답 본문과 Nginx 응답 헤더에도 임시 외부 키가 없음을 확인했다. 따라서 #93의 외부 키 기반 목록→MP3 재생, 브라우저 키 비노출 기준을 로컬 환경에서 확인했다.
+
+정책 허용·보류는 격리 DB에서만 모의했으며 원래 값으로 복구했다. 임시 키·시험 운영자·공유 파일을 정리하고 동일 Compose 구성의 `down` 후 잔여 컨테이너가 없음을 확인했다. 기존 엔진·DB·파일 볼륨은 보존했다. 이번 작업은 완료 기준 재검증과 문서 기록이며 기능 코드는 바꾸지 않았다. 실제 운영 서버·Funnel·다중 사용자 부하·음색 청감 평가는 #49 범위로 남는다.
+
 ### prototype 없이 실행하기 위한 조건·검증 — 2026-11-03
 
-기본 `api/compose.yaml`과 `demo` 프로필은 `proto_type/` 소스·프로토타입 컨테이너·v0.1.1 런타임 이미지를 사용하지 않는다. 기본 실행에는 `deploy/compose.standin.yaml`을 추가하지 않는다. #25의 선택적 `engine-selftest` 도구는 과거 런타임 이미지를 쓰는 별도 검사이며 데모 기동 경로에 포함되지 않는다.
+기본 `api/compose.yaml`과 `demo` 프로필은 `proto_type/` 소스·프로토타입 컨테이너·v0.1.1 런타임 이미지를 사용하지 않는다. 기본 실행에는 `deploy/compose.standin.yaml`을 추가하지 않는다. #142부터 선택적 `engine-selftest`도 재구성 model-api 이미지를 기본으로 사용한다. 검사 도구는 데모 기동 경로에 포함되지 않는다.
 
 필수 실행 자원은 별개다. `api/.env`의 DB·키 설정, Git LFS에서 받은 `api/shared/soundfonts`의 실제 SF2 파일, 설치된 homr·정간보·가중치가 있는 외부 엔진 볼륨(기본 `klassic_engines`)이 필요하다. 엔진 볼륨은 읽기 전용으로 재사용하며 기존 Python 절대 경로 때문에 `/opt/gugak-engines`를 유지한다. 현재 model-api 이미지는 엔진·가중치를 포함하지 않으므로 엔진이 없는 새 PC에 소스만 복사하면 바로 실행되는 배포물은 아니다. 새 환경에는 엔진 볼륨 준비·이관 절차가 별도로 필요하다.
 
@@ -421,7 +429,7 @@ Get-Content -Raw tests/container_smoke.py | docker compose -f ../../compose.yaml
 
 악보 인식(오선보 · 정간보) · MP3/PDF 렌더링 · 국악기 추천 · 외부 API(`/api/v1`, API 키).
 
-- 참고 코드: `proto_type/src/app/model-api` (Python 3.11 · FastAPI · uv, 약 8,800줄 · 테스트 36개 파일)
+- 참고 코드: `proto_type/src/app/model-api` (Python 3.11 · FastAPI · uv, 약 8,800줄 · 테스트 36개 파일) — 원본은 git 태그 `v0.1.1` 에 있다 (#143)
 - 엔진 설치 참고: `proto_type/src/app/ops/engines` · `proto_type/docker/engines-installer.Dockerfile`
 - 계약: [../../contracts/model-api.yaml](../../contracts/model-api.yaml)
 
@@ -447,9 +455,9 @@ Get-Content -Raw tests/container_smoke.py | docker compose -f ../../compose.yaml
 | 엔진 제공 | Docker 외부 볼륨 `klassic_engines`, `external: true` |
 | 소비 경로 | `ENGINES_DIR=/opt/gugak-engines`, 마운트 `read_only: true`, `nocopy: true` |
 | 아키텍처 | `linux/amd64` 고정. ARM64용으로 검증하지 않음 |
-| 검사 런타임 | 로컬의 `klassic/klassic-model-api:0.1.1`, Python 3.11.18·Debian bookworm 계열 |
-| 이번 검증 이미지 ID | `sha256:908e979868cd0c2275932488668757efe7b7f8459cae2d262a7678b8fabff749` |
-| 이미지 배포 상태 | 기존 로컬 이미지 사용. 이번 작업에서 Docker Hub에 게시하지 않음 |
+| 검사 런타임 | #142부터 `MODEL_API_IMAGE`와 같은 재구성 이미지(기본 `klassic/model-api:0.2.2`). `ENGINE_CHECK_IMAGE`로 별도 지정 가능 |
+| #25 당시 검증 이미지 ID (과거 기록) | `sha256:908e979868cd0c2275932488668757efe7b7f8459cae2d262a7678b8fabff749`, `klassic/klassic-model-api:0.1.1` |
+| 이미지 배포 상태 | `api/`에서 로컬 빌드한 이미지 사용. Docker Hub 게시 여부와 구분 |
 | 검사 실행 | `engine-selftest`, `tools` 프로필의 일회성 도구. uid/gid 1000, 네트워크 차단, 호스트 포트 없음 |
 | 쓰기 위치 | 임시 캐시만 컨테이너의 `/tmp` tmpfs에 기록. 루트 파일시스템과 엔진 볼륨은 읽기 전용 |
 
@@ -469,7 +477,7 @@ Set-Location api
 
 # 실제 설치 볼륨명·이미지·아키텍처를 확인한다.
 docker volume inspect klassic_engines --format '{{.Name}}'
-docker image inspect klassic/klassic-model-api:0.1.1 --format '{{.Id}} {{.Os}}/{{.Architecture}}'
+docker compose build model-api
 
 docker compose -p klassic-api-issue25 --profile tools config --quiet
 docker compose -p klassic-api-issue25 --profile tools run --rm engine-selftest
@@ -478,13 +486,13 @@ if ($LASTEXITCODE -ne 0) { throw '엔진 selftest 실패: 출력 JSON의 error �
 
 이 도구는 새 설치를 수행하지 않는다. 기존 엔진 설치가 끝난 볼륨과 Linux 이미지가 선행 조건이며, 서버 키·DB·프로토타입 `.env` 복사는 필요 없다. `pull_policy: never`라서 로컬 이미지가 없으면 명확하게 실패한다. 검사 때문에 비공개 이미지를 원격에서 내려받거나 새 이미지를 자동 빌드하지 않는다.
 
-이미지가 없으면 기존 프로젝트의 model-api 이미지 빌드 절차를 따른다. 명시적으로 재빌드하려면 저장소 루트에서 다음 명령을 사용할 수 있다. 실행할 서비스는 없으며, 엔진 볼륨을 변경하지 않는다. 빌드에는 네트워크와 의존성 다운로드가 필요하고, 기존 태그 덮어쓰기를 피하도록 별도 로컬 태그를 쓴다.
+이미지가 없으면 `api/`의 model-api를 빌드한다. 별도 로컬 태그로 빌드해 검사하려면 다음처럼 실행한다. 엔진 볼륨은 변경하지 않으며, 빌드에는 네트워크와 의존성 다운로드가 필요하다.
 
 ```powershell
-# 저장소/worktree 루트에서 (필요한 PC에서만 수행)
-docker build -f proto_type/docker/model-api.Dockerfile -t klassic/klassic-model-api:issue25-check proto_type/src/app
-# 이후 api/에서 검사할 때 사용할 로컬 태그 선택
-$env:ENGINE_CHECK_IMAGE = 'klassic/klassic-model-api:issue25-check'
+# api/에서 (필요한 PC에서만 수행)
+$env:MODEL_API_IMAGE = 'klassic/model-api:issue142-check'
+docker compose build model-api
+$env:ENGINE_CHECK_IMAGE = 'klassic/model-api:issue142-check'
 ```
 
 설정 형식은 이 폴더의 [.env.example](.env.example)에 있다. `api/`의 전체 compose로 실행할 때 이 파일이 자동으로 읽히는 것은 아니므로, 필요한 항목을 **`api/.env`에 추가하거나 현재 셸의 환경변수로 지정**한다. 기존 `.env` 파일을 덮어쓰지 않는다.
@@ -493,7 +501,7 @@ $env:ENGINE_CHECK_IMAGE = 'klassic/klassic-model-api:issue25-check'
 |---|---|---|
 | `ENGINES_VOLUME_NAME` | `klassic_engines` | Docker에서 확인한 실제 설치 완료 볼륨명. 없는 볼륨은 자동 생성하지 않음 |
 | `ENGINES_DIR` | `/opt/gugak-engines` | 엔진 가상환경의 절대 경로와 Python 심볼릭 링크 때문에 기존 볼륨 재사용 시 유지 |
-| `ENGINE_CHECK_IMAGE` | `klassic/klassic-model-api:0.1.1` | 로컬 Linux/amd64 model-api 이미지. 검증 이미지 ID와 비교하거나 별도 태그를 선택 |
+| `ENGINE_CHECK_IMAGE` | 비어 있으면 `MODEL_API_IMAGE`, 그마저 없으면 `klassic/model-api:0.2.2` | 로컬에 빌드한 재구성 Linux/amd64 이미지. 명시한 검사 이미지가 있으면 우선 사용 |
 
 homr의 Python은 이미지 내부 `/usr/local/bin/python3.11`을 사용한다. 정간보의 Python 3.8.20은 볼륨 안 `.uv-python/cpython-3.8.20-linux-x86_64-gnu/`를 가리킨다. 엔진 폴더만 떼어 다른 위치에 마운트하거나 다른 Python·OS 이미지에 붙이면 실행 파일이 있어도 불러오지 못할 수 있다. Debian bookworm 계열의 기존 model-api 이미지로 검증했으며, 다른 런타임은 다시 selftest해야 한다.
 
@@ -748,8 +756,8 @@ Audiveris를 실행하지 않은 것은 P3 판단에 따른 범위 결정이며 
 
 참고한 프로젝트 파일:
 
-- [엔진 설치 스크립트](../../../proto_type/src/app/ops/engines/) · [설치용 Dockerfile](../../../proto_type/docker/engines-installer.Dockerfile) · [모델 API Dockerfile](../../../proto_type/docker/model-api.Dockerfile)
-- [엔진 어댑터](../../../proto_type/src/app/model-api/app/engines/) · [렌더러](../../../proto_type/src/app/model-api/app/render/) · [상태 API](../../../proto_type/src/app/model-api/app/routers/health.py)
+- 엔진 설치 스크립트 (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/src/app/ops/engines`) · 설치용 Dockerfile (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/docker/engines-installer.Dockerfile`) · 모델 API Dockerfile (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/docker/model-api.Dockerfile`)
+- 엔진 어댑터 (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/src/app/model-api/app/engines`) · 렌더러 (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/src/app/model-api/app/render`) · 상태 API (v0.1.1 원본: git 태그 `v0.1.1` · `proto_type/src/app/model-api/app/routers/health.py`)
 - [프로젝트 작성규칙](../../../docs/API_재구성_작성규칙.md)
 
 로컬 최종 검사: 사전 검증 응답 5건과 본문의 시간·성공·fallback 값을 대조했고, 참조 파일 존재 여부·`git diff --check`·`docker compose -f api/compose.yaml config --quiet`를 검사했다. Compose 검사 통과는 골격의 설정 유효성만 뜻한다.

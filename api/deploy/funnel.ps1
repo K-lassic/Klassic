@@ -11,14 +11,15 @@
 #
 # 사용:
 #   pwsh api/deploy/funnel.ps1 status
-#   pwsh api/deploy/funnel.ps1 start            # 기본 9503 (proto_type)
+#   pwsh api/deploy/funnel.ps1 start            # 기본 9603 (api/ 입구 · #139)
+#   pwsh api/deploy/funnel.ps1 start -Port 9503 # 예비 시연 (proto_type 이 있을 때만 · #139)
 #   pwsh api/deploy/funnel.ps1 start -Port 9603 # 재구성 gateway 로 전환
 #   pwsh api/deploy/funnel.ps1 stop
 # =============================================================================
 param(
     [ValidateSet('start', 'stop', 'status')]
     [string]$Action = 'status',
-    [int]$Port = 9503
+    [int]$Port = 9603
 )
 
 $ErrorActionPreference = 'Stop'

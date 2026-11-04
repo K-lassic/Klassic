@@ -57,8 +57,8 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 ```powershell
 pwsh api/deploy/funnel.ps1 status             # 로그인 상태 · 공개 주소
-pwsh api/deploy/funnel.ps1 start              # 예비 시연: proto_type gateway(9503) 공개
-pwsh api/deploy/funnel.ps1 start -Port 9603   # 재구성: api/ 입구(Nginx)로 전환 (#48)
+pwsh api/deploy/funnel.ps1 start              # 재구성: api/ 입구(9603) 공개 — 기본값 (#139)
+pwsh api/deploy/funnel.ps1 start -Port 9503   # 예비 시연: proto_type gateway(9503) 공개 (proto_type 이 있을 때만)
 pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 ```
 
@@ -78,7 +78,7 @@ pwsh api/deploy/funnel.ps1 start -Port 9603
 pwsh api/deploy/check-public.ps1
 
 # 3. 되돌리기 · 다시 전환 — 시간을 잰다 (완료 기준 1분 안)
-pwsh api/deploy/funnel.ps1 start
+pwsh api/deploy/funnel.ps1 start -Port 9503
 pwsh api/deploy/funnel.ps1 start -Port 9603
 
 # 4. 평소에는 끈다
@@ -144,6 +144,37 @@ pwsh api/deploy/funnel.ps1 stop
 - proto_type(v0.1.1)은 9503 · 26101 을 쓴다. `api/` 는 **9603 · 26201**(`API_PUBLIC_PORT` · `API_ADMIN_PORT`)로 띄워서 둘이 같이 떠 있게 한다 (#20).
 - 발표에 쓸 쪽을 정하면 `start -Port <포트>` 로 Funnel 이 가리키는 곳만 바꾼다. 컨테이너는 끄지 않는다.
 
+## 엔진 자가 검사 — 재구성 이미지 사용 (#142)
+
+구조에서의 위치: 운영자의 `tools` 명령 → api model-api 이미지 → 읽기 전용 엔진 볼륨.
+필요한 것은 `api/`에서 빌드한 model-api 이미지와 설치 완료된 엔진 볼륨이다.
+`ENGINE_CHECK_IMAGE`가 비어 있으면 `MODEL_API_IMAGE`를 사용하고, 둘 다 없으면
+`klassic/model-api:0.2.2`를 선택한다. 기준판 이미지나 실행 중인 DB·서비스 키는 검사에 필요하지 않다.
+
+`api/`에서 Git Bash/Linux 셸로 실행한다. 임시 프로젝트·임시 볼륨 이름을 명시한다.
+
+```bash
+export ENGINES_VOLUME_NAME=klassic_issue138_fresh
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml build model-api
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml --profile tools config -q
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml --profile tools run --rm --no-deps engine-selftest
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml down
+unset ENGINES_VOLUME_NAME
+```
+
+Compose 전체를 해석하기 위한 로컬 `.env`는 필요하지만, 검사 컨테이너에는 DB 비밀번호·키를 전달하지 않는다.
+네트워크는 차단하고 엔진·루트 파일시스템은 읽기 전용이며, 임시 파일만 `/tmp`에 기록한다.
+마지막 JSON의 `ok=true`, 각 엔진의 `ok=true`, 종료 코드 0을 확인한다.
+`ENGINE_CHECK_IMAGE`에 별도 태그를 지정하려면 해당 재구성 이미지가 로컬에 먼저 있어야 한다.
+기존 `klassic/klassic-model-api:0.1.1` 이미지는 아래 예비 시연·롤백용으로 보존하며 삭제하지 않는다 (#145).
+
+2026-11-03 임시 프로젝트 `klassic-api-issue142`에서 `api/`로 빌드한 model-api 이미지와
+임시 엔진 볼륨 `klassic_issue138_fresh`로 확인했다. homr 약 3.5초, 정간보 약 14.6초,
+전체 약 18.1초에 모두 `ok=true`, 종료 코드 0이었다. UID 1000·읽기 전용 엔진 마운트를 확인했고,
+검사 이미지 명시 → 서비스 이미지 → 기본 이미지 순서의 설정 선택도 확인했다.
+전체 Compose를 `up -d --build --wait`로 실행해 상시 서비스 healthy와 브라우저 API활용 화면 표시를
+확인한 뒤 같은 프로젝트·환경 파일로 `down`했다. 잔여 컨테이너는 없고 엔진·DB 볼륨과 롤백 이미지는 보존했다.
+
 ## model-api 대역 (#49)
 
 재구성 model-api(#24 · #28~#31)가 발표까지 갖춰지지 않을 때를 대비해, **v0.1.1 이미지를 `model-api` 이름으로 `api/` 에 붙인다.** 코드는 고치지 않는다. 파일은 [compose.standin.yaml](compose.standin.yaml) · [model-standin.env](model-standin.env)(키 이름만) 두 개다.
@@ -154,7 +185,8 @@ web ──┐
 Nginx ┘
 ```
 
-필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`. proto_type 컨테이너는 떠 있지 않아도 된다.
+대역을 선택할 때만 필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`.
+위 #142의 재구성 엔진 자가 검사에는 이 이미지가 필요하지 않다. proto_type 컨테이너는 떠 있지 않아도 된다.
 
 **처음 한 번 — 서비스 키 만들기** (서버 PC · Git Bash · `api/` 폴더)
 
@@ -258,6 +290,57 @@ MODEL_API_IMAGE=klassic/model-api:0.2.0 docker compose up -d --force-recreate --
 ```
 
 모든 서비스가 Healthy 면 정상이다. 끝나면 이미지 Id 를 대조한다.
+
+## v0.2.2 · 외부 API 예시(/demo) 연결 · 음원 라이선스 승인 (2026-11-03)
+
+main `425c1e8` (#131 · #136 · #137 · #147 포함)로 model-api · web · admin · frontend 를 올리고 demo 를 켰다. 시작 전에 `deploy/backup.sh` 로 백업했다 (`D:\klassic-backup\20261103-164111`, 계정 3 · 요청 13 · 공유 악보 3행).
+
+| 순서 | 한 일 | 확인 |
+|---|---|---|
+| 1 | frontend 다시 올림 (#147 체험하기 장 넘김) | 이미지 Id 일치, 화면 파일에 수정 있음, `/tour` 200 |
+| 2 | model-api 0.2.2 (`0.2.2` · `0.2.2-g425c1e8`) | Id 일치, 버전 0.2.2, `mem_limit` 4GiB, 공유 볼륨 `shared/` 만 읽기 전용 |
+| 3 | 외부 키 1개 발급 → `api/.env` 의 `DEMO_API_KEY` | 시간당 30회. 화면 · 응답 · 로그에 키 문자열 없음 |
+| 4 | demo(`klassic/api-demo:0.2.2`) 켬 — `docker compose --profile demo up -d --wait demo` | Healthy, `/demo/` 200, 목록 3곡 · 악기 6개 |
+| 5 | 예시 공유 악보 등록 — `shared-seed --confirm-rights` | 1차 `added 1`, 2차 `skipped 1`. 아리랑 세마치장단 `S-1103-PYQ5Q86G` 만료 2037년 |
+| 6 | backend 다시 빌드 · web · admin 다시 만듦 (`confirmLicense` 도구 포함) | 두 컨테이너 Id 일치 |
+| 7 | 음원 라이선스 승인 — 운영자 `admin_jsg` (`confirmLicense --confirm`) | `v_mp3_license` = `license_confirmed` 1 · `web_mp3_internal_only` 0 · `api_mp3_allowed` 1, `change_history` 에 false → true |
+| 8 | `/demo/api/bgm` 요청 | 승인 전 409 `MP3_WITHHELD`, 승인 뒤 200 `audio/mpeg` — 가야금 741,040B · 대금 736,025B (서로 다름) |
+
+- 사용자 확인 (2026-11-03, 외부 주소로 접속): 듣기 · 변환이 된다. 화면에 「팀 내부 시연용」 안내가 보이지 않는다. (어느 네트워크에서 접속했는지는 기록하지 않았다.)
+- 남은 문제: `/tour` 장 넘김 때 창 크기가 바뀌면서 [다음] 버튼 위치가 조금씩 바뀐다 (#147 반영 뒤에도 남음, 사용자 확인). 황송해 님이 따로 고치는 중 — #146 은 PR 병합으로 닫혔지만 이 증상은 아직 해결되지 않았다.
+- 아직 확인하지 못한 것: LTE(휴대폰 데이터) 접속 → #49 리허설.
+- 이 서버의 작업 폴더는 `main` 이다. 병합된 PR 을 받을 때 `git pull --ff-only`.
+
+**되돌리기** (서버 PC · Git Bash · `api/` 폴더)
+
+- 라이선스 승인 취소 — 정상이면 `바꿨습니다: 확인 전 …` 이 나온다:
+
+```bash
+docker compose run --rm -T --no-deps web node dist/tools/confirmLicense.js --operator admin_jsg --withhold
+```
+
+- demo 끄기 — `/demo/` 는 503 안내 화면이 된다. 끄면 외부 키는 계속 유효하므로 필요하면 `api/.env` 의 `DEMO_API_KEY` 줄도 지운다 (키를 폐기하는 명령줄 도구는 아직 없다 — 관리자 API #100 전):
+
+```bash
+docker compose --profile demo stop demo
+```
+
+- model-api 를 0.2.1 로 — **이미지 이름만 바꾸면 안 된다.** 현재 compose 의 `shared-storage-init` 이 0.2.2 에만 있는 도구(`app.tools.init_shared_storage`)를 부르므로 0.2.1 이미지로는 기동이 막힌다 (추정, 시험하지 않음). 이전 이미지 `model-api:0.2.1` 은 남겨 두었지만, 되돌려야 하면 compose 도 0.2.1 시점(`45cb4af`)으로 같이 되돌려야 한다. 같은 폴더의 `deploy/nginx` 도 그 시점 것으로 바뀌어 `/demo` 연결이 빠지므로, 되돌리기 전에 담당자와 상의한다.
+- backend 이전 이미지(`confirmLicense` 도구 없음) — `backend:before-license`. **순서: 위의 라이선스 승인 취소를 먼저 하고, 그다음 backend 를 되돌린다.** `before-license` 에는 `confirmLicense.js` 가 없어서 승인 취소를 먼저 해야 한다. 지금 이미지는 태그를 남겨 둔 뒤 되돌린다 (다시 앞으로 올 때 빌드하지 않도록):
+
+```bash
+docker tag klassic/backend:dev klassic/backend:with-license
+```
+
+```bash
+docker tag klassic/backend:before-license klassic/backend:dev
+```
+
+```bash
+docker compose up -d --force-recreate --no-deps --wait web admin
+```
+
+되돌린 뒤 앞으로 가려면 `docker tag klassic/backend:with-license klassic/backend:dev` 로 태그를 되돌리고 같은 `up` 을 한다.
 
 ## CPU 전용 엔진 볼륨 시험 (2026-11-02)
 
@@ -451,12 +534,57 @@ docker run --rm --network none --read-only --tmpfs /tmp \
   -B -m unittest discover -s /tests -v
 ```
 
+## proto_type 없는 새 환경 시험 (#144, 2026-11-04)
+
+새로 클론한 저장소에서 `proto_type/` 을 지운 뒤 `api/` 만으로 빌드 · 기동 · 엔진 설치 · 인식 · 내보내기 · 공유 · 외부 키까지 돌렸다. **원본 폴더와 실제 서비스 볼륨은 건드리지 않았다.**
+
+**구성**
+
+| 항목 | 값 |
+|---|---|
+| 코드 | main `4a74780` (#150 ~ #153 병합 후) 새 클론, 사본에서만 `proto_type/` 삭제 |
+| PC | 코드 작업용 PC (Ryzen 5 7500F · Docker 6코어 · 31GiB · amd64 · GPU 없음). **서버 PC 측정값이 아니다** |
+| 프로젝트 · 포트 | `-p klassic-standalone-test -f compose.yaml` · 9713 · 26311 |
+| `.env` | 임시 값으로 새로 만듦 (비밀값은 무작위 생성, 시험 뒤 삭제) · 이미지 태그 `issue144` 로 분리 |
+| 엔진 | 빈 볼륨 `klassic_issue144_engines` 에 #138 설치기로 새로 설치 |
+| DB | 새 볼륨 — 마이그레이션 → 운영자 · 서비스 키 · 외부 키 · 라이선스 승인 모두 이 임시 DB 에서만 |
+
+**결과 — 모두 통과**
+
+| 확인 | 결과 |
+|---|---|
+| 런타임 경로의 `proto_type` | **0건** — `api/` 안 59건은 모두 주석 · 문서 · 시험 주석 (compose 머리 주석, `vite.config.ts` 주석, 마이그레이션 머리말 등) |
+| 이미지 빌드 | backend · frontend · model-api · api-demo · engines-installer 5개 성공 (빌드 캐시 재사용, 25초 · 27초) |
+| 엔진 설치 (#138) | 3분 6초 · homr 23초 · 정간보 160초 · 두 엔진 `INSTALL_MANIFEST.json` 생성 · 볼륨 6,001,168,548 B (#138 기록과 2,394 B 차이) |
+| 기동 | 23초 뒤 db · web · admin · model-api · frontend 모두 Healthy |
+| 공개 점검 `check-public.ps1 -Local` | 15개 모두 통과 (인식 · 렌더링 경로가 재구성판임을 확인) |
+| 예시 3개 인식 | 아리랑 세마치 9.2초 · 미뉴에트 8.1초 · 타령 PDF 2쪽 8.1초 — 모두 `route=recognize` · `fallback=false` · `trust` (homr 0.7.0 · `jeongganbo-omr@e95045f+ckpt-v1.0.0`) |
+| 직접 올리기 (타령 PDF) | upload-check 통과 → 7.1초 · `recognize` · 대체 아님 |
+| 4형식 (오선보 · 정간보, 전조 +2 편집) | MIDI · MusicXML 바로, PDF 1.2~2.2초 (`verovio 5.7.0-7135340`), MP3 2.6~3.1초 (`fluidsynth 2.3.1+lame3.100`) — 파일 머리 확인 |
+| 라이선스 승인 전 MP3 | 웹 내보내기에 「팀 내부 시연용」 안내가 붙음 · 도구 상태 「외부 키 MP3 보류」 |
+| 공유 | 공유하기 200 → 다른 계정의 공유 목록에 1건 · 공유 악보 받기 200 |
+| 외부 키 (승인 후) | 키 없음 401 · 접수 202 → 7.3초 완료 · `recognize` · 대체 아님 · MusicXML · MIDI · MP3 파일 3개 받음 · 다른 키로 상태 조회 404 · `/api/v1/shared-scores` 200 |
+| model-api 메모리 | 웹 흐름 중 최대 1.958GiB (`mem_limit` 4g, 2초 간격 `docker stats`) |
+
+**발견한 것**
+
+- **외부 키 결과의 파일 주소에 포트가 빠진다.** `http://127.0.0.1/api/v1/files/<token>` 처럼 나온다 (입구가 9713 인데 포트 없음). Nginx 가 `proxy_set_header Host $host` 로 넘겨 포트가 떨어지고, model-api 가 `request.url_for` 로 주소를 만든다. 공개 주소(Funnel HTTPS 443)는 기본 포트라 영향이 없을 것으로 보지만 (추정), 로컬 · 임시 프로젝트 · 9603 직접 접속에서는 주소를 그대로 열 수 없다. `$http_host` 로 바꾸는 방안을 별도 이슈로 검토한다. 이번 시험은 주소의 경로만 떼어 받았다.
+- Git Bash 에서 임시 폴더(`AppData\Local\Temp\...`) 아래 사본을 빌드하면 Compose 5.6 의 bake 가 `--allow=fs.read=...` 권한을 요구하며 멈췄다. 같은 명령이 PowerShell 에서는 되고, 원래 저장소 경로에서는 Git Bash 로도 된다. 경로 문제로 보이며 프로젝트 코드와는 관계없다 (추정).
+- `compose run` 뒤에 이름 없는 빈 볼륨 2개가 남았다 (위 「CPU 전용 엔진 볼륨 시험」 7번과 같은 현상).
+
+**선행 이슈 상태:** #138 · #139 · #140 · #143 완료(병합). **#141 (엔진 볼륨 백업) · #142 (engine-selftest 이미지) 는 열린 채로 시험했다.** `engine-selftest` 는 아직 v0.1.1 이미지(`klassic/klassic-model-api:0.1.1`, `pull_policy: never`)를 쓰므로 그 이미지가 없는 PC 에서는 실행되지 않는다 (추정 — 이 PC 에는 이미지가 있어 확인하지 못함). 기본 서비스 · 설치기와는 관계없다.
+
+**시험하지 않은 것:** 브라우저 화면 · 소리 (#49 범위), 외부 Funnel, 동시 사용, 빌드 캐시 없는 빌드 시간, 엔진 볼륨 백업 · 복원 (#141).
+
+**정리:** 컨테이너 · 네트워크와 `klassic-standalone-test_*` 볼륨 3개는 지웠다. 남은 것 — 빈 익명 볼륨 2개, 이미지 `*:issue144` 5개, 새로 설치한 엔진 볼륨 `klassic_issue144_engines` (6.0GB, 서버 전환이나 #141 시험에 다시 쓸 수 있어 남김).
+
 ## 백업 · 복원 (#97)
 
 **자동으로 돌지 않는다.** 사람이 정한 때 실행한다. 권장 시점: 발표 리허설 전 · 발표 직전 · 마이그레이션이나 큰 변경 전.
 
 - 담는 것: DB(`db.sql.gz`) · `storage` · `model-storage` · `MANIFEST.txt`(해시 · 커밋 · 행 수)
-- 담지 않는 것: `api/.env` 는 따로 보관한다. 엔진 볼륨은 다시 만들 수 있고, 음원은 저장소에 있다.
+- `-e` 를 주면 엔진 볼륨도 담는다 (#141): `engines.tar.gz` · `engines.sha256`(파일 해시 목록) · `engines.links`(링크 목록). `MANIFEST.txt` 에 두 목록의 해시와 볼륨 이름 · 파일 수 · 설치 기록(`INSTALL_MANIFEST.json`) 유무가 들어간다. 약 2.8GB · 6분이라 기본으로는 담지 않는다.
+- 담지 않는 것: `api/.env` 는 따로 보관한다. 음원은 저장소에 있다.
 - 비밀번호는 컨테이너 안 환경변수로만 쓴다. 명령줄 · 파일 이름 · 출력에 나오지 않는다.
 
 **백업** (서버 PC · Git Bash · `api/` 폴더) — 서비스를 멈추지 않는다. 기본 위치 `D:\klassic-backup\<시각>\`. 끝에 `완료:` 가 나오면 정상이다. 중간에 실패하면 `.incomplete` 폴더만 남고, 복원은 이 폴더를 거부한다.
@@ -479,7 +607,57 @@ API_PUBLIC_PORT=9623 API_ADMIN_PORT=26221 docker compose -p klassic-api-restore 
 
 **시험 결과 (2026-11-03, 임시 프로젝트):** 인식 · 내보내기 · 공유까지 만든 프로젝트를 백업해 다른 프로젝트에 복원했다. 행 수 일치, 같은 계정 로그인, 내 악보 · 결과 악보 · 내려받기 · 공유 악보 모두 200, DB 와 파일 일치. 틀린 비밀번호는 401. 덤프 · 기록에 비밀번호 없음.
 
-**시험하지 않은 것:** 실제 서비스 볼륨을 되돌리는 절차, 다른 PC 에서 복원, 큰 볼륨의 소요 시간.
+**시험하지 않은 것 (#97):** 실제 서비스 볼륨을 되돌리는 절차, 다른 PC 에서 복원. 큰 볼륨(엔진 6GB)의 소요 시간은 #141 에서 쟀다.
+
+### 엔진 볼륨 백업 · 복원 (#141)
+
+엔진 볼륨은 프로젝트 밖의 외부 볼륨이라 이름으로 고른다 (`-E`, 기본 `klassic_engines`). 백업은 볼륨을 **읽기 전용**으로만 연다.
+
+**백업** (서버 PC · Git Bash · `api/` 폴더) — 끝에 `완료:` 가 나오고, 그 위에 `엔진: 파일 <수> · 링크 <수>` 가 보이면 정상이다.
+
+```bash
+bash deploy/backup.sh -e
+```
+
+**엔진만 복원** — 실제 서비스(`klassic-api`)의 엔진을 잃었을 때 쓴다. **새 이름**의 볼륨에만 풀고, 파일 해시 · 링크 목록이 백업과 같아야 `완료:` 가 나온다. 이미 있는 볼륨(실제 `klassic_engines` 포함)은 거부한다.
+
+```bash
+bash deploy/restore.sh -i /d/klassic-backup/<시각> -E klassic_engines_restored
+```
+
+복원한 볼륨을 붙인다. model-api 가 Healthy 면 정상이다. 되돌리려면 같은 명령을 `ENGINES_VOLUME_NAME=` 없이 실행한다.
+
+```bash
+ENGINES_VOLUME_NAME=klassic_engines_restored docker compose up -d --wait model-api
+```
+
+- 새 프로젝트에 DB · 파일과 함께 복원할 때는 `-p <새 프로젝트>` 와 `-E <새 볼륨>` 을 같이 준다.
+- 해시가 다르면 `엔진 파일 해시가 백업과 다르다` 로 멈춘다. 그 볼륨은 쓰지 않고 이름을 확인한 뒤 지운다. 다시 할 때는 새 이름을 쓴다.
+- 엔진 백업이 없으면 #138 설치기로 새로 설치한다 (위 「api 코드만으로 엔진 새로 설치」).
+
+### 엔진 볼륨이 없을 때
+
+| 증상 | 근거 | 조치 |
+|---|---|---|
+| `docker compose up -d` 가 바로 `external volume "klassic_engines" not found` 로 끝난다 (끝 코드 1) | model-api 의 `engines` 볼륨이 `external: true` 라 Compose 가 새로 만들지 않는다. **컨테이너 · 네트워크를 하나도 만들지 않고** 멈춘다 | ① 엔진 백업이 있으면 「엔진만 복원」 → `ENGINES_VOLUME_NAME` 로 붙인다 ② 없으면 #138 설치기로 새 볼륨에 설치 |
+
+- `docker compose config` 는 볼륨이 있는지 검사하지 않아 통과한다. 이 증상은 `up` 에서만 보인다.
+- 엔진을 쓰지 않는 서비스만 이름을 지정해 띄우면(`up -d db`) 뜬다. 화면 · 인식은 model-api 가 있어야 한다.
+- 이름이 틀린 경우도 같은 문구다 (`ENGINES_VOLUME_NAME` 오타). 먼저 `docker volume ls` 로 이름을 본다.
+
+### #141 시험 결과 (2026-11-04, 코드 작업용 PC · 임시 프로젝트)
+
+| 확인 | 결과 |
+|---|---|
+| 엔진 없음 | `ENGINES_VOLUME_NAME=klassic_issue141_missing` 로 `up -d --wait` → `external volume "klassic_issue141_missing" not found` · 끝 코드 1 · 만든 것 없음. `up -d db` 는 뜸 · `config --quiet` 는 통과 |
+| 백업 `-e` | 시험 엔진 볼륨(`klassic_issue144_engines`, #144 에서 설치) — **6분 23초 · 2.8GB** (엔진 2.99GB 압축) · 파일 41,794 · 링크 1,057 · 두 엔진 설치 기록 있음 |
+| 복원 `-p` + `-E` | **4분 41초** · 엔진 파일 해시 · 링크 목록이 백업과 같음 · DB 행 수 일치 (계정 3 · 요청 4 · 업로드 4 · 공유 1) |
+| 복원한 엔진으로 기동 | 13초 뒤 모두 Healthy · 엔진 볼륨 읽기 전용 · 공개 점검 15개 통과 · 예시 3개와 PDF 직접 올리기 모두 `recognize` · 대체 아님 (9.2~10.3초) |
+| 거부 | 이미 있는 볼륨(`klassic_engines`) · 실제 서비스 프로젝트 · 엔진 없는 백업 · 인자 없음 — 모두 아무것도 만들지 않고 멈춤 |
+| 검사기가 불일치를 잡는가 | 해시를 일부러 틀린 작은 가짜 백업 → `엔진 파일 해시가 백업과 다르다` · 끝 코드 1. 맞는 해시로는 통과 |
+
+- 실제 `klassic_engines` 는 거부 시험에서 이름만 대조했고 열지 않았다.
+- 시험하지 않은 것: 실제 서비스 볼륨 백업 실행(필요한 시점에 사람이 정한다), 다른 PC 로 옮겨 복원, 서버 PC(노트북)에서의 소요 시간.
 
 ## 서버 PC 운영 (#47)
 
@@ -495,6 +673,9 @@ API_PUBLIC_PORT=9623 API_ADMIN_PORT=26221 docker compose -p klassic-api-restore 
 | 2026-11-01 | 덮개 닫기(전원 연결) | 절전 | **아무것도 안 함** | 제어판 → 전원 옵션 → 덮개를 닫으면 |
 | 2026-11-02 | `api/.env` `COMPOSE_FILE` | 없음 | **대역을 기본 구성으로** (#86) | `api/.env` 의 두 줄 삭제 |
 | 2026-11-03 | `api/.env` `COMPOSE_FILE` | 대역이 기본 | **두 줄 삭제 — 재구성판이 기본** (#87) | 「model-api 대역」 절차로 두 줄을 다시 넣는다 |
+| 2026-11-03 | `api/.env` `DEMO_API_KEY` | 없음 | **외부 키 한 줄 추가** (#93, 값은 문서에 적지 않는다) | 그 줄 삭제 후 `docker compose --profile demo stop demo` |
+| 2026-11-03 | DB `license_policy.confirmed` | 0 (확인 전) | **1 (확인함, 운영자 `admin_jsg`)** (#98) | `confirmLicense.js --operator admin_jsg --withhold` |
+| 2026-11-03 | 서버 작업 폴더 브랜치 | `docs/98-license-decision` | **`main`** | 필요한 브랜치로 `git switch` |
 | 2026-11-01 | Windows 업데이트 | 중지 안 함 | **11/05 까지 일시 중지** | 설정 → Windows 업데이트 → 업데이트 재개 |
 | 2026-11-01 | Tailscale Run unattended | 꺼짐 | **켜짐** (`ForceDaemon: true` 확인) | 작업 표시줄 Tailscale 앱 Preferences |
 
