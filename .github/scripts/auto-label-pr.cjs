@@ -4,10 +4,13 @@
 //   구조에서의 위치: .github/workflows/auto-label-pr.yml 이 PR 이 열리거나 바뀔 때 실행 → 이 파일 → gh api (GitHub API) 로 PR · 이슈를 읽고 라벨을 더한다.
 //     서비스 · 이미지와는 관계없다. 저장하는 것은 PR 의 라벨뿐이다.
 //   규칙 (이미 붙은 라벨은 절대 떼지 않고, 종류마다 하나도 없을 때만 더한다 → 사람이 붙인 라벨이 우선한다)
+//     ※ 처음 붙은 라벨은 나중에 바뀌지 않는다(의도한 동작). 예: 문서만 있던 초안 PR 에 area:common 이 붙은 뒤 backend 코드를 더해도 영역은 그대로다
+//       → 영역이 맞지 않게 되면 사람이 라벨을 고친다(그 PR 의 라벨을 떼면 다음 실행 때 다시 계산해서 붙인다).
 //     유형      제목의 Conventional Commits 종류: feat→enhancement · fix→fix · docs→documentation · test→test · chore/ci/build/style→chore · refactor→refactor · perf→enhancement
 //     영역      제목의 범위(frontend · backend · model-api · deploy · nginx · ci · shared · db · contracts · score-core · common)를 우선하고,
 //               범위가 없거나 모르면 변경 파일 경로로 정한다. 세 영역 이상이 같은 개수로 걸치면 area:common.
-//     우선순위  제목에 적힌 이슈 번호 → 없으면 본문의 Closes · Fixes · Resolves · Refs · Related 로 연결한 이슈의 P1~P3 (여러 개면 가장 높은 것)
+//     우선순위  제목에 적힌 이슈 번호 → 없으면 본문의 Closes · Fixes · Resolves(과거형 포함) · Refs · Related 로 연결한 이슈의 P1~P3 (여러 개면 가장 높은 것).
+//               `Closes #1, #2` 처럼 쉼표 · 중점 · 및 · and 로 이은 번호를 모두 읽고, 키워드 앞에 글자가 붙은 `hotfix #12` 는 연결로 읽지 않는다
 //     contract  api/contracts/*.yaml 이 바뀌면 (API 계약 변경 — 상대 담당 리뷰 필수)
 //   보안: pull_request_target 로 쓰기 권한을 받아 도는 파일이다. PR 의 코드를 실행하지 않고(워크플로가 기본 브랜치의 이 파일만 받는다),
 //     PR 제목 · 본문을 환경변수 · 셸 명령에 넣지 않는다 — 번호만 받고 API 로 직접 읽으며, gh 는 인자 배열로만 부른다(셸을 거치지 않는다).
@@ -28,7 +31,10 @@ const AREA_BY_SCOPE = {
   deploy: 'area:ops', nginx: 'area:ops', ci: 'area:ops',
   shared: 'area:common', db: 'area:common', contracts: 'area:common', contract: 'area:common', 'score-core': 'area:common', common: 'area:common',
 };
-const LINK_KEYWORDS = /(?:Closes?|Fix(?:es)?|Resolves?|Refs?|Related)\s*:?\s*#(\d{1,5})\b/gi;
+// 연결 키워드 + 이슈 번호 목록: `Closes #1` · `Refs: #1, #2` · `Fixes #1 · #2` · `Resolved #1 and #2`.
+//   키워드 앞에 글자가 붙어 있으면 키워드가 아니다(`hotfix #12` 의 fix 를 연결로 읽지 않는다 — 리뷰 #170).
+//   GitHub 가 이슈를 닫는 키워드(close · fix · resolve 의 과거형 포함)에 Refs · Related 를 더했다.
+const LINK_KEYWORDS = /(?<![\p{L}\p{N}_])(?:Close[sd]?|Fix(?:e[sd])?|Resolve[sd]?|Refs?|Related)\s*:?\s*(#\d{1,5}(?:\s*(?:,|·|및|and|&)\s*#\d{1,5})*)/giu;
 const MAX_ISSUE_LOOKUPS = 5;
 
 /** 제목 → 유형 라벨. `feat(scope): …` · `fix: …` · `feat!: …` 모양만. 규칙 밖이면 undefined
@@ -63,7 +69,7 @@ function areasFromFiles(files) {
 }
 
 const issueNumbers = (text) => [...new Set([...text.matchAll(/#(\d{1,5})\b/g)].map((m) => Number(m[1])))];
-const linkedNumbers = (text) => [...new Set([...text.matchAll(LINK_KEYWORDS)].map((m) => Number(m[1])))];
+const linkedNumbers = (text) => [...new Set([...text.matchAll(LINK_KEYWORDS)].flatMap((m) => [...m[1].matchAll(/#(\d{1,5})/g)].map((n) => Number(n[1]))))];
 
 /**
  * 라벨 계산 (부수 효과 없음). lookup(번호) → 그 번호가 이슈이면 그 이슈의 라벨 이름 목록, 이슈가 아니거나 없으면 null.
@@ -123,7 +129,13 @@ function main(env = process.env, run = gh) {
       try {
         const i = ghJson(`repos/${repo}/issues/${n}`);
         cache.set(n, i.pull_request ? null : i.labels.map((l) => l.name)); // PR 번호는 이슈가 아니다
-      } catch { cache.set(n, null); }
+      } catch (e) {
+        cache.set(n, null);
+        // 없는 번호(404)는 제목의 숫자일 뿐일 수 있어 안내만 하고, 권한 부족 · API 한도 초과 같은 그 밖의 실패는 경고로 남긴다(리뷰 #170 — 조용히 묻히면 병합 뒤 원인을 찾기 어렵다).
+        // 오류 문구는 GitHub 가 돌려준 것이지만 줄바꿈 · `::` 를 지워 워크플로 명령으로 읽히지 않게 한다.
+        const why = String(e?.stderr || e?.message || e).split('\n')[0].replace(/::/g, ': ').trim().slice(0, 120);
+        console.log(/\b404\b|Not Found/i.test(why) ? `- 이슈 #${n} 없음(404) — 우선순위에서 제외` : `::warning::이슈 #${n} 조회 실패 — ${why}`);
+      }
     }
     return cache.get(n);
   };

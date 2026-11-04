@@ -62,8 +62,29 @@ test('plan — 본문은 연결 키워드가 붙은 이슈만 인정한다 (스�
   const lookup = issues({ 20: ['P1'], 21: ['P2'] });
   const mention = plan({ title: 'docs: x', body: '이전에 #20 에서 논의했다', labels: [], files: [], lookup });
   assert.ok(!mention.add.some((l) => /^P\d$/.test(l)));
-  for (const kw of ['Closes #21', 'closes: #21', 'Fixes #21', 'Resolves #21', 'Refs #21', 'Related #21']) {
+  for (const kw of ['Closes #21', 'closes: #21', 'Fixes #21', 'Resolves #21', 'Refs #21', 'Related #21', 'Closed #21', 'Fixed #21', 'Resolved #21', 'Close #21', 'Fix #21']) {
     assert.ok(plan({ title: 'docs: x', body: kw, labels: [], files: [], lookup }).add.includes('P2'), kw);
+  }
+});
+
+test('plan — 쉼표 등으로 이은 이슈 번호를 모두 읽고 가장 높은 우선순위를 쓴다 (리뷰 #170 1)', () => {
+  const lookup = issues({ 1: ['P3'], 2: ['P1'], 3: ['P2'] });
+  for (const body of ['Closes #1, #2', 'Refs #1 · #2', 'Fixes #1 and #2', 'Resolves #1 및 #2', 'Closes #1,#2', 'Related: #1, #3, #2', 'Closes #1, #3 & #2', '- Closes #1, #2\n- 다음 줄']) {
+    assert.ok(plan({ title: 'docs: x', body, labels: [], files: [], lookup }).add.includes('P1'), body);
+  }
+  // 목록이 끝난 뒤 따로 언급한 번호까지 끌어오지 않는다
+  assert.ok(plan({ title: 'docs: x', body: 'Closes #1, 그리고 나중에 #2 논의', labels: [], files: [], lookup }).add.includes('P3'));
+  assert.ok(plan({ title: 'docs: x', body: 'Closes #1\n\n참고로 #2 도 있다', labels: [], files: [], lookup }).add.includes('P3'));
+});
+
+test('plan — 키워드 앞에 글자가 붙은 단어는 연결로 읽지 않는다 (리뷰 #170 2)', () => {
+  const lookup = issues({ 12: ['P1'] });
+  for (const body of ['hotfix #12 이후 정리', 'prefix #12', 'unrelated #12', 'Prefs #12', 'affixes #12', 'enclose #12', 'wordFix #12', '한글Fix #12']) {
+    assert.ok(!plan({ title: 'docs: x', body, labels: [], files: [], lookup }).add.some((l) => /^P\d$/.test(l)), body);
+  }
+  // 줄 맨 앞 · 괄호 · 문장부호 뒤의 정상 키워드는 읽는다
+  for (const body of ['Closes #12', '(Closes #12)', '- Closes #12', '설명\nCloses #12', '완료. Fixes #12', '[Refs #12]']) {
+    assert.ok(plan({ title: 'docs: x', body, labels: [], files: [], lookup }).add.includes('P1'), body);
   }
 });
 
@@ -102,7 +123,7 @@ test('plan — 제목 · 본문에 셸 문자가 있어도 그냥 글자로 다�
 // ---- main 전체 흐름 (가짜 gh) — 실제 저장소로는 만들기 어려운 상황과, 라벨을 달 때 보내는 인자의 모양
 const { main } = require('./auto-label-pr.cjs');
 
-function runMain({ pr, repoLabels, issueTable = {}, prNumbers = [], env = {} }) {
+function runMain({ pr, repoLabels, issueTable = {}, prNumbers = [], issueErrors = {}, env = {} }) {
   const posts = [];
   const run = (args) => {
     const path = args.find((a) => a.startsWith('repos/')) ?? '';
@@ -111,6 +132,7 @@ function runMain({ pr, repoLabels, issueTable = {}, prNumbers = [], env = {} }) 
     if (path.endsWith('/labels')) return `${repoLabels.join('\n')}\n`;
     const issue = path.match(/\/issues\/(\d+)$/);
     // 이슈 API 는 PR 번호에도 답한다 (pull_request 항목이 붙는다) — 이런 번호는 이슈로 치면 안 된다
+    if (issue && issueErrors[issue[1]]) throw new Error(issueErrors[issue[1]]); // gh 가 실패했을 때의 오류 문구
     if (issue && prNumbers.includes(Number(issue[1]))) return JSON.stringify({ pull_request: {}, labels: [{ name: 'P1' }] });
     if (issue) { if (!issueTable[issue[1]]) throw new Error('404'); return JSON.stringify({ labels: issueTable[issue[1]].map((name) => ({ name })) }); }
     return JSON.stringify(pr); // repos/o/r/pulls/5
@@ -152,6 +174,39 @@ test('main — 제목에 적힌 번호가 이슈가 아니라 PR 이면 그 라�
   const r = runMain({ pr: { title: 'fix(backend): #147 병합 뒤 빠진 수정 반영', body: '', labels: [] }, repoLabels: ALL_LABELS, prNumbers: [147] });
   assert.ok(!r.posts[0].includes('labels[]=P1'), r.posts[0].join(' '));
   assert.match(r.out, /우선순위 건너뜀/);
+});
+
+test('main — 이슈 조회가 권한 부족 · API 한도로 실패하면 경고로 남기고, 없는 번호(404)는 경고 없이 안내만 한다 (리뷰 #170 3)', () => {
+  const pr = { title: 'feat(backend): x (#10 · #11)', body: '', labels: [] };
+  const r = runMain({ pr, repoLabels: ALL_LABELS, issueErrors: { 10: 'gh: Resource not accessible by integration (HTTP 403)', 11: 'gh: Not Found (HTTP 404)' } });
+  assert.match(r.out, /::warning::이슈 #10 조회 실패 — gh: Resource not accessible by integration \(HTTP 403\)/);
+  assert.match(r.out, /- 이슈 #11 없음\(404\)/);
+  assert.ok(!/::warning::이슈 #11/.test(r.out), '404 는 경고가 아니다');
+  assert.match(r.out, /우선순위 건너뜀/); // 판정은 그대로 건너뛰되 이유가 로그에 남는다
+  const limited = runMain({ pr: { title: 'feat(backend): x (#10)', body: '', labels: [] }, repoLabels: ALL_LABELS, issueErrors: { 10: 'gh: API rate limit exceeded (HTTP 403)' } });
+  assert.match(limited.out, /::warning::이슈 #10 조회 실패 — gh: API rate limit exceeded/);
+});
+
+// 두 방어(첫 줄만 쓰기 · :: 지우기)는 서로 겹쳐서, 입력을 하나씩 따로 줘야 각각이 빠졌을 때 시험이 실패한다
+const errorOut = (message) => runMain({ pr: { title: 'feat(backend): x (#10)', body: '', labels: [] }, repoLabels: ALL_LABELS, issueErrors: { 10: message } }).out;
+
+test('main — 조회 오류 문구는 첫 줄만 쓴다 (줄을 바꿔 새 로그 줄·명령을 만들 수 없다)', () => {
+  const out = errorOut('첫째 줄\n둘째 줄 비밀');
+  assert.match(out, /조회 실패 — 첫째 줄$/m);
+  assert.ok(!out.includes('둘째 줄'), out);
+  assert.equal(out.split('\n').filter((l) => l.startsWith('::')).length, 1, '우리가 만든 ::warning:: 한 줄만');
+});
+
+test('main — 조회 오류 문구의 :: 는 지운다 (::error:: 같은 워크플로 명령 모양이 로그에 남지 않는다)', () => {
+  const out = errorOut('실패 ::error::주입 시도 ::set-output name=x::y');
+  assert.ok(!out.includes('::error::') && !out.includes('::set-output'), out);
+  assert.match(out, /^::warning::이슈 #10 조회 실패 — 실패 : error: 주입 시도 : set-output name=x: y$/m);
+});
+
+test('main — 조회 오류 문구는 120자까지만 쓴다', () => {
+  const out = errorOut('가'.repeat(500));
+  const why = out.split('조회 실패 — ')[1].split('\n')[0];
+  assert.equal([...why].length, 120);
 });
 
 test('main — 제목 · 본문의 글자는 호출 인자와 출력에 섞이지 않는다', () => {
