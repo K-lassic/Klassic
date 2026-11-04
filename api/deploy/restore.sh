@@ -51,6 +51,15 @@ if [ -n "$ENGINES_TARGET" ]; then
     echo "엔진 볼륨 $ENGINES_TARGET 가 이미 있다 — 새 이름을 쓴다" >&2
     exit 1
   fi
+  # #141 리뷰 P2 — 새 프로젝트의 DB · 파일 볼륨과 같은 이름이면 그 볼륨에 엔진을 풀게 된다
+  if [ -n "$PROJECT" ]; then
+    for v in db-data storage model-storage; do
+      if [ "$ENGINES_TARGET" = "${PROJECT}_$v" ]; then
+        echo "엔진 볼륨 $ENGINES_TARGET 는 프로젝트 볼륨 ${PROJECT}_$v 와 같다 — 다른 이름을 쓴다" >&2
+        exit 1
+      fi
+    done
+  fi
 fi
 
 COMPOSE=(docker compose -p "$PROJECT" -f compose.yaml)
@@ -62,6 +71,11 @@ echo "[1/4] 백업 확인"
 # #141 엔진 볼륨 — 새 볼륨에 풀고, 백업 때의 해시 · 링크 목록과 같은지 본다
 restore_engines() {
   echo "[엔진] $ENGINES_TARGET 에 복원 — 몇 분 걸린다"
+  # #141 리뷰 P2 — 시작 검사 뒤에 같은 이름의 볼륨이 생겼으면 docker volume create 가 그 볼륨을 돌려주므로 여기서 다시 막는다
+  if docker volume inspect "$ENGINES_TARGET" >/dev/null 2>&1; then
+    echo "엔진 볼륨 $ENGINES_TARGET 가 복원 직전에 생겼다 — 쓰지 않는다" >&2
+    exit 1
+  fi
   docker volume create "$ENGINES_TARGET" >/dev/null
   gzip -dc "$INPUT/engines.tar.gz" | docker run --rm -i -v "$ENGINES_TARGET:/to" "$DB_IMAGE" tar -C /to --numeric-owner -xf -
   docker run --rm -v "$ENGINES_TARGET:/from:ro" -w /from "$DB_IMAGE" sh -c 'find . -type f -print0 | sort -z | xargs -0 sha256sum' \
