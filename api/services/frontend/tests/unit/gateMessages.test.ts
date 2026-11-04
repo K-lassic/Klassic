@@ -54,6 +54,16 @@ describe('gateMessages — api/shared/errors 세 파일에서 만든 C2 문구',
     expect(gateMessage('APPLICATION_RATE_LIMITED').actionLabel).toBeNull();
     expect(gateMessage('APPLICATION_RATE_LIMITED').title).toContain('G11');
   });
+  it.each([
+    ['addr', '같은 접속 주소에서 최근 1시간 동안 악보를 최대 7회 올릴 수 있습니다. 같은 주소를 쓰는 계정의 업로드도 함께 셉니다.'],
+    ['account', '이 계정은 최근 1시간 동안 악보를 최대 7회 올릴 수 있습니다.'],
+  ])('G12 시간당 한도는 서버의 횟수와 집계 기준을 보여 준다 (%s)', (scope, reason) => {
+    const e = new GateError(429, { code: 'WEB_HOURLY_LIMIT', message: '한 시간에 올릴 수 있는 횟수를 넘었습니다.',
+      gate: 'G12', retry_after: '2026-11-04T05:47:00Z', details: { scope, cap: 7 } });
+    const view = gateFromError(e);
+    expect(view.reason).toBe(reason);
+    expect(view.retryAt?.toISOString()).toBe('2026-11-04T05:47:00.000Z');
+  });
   it('G10 제목 · G8(사용자 음원, 2026-09-29 삭제) 코드는 없다', () => {
     expect(gateMessage('SF2_TOO_LARGE').gate).toBeNull();
     expect(gateMessage('APPLICATION_MISSING_FIELD').actionLabel).toBe('빠진 항목으로 가기');
