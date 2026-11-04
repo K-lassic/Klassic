@@ -331,7 +331,7 @@ docker compose exec frontend id       # uid=101(nginx)
 | (#22 붙인 뒤) `9603/admin/x` · `9603/api/v1/internal/x` | 404 JSON `NOT_FOUND` |
 | (#22 붙인 뒤, 백엔드 없음) `9603/api/me` · `26201/admin/me` | 502 JSON `WEB_UNAVAILABLE` |
 
-개발 서버는 `npm run dev`(5173). `/api` · `/soundfonts` · `/admin/` 은 v0.1.1 대역(9503 · 26101)으로 넘긴다. api/ 로 붙이려면 `DEV_PUBLIC_TARGET=http://127.0.0.1:9603 DEV_ADMIN_TARGET=http://127.0.0.1:26201 npm run dev`.
+개발 서버는 `npm run dev`(5173). `/api` · `/soundfonts` · `/admin/` 은 api/ 입구(9603 · 26201)로 넘긴다 (#139). v0.1.1 예비 시연(proto_type)에 붙이려면 `DEV_PUBLIC_TARGET=http://127.0.0.1:9503 DEV_ADMIN_TARGET=http://127.0.0.1:26101 npm run dev`.
 
 ### 만약에
 
