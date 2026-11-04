@@ -291,6 +291,51 @@ MODEL_API_IMAGE=klassic/model-api:0.2.0 docker compose up -d --force-recreate --
 
 모든 서비스가 Healthy 면 정상이다. 끝나면 이미지 Id 를 대조한다.
 
+## v0.2.2 · 외부 API 예시(/demo) 연결 · 음원 라이선스 승인 (2026-11-03)
+
+main `425c1e8` (#131 · #136 · #137 · #147 포함)로 model-api · web · admin · frontend 를 올리고 demo 를 켰다. 시작 전에 `deploy/backup.sh` 로 백업했다 (`D:\klassic-backup\20261103-164111`, 계정 3 · 요청 13 · 공유 악보 3행).
+
+| 순서 | 한 일 | 확인 |
+|---|---|---|
+| 1 | frontend 다시 올림 (#147 체험하기 장 넘김) | 이미지 Id 일치, 화면 파일에 수정 있음, `/tour` 200 |
+| 2 | model-api 0.2.2 (`0.2.2` · `0.2.2-g425c1e8`) | Id 일치, 버전 0.2.2, `mem_limit` 4GiB, 공유 볼륨 `shared/` 만 읽기 전용 |
+| 3 | 외부 키 1개 발급 → `api/.env` 의 `DEMO_API_KEY` | 시간당 30회. 화면 · 응답 · 로그에 키 문자열 없음 |
+| 4 | demo(`klassic/api-demo:0.2.2`) 켬 — `docker compose --profile demo up -d --wait demo` | Healthy, `/demo/` 200, 목록 3곡 · 악기 6개 |
+| 5 | 예시 공유 악보 등록 — `shared-seed --confirm-rights` | 1차 `added 1`, 2차 `skipped 1`. 아리랑 세마치장단 `S-1103-PYQ5Q86G` 만료 2037년 |
+| 6 | backend 다시 빌드 · web · admin 다시 만듦 (`confirmLicense` 도구 포함) | 두 컨테이너 Id 일치 |
+| 7 | 음원 라이선스 승인 — 운영자 `admin_jsg` (`confirmLicense --confirm`) | `v_mp3_license` = 1 · 0 · 1, `change_history` 에 false → true |
+| 8 | `/demo/api/bgm` 요청 | 승인 전 409 `MP3_WITHHELD`, 승인 뒤 200 `audio/mpeg` — 가야금 741,040B · 대금 736,025B (서로 다름) |
+
+- 사용자 확인 (2026-11-03, 외부 주소로 접속): 듣기 · 변환이 된다. 화면에 「팀 내부 시연용」 안내가 보이지 않는다. (어느 네트워크에서 접속했는지는 기록하지 않았다.)
+- 남은 문제: `/tour` 장 넘김 때 창 크기가 바뀌면서 [다음] 버튼 위치가 조금씩 바뀐다 (#147 반영 뒤에도 남음, 사용자 확인). 황송해 님이 따로 고치는 중 — #146 은 PR 병합으로 닫혔지만 이 증상은 아직 해결되지 않았다.
+- 아직 확인하지 못한 것: LTE(휴대폰 데이터) 접속 → #49 리허설.
+- 이 서버의 작업 폴더는 `main` 이다. 병합된 PR 을 받을 때 `git pull --ff-only`.
+
+**되돌리기** (서버 PC · Git Bash · `api/` 폴더)
+
+- 라이선스 승인 취소 — 정상이면 `바꿨습니다: 확인 전 …` 이 나온다:
+
+```bash
+docker compose run --rm -T --no-deps web node dist/tools/confirmLicense.js --operator admin_jsg --withhold
+```
+
+- demo 끄기 — `/demo/` 는 503 안내 화면이 된다. 끄면 외부 키는 계속 유효하므로 필요하면 `api/.env` 의 `DEMO_API_KEY` 줄도 지운다 (키를 폐기하는 명령줄 도구는 아직 없다 — 관리자 API #100 전):
+
+```bash
+docker compose --profile demo stop demo
+```
+
+- model-api 를 0.2.1 로 — **이미지 이름만 바꾸면 안 된다.** 현재 compose 의 `shared-storage-init` 이 0.2.2 에만 있는 도구(`app.tools.init_shared_storage`)를 부르므로 0.2.1 이미지로는 기동이 막힌다 (추정, 시험하지 않음). 이전 이미지 `model-api:0.2.1` 은 남겨 두었지만, 되돌려야 하면 compose 도 0.2.1 시점(`45cb4af`)으로 같이 되돌려야 한다. 같은 폴더의 `deploy/nginx` 도 그 시점 것으로 바뀌어 `/demo` 연결이 빠지므로, 되돌리기 전에 담당자와 상의한다.
+- backend 이전 이미지(`confirmLicense` 도구 없음) — `backend:before-license`:
+
+```bash
+docker tag klassic/backend:before-license klassic/backend:dev
+```
+
+```bash
+docker compose up -d --force-recreate --no-deps --wait web admin
+```
+
 ## CPU 전용 엔진 볼륨 시험 (2026-11-02)
 
 model-api 는 정간보를 CPU 로만 돌리는데, 고정 목록에 GPU 패키지가 들어 있어 엔진 볼륨이 크다. [build-cpu-engines.sh](build-cpu-engines.sh) 로 GPU 패키지를 뺀 새 볼륨을 만들어 기존 볼륨과 비교했다. `services/model-api/README.md` 「CPU 전용 정간보 환경」 순서를 따랐다.
@@ -571,6 +616,9 @@ API_PUBLIC_PORT=9623 API_ADMIN_PORT=26221 docker compose -p klassic-api-restore 
 | 2026-11-01 | 덮개 닫기(전원 연결) | 절전 | **아무것도 안 함** | 제어판 → 전원 옵션 → 덮개를 닫으면 |
 | 2026-11-02 | `api/.env` `COMPOSE_FILE` | 없음 | **대역을 기본 구성으로** (#86) | `api/.env` 의 두 줄 삭제 |
 | 2026-11-03 | `api/.env` `COMPOSE_FILE` | 대역이 기본 | **두 줄 삭제 — 재구성판이 기본** (#87) | 「model-api 대역」 절차로 두 줄을 다시 넣는다 |
+| 2026-11-03 | `api/.env` `DEMO_API_KEY` | 없음 | **외부 키 한 줄 추가** (#93, 값은 문서에 적지 않는다) | 그 줄 삭제 후 `docker compose --profile demo stop demo` |
+| 2026-11-03 | DB `license_policy.confirmed` | 0 (확인 전) | **1 (확인함, 운영자 `admin_jsg`)** (#98) | `confirmLicense.js --operator admin_jsg --withhold` |
+| 2026-11-03 | 서버 작업 폴더 브랜치 | `docs/98-license-decision` | **`main`** | 필요한 브랜치로 `git switch` |
 | 2026-11-01 | Windows 업데이트 | 중지 안 함 | **11/05 까지 일시 중지** | 설정 → Windows 업데이트 → 업데이트 재개 |
 | 2026-11-01 | Tailscale Run unattended | 꺼짐 | **켜짐** (`ForceDaemon: true` 확인) | 작업 표시줄 Tailscale 앱 Preferences |
 
