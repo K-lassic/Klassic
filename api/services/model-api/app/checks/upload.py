@@ -21,8 +21,8 @@ shared/upload-rules.json으로 사진·PDF를 검사하고 판정·쪽 정보를
 
 2026-09-29 황송해 결정(여러 쪽): 사용자 업로드(multi_page=True)는 한 요청 = 악보 한 곡 —
   PDF 한 개(모든 쪽) 또는 사진 여러 장(올린 순서), 최대 max_pages(30)쪽.
-  순서: count(파일 수 > 10 → UPLOAD_TOO_MANY_PAGES) → type(파일마다) → 섞기(PDF 둘 이상 · PDF+사진 → UPLOAD_TOO_MANY_FILES)
-        → corrupted(파일마다, PDF 는 열고 쪽수 > 10 이면 UPLOAD_TOO_MANY_PAGES) → size(파일마다) → resolution(쪽마다) → 악보 종류.
+  순서: count(파일 수 > max_pages → UPLOAD_TOO_MANY_PAGES) → type(파일마다) → 섞기(PDF 둘 이상 · PDF+사진 → UPLOAD_TOO_MANY_FILES)
+        → corrupted(파일마다, PDF 는 열고 쪽수 > max_pages 이면 UPLOAD_TOO_MANY_PAGES) → size(파일마다) → resolution(쪽마다) → 악보 종류.
   쪽마다의 반려에는 details.page(몇 쪽인지)를 붙인다(여러 쪽일 때). 통과하면 verdict.pages(쪽마다 그림)·verdict.files.
   내부 입력(/v1/recommend · /v1/render/*, multi_page=False)은 예전처럼 파일 한 개(둘 이상이면 UPLOAD_TOO_MANY_FILES).
 """
