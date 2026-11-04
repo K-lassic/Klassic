@@ -296,9 +296,9 @@ const engineHelp = computed(() => {
                 <thead><tr><th scope="col">현재 악기</th><th scope="col">변경할 악기</th></tr></thead>
                 <tbody>
                   <tr v-for="(p, i) in playDoc.parts" :key="p.id" :class="{ on: trackPicker === i }">
-                    <th scope="row">{{ partName(i) }}</th>
+                    <th scope="row">{{ playDoc.parts.length > 1 ? `${i + 1}성부 · ${partName(i)}` : partName(i) }}</th>
                     <td>
-                      <button type="button" class="btn btn-secondary btn-sm" :aria-disabled="expired ? 'true' : undefined" data-test="pick-instrument" @click="!expired && (trackPicker = trackPicker === i ? null : i)">
+                      <button type="button" class="btn btn-secondary btn-sm" :aria-disabled="expired ? 'true' : undefined" :aria-label="`${i + 1}성부 ${partName(i)} 악기 선택`" data-test="pick-instrument" @click="!expired && (trackPicker = trackPicker === i ? null : i)">
                         {{ trackPicker === i ? '닫기' : '악기 선택' }}
                       </button>
                     </td>

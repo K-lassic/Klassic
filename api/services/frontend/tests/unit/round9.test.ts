@@ -170,8 +170,7 @@ describe('화면 다듬기 9차(소스 확인)', () => {
     expect(t).not.toContain('새 악보 올리기');
     expect(t).not.toContain('big-legend');
     expect(t).not.toContain('vol-num');
-    // (2026-09-30 115번) 3단계에는 악기 바꾸기 없음(2단계로 옮김)
-    expect(t).not.toContain('악기 선택');
+    expect(t).toContain('악기 선택');
     expect(t).not.toContain("'악기 바꾸기'");
     // 98: "전체 음 반음씩 옮기기"는 악보 음표 수정(NoteInspector) 바로 다음
     expect(t.indexOf('data-test="transpose"')).toBeGreaterThan(t.indexOf('<NoteInspector'));

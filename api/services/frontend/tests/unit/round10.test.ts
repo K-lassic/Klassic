@@ -92,13 +92,13 @@ describe('소스 확인', () => {
     expect(src).toContain("await ed.pushMany(ops)");
     expect(src).toContain('applyOps(baseDoc.value, ed.ops)');
   });
-  it('114 · 115 3단계: 기준 악보 = 결과 + 기본 국악기(목소리 이름 없음) · 악기 바꾸기 없음 · 고정 막대', () => {
+  it('3단계: 기본 국악기 구성에서 성부별 악기 선택과 고정 재생 막대를 제공한다', () => {
     const src = read('src/pages/S2Edit.vue');
     expect(src).toContain('try { return applyDefaultEnsemble(base, inst.catalog); } catch { return base; }');
     expect(src).not.toContain('if (!ed.isEdited) return req.score?.musicxml');
     const t = noComments(src.slice(src.indexOf('<template>')));
-    expect(t).not.toContain('C4InstrumentPicker');
-    expect(t).not.toContain('변경할 악기');
+    expect(t).toContain('<C4InstrumentPicker');
+    expect(t).toContain('변경할 악기');
     expect(t).toMatch(/:show-now="false" :tempo-rate="tempoRate" dock/); // (135 · 161번) 3단계에도 재생 빠르기, 편집 기록과 이어짐
     const s3 = read('src/pages/S3Download.vue');
     expect(s3).toContain('base = applyDefaultEnsemble(raw, inst.catalog)');
