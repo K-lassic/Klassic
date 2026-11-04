@@ -4,6 +4,7 @@
 //     키가 비어 있으면 model-api 가 401 을 준다 — backend README 「장애 조치」.
 //   v0.1.1 services/modelApiClient.ts 와 같은 동작.
 import { env } from '../config/env.js';
+import { monotonicNowMs } from '../lib/clock.js';
 
 export class ModelApiDown extends Error {
   constructor(readonly reason: 'unreachable' | 'timeout' | 'http', readonly status?: number, readonly body?: unknown) {
@@ -11,15 +12,17 @@ export class ModelApiDown extends Error {
   }
 }
 
-interface CallOpts { timeoutMs?: number; deadline?: Date; headers?: Record<string, string> }
+/** deadlineMono = 단조 시계(monotonicNowMs) 기준 마감. 벽시계 값은 model-api 에 넘길 때 한 번만 만든다 (#105) */
+interface CallOpts { timeoutMs?: number; deadlineMono?: number; headers?: Record<string, string> }
 
 async function call(method: string, path: string, body?: FormData | object, opts: CallOpts = {}): Promise<Response> {
   const headers: Record<string, string> = { 'X-API-Key': env().SERVICE_API_KEY, ...(opts.headers ?? {}) };
   let payload: BodyInit | undefined;
   if (body instanceof FormData) payload = body;
   else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
-  if (opts.deadline) headers['X-Deadline'] = opts.deadline.toISOString();
-  const timeoutMs = opts.deadline ? Math.max(1, opts.deadline.getTime() - Date.now()) : (opts.timeoutMs ?? 15000);
+  const remainingMs = opts.deadlineMono === undefined ? undefined : Math.max(1, opts.deadlineMono - monotonicNowMs());
+  if (remainingMs !== undefined) headers['X-Deadline'] = new Date(Date.now() + remainingMs).toISOString();
+  const timeoutMs = remainingMs ?? opts.timeoutMs ?? 15000;
   try {
     return await fetch(`${env().MODEL_API_URL}${path}`, { method, headers, body: payload, signal: AbortSignal.timeout(timeoutMs) });
   } catch (e) {
