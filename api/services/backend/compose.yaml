@@ -27,6 +27,8 @@ x-backend: &backend
     PUBLIC_API_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:9603}/api
     LOG_LEVEL: ${LOG_LEVEL:-info}
     PERIODIC_JOB_SECONDS: ${PERIODIC_JOB_SECONDS:-21600}
+    # #100 관리자 API 접속 허용 범위(CIDR) — admin 만 읽는다. 기본값은 config/env.ts 와 같아야 한다. 비우지 않는다(비면 시작하지 않는다)
+    ADMIN_ALLOWED_CIDRS: ${ADMIN_ALLOWED_CIDRS:-127.0.0.1/32,::1/128,172.16.0.0/12}
   depends_on:
     # DB 가 준비되고 마이그레이션이 끝난 뒤 뜬다 (작성규칙 4-2 · #20 의 migrate)
     migrate: { condition: service_completed_successfully }

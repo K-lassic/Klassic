@@ -659,6 +659,86 @@ ENGINES_VOLUME_NAME=klassic_engines_restored docker compose up -d --wait model-a
 - 실제 `klassic_engines` 는 거부 시험에서 이름만 대조했고 열지 않았다.
 - 시험하지 않은 것: 실제 서비스 볼륨 백업 실행(필요한 시점에 사람이 정한다), 다른 PC 로 옮겨 복원, 서버 PC(노트북)에서의 소요 시간.
 
+## 관리자 API — 접속 허용 범위 · 운영자 로그인 (#100)
+
+관리자 API(`/admin/*`)의 첫 묶음이다. 계정 · 키 · 설정 · 모델 등 나머지는 #100 의 다음 PR 에서 붙는다. 운영자 계정은 지금처럼 명령줄로만 만든다 (`createOperator`, backend README 「운영 명령줄 도구」).
+
+**지금 되는 것:** `POST /admin/login` · `POST /admin/logout` · `GET /admin/me` · `POST /admin/service-key`. 그 밖의 `/admin/*` 는 로그인 전에 401, 로그인 뒤에는 404(아직 없음)다.
+
+**접속 허용 범위** — `api/.env` 의 `ADMIN_ALLOWED_CIDRS`(쉼표로 나눈 CIDR). 범위 밖이면 `403 ADMIN_NETWORK_DENIED`(G5)이고 사건은 `gate_event` 에 주소 **해시**만 남는다.
+
+| 항목 | 값 |
+|---|---|
+| 기본값 | `127.0.0.1/32,::1/128,172.16.0.0/12` (같은 PC + Docker 사설 대역) |
+| 왜 172.16.0.0/12 | 관리자 포트는 호스트 `127.0.0.1` 에만 열리지만, Docker 포트 전달로 들어온 접속은 Nginx 에 **compose 네트워크 게이트웨이(172.x.0.1)** 로 보인다. 2026-11-04 코드 작업용 PC(Docker Desktop)에서 실측: `172.18.0.1` |
+| 잘못된 값 | 항목이 하나라도 CIDR 이 아니거나 비어 있으면 **admin 이 시작하지 않는다**(키 이름만 알리고 값은 출력하지 않음). 일부만 적용해 범위가 넓어지는 일이 없다 |
+| 그대로 통과 | `/admin/health` — 컨테이너 healthcheck 용이고 준비 여부만 알린다 |
+
+**접속 주소는 헤더가 아니라 실제 접속 주소다.** 관리자 Nginx(`deploy/nginx/admin/admin.conf`)는 `X-Forwarded-For` 를 믿지 않고 실제 TCP 접속 주소로 덮어써 넘긴다. 이전에는 `set_real_ip_from` 이 compose 게이트웨이를 신뢰해서, 접속자가 `X-Forwarded-For: 10.1.1.1` 을 직접 보내면 범위 검사를 우회할 수 있었다(아래 시험 결과). 앞에 프록시를 두면 그 프록시의 주소만 `set_real_ip_from` 에 넣는다(대역 전체를 넣지 않는다).
+
+**로그인 · 세션**
+- 일반 계정으로 로그인하고 `operator` 역할이 있어야 한다. 쿠키 `gugak_admin` — 서명 · HttpOnly · SameSite=Strict · 8시간, 요청마다 DB 에서 계정 · 역할 · 운영자 사용 여부를 다시 본다(역할을 빼면 다음 요청부터 401).
+- 처리 설정의 `login_max_failures` 번 틀리면 `login_lock_minutes` 분 잠금(423). 사용자 로그인과 같은 계정 표를 쓴다.
+- **admin 컨테이너를 다시 띄우면 모든 운영자가 다시 로그인해야 한다.** 로그아웃한 쿠키를 막아 둔 목록이 메모리에만 있어서, 쿠키에 프로세스 시작 표식을 넣어 재시작 때 이전 쿠키를 모두 무효로 한다. (이 표식이 없던 첫 구현은 재시작 뒤 로그아웃했던 쿠키가 200 으로 되살아났다 — 실측.)
+- 서비스 키(`POST /admin/service-key`)는 명령줄 도구 `issueServiceKey` 와 같은 함수다. 원문은 응답에서 한 번만 나오고(`Cache-Control: no-store`), 발급해도 `api/.env` 의 `SERVICE_API_KEY` 를 바꾸고 web 을 다시 만들어야 적용된다.
+
+**서버 PC 에 반영할 때** (서버 PC · Git Bash · `api/` 폴더). 마이그레이션은 없다(DB 표 변경 없음).
+
+```bash
+git pull
+docker compose up -d --build web admin
+docker compose restart frontend
+```
+
+- web · admin 은 같은 이미지(`klassic/backend`)라 둘 다 다시 만든다. web 은 몇 초 끊긴다(그동안 진행 중인 인식 요청은 재시작 복구로 이어진다).
+- `frontend` 는 다시 시작해야 바뀐 `admin.conf` 를 읽는다(설정 폴더를 `:ro` 로 붙여 둔다). 사용자 화면이 몇 초 끊긴다.
+- 끝난 뒤 `docker compose ps` 의 web · admin · frontend 가 `(healthy)` 이고, **web · admin 컨테이너의 이미지 ID 가 방금 빌드한 이미지와 같은지** `docker inspect -f '{{.Image}}' <컨테이너>` 와 `docker images` 로 대조한다(`up -d` 가 다시 만들지 않는 일이 있었다).
+- 반영하면 아래 「서버 PC 운영 변경 기록」 표에 한 줄 남긴다(이전 값 · 지금 값 · 되돌리는 방법).
+
+**확인** (서버 PC · Git Bash). 정상 결과는 각 줄 끝에 적었다.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:26201/admin/health
+```
+→ `200`
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:26201/admin/me
+```
+→ `401` (로그인 전). `403` 이면 접속 허용 범위가 이 PC 를 막고 있다 — `ADMIN_ALLOWED_CIDRS` 와 Nginx 가 본 주소(`docker compose logs frontend` 의 접속 기록 첫 칸)를 비교한다.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-For: 203.0.113.9" http://127.0.0.1:26201/admin/me
+```
+→ `401`. 꾸민 헤더가 무시된다는 뜻이다(범위가 넓어서 통과한 것이지, 헤더를 믿은 것이 아니다). 헤더가 통하는지 가려내려면 범위를 좁혀 본다:
+
+```bash
+ADMIN_ALLOWED_CIDRS=10.0.0.0/8 docker compose up -d admin
+curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-For: 10.1.1.1" http://127.0.0.1:26201/admin/me
+docker compose up -d admin
+```
+→ 가운데 줄이 `403` 이어야 정상이다(`401` 이면 헤더가 통하는 것 — Nginx 설정이 옛것이다). **마지막 줄로 반드시 원래 범위로 되돌린다**(셸에만 준 값이라 다시 `up -d` 하면 `.env` 값으로 돌아온다). 이 확인은 admin 을 두 번 다시 띄우므로 로그인 중인 운영자가 있으면 풀린다.
+
+**외부에서 접속 불가** — 호스트 `127.0.0.1` 에만 열려 있어서 LAN · Tailscale 주소로는 연결 자체가 안 된다(`curl http://<PC 의 LAN 주소>:26201/admin/health` 가 `000`). Funnel 은 사용자 포트(9603)만 가리킨다.
+
+### #100 1차 시험 결과 (2026-11-04, 코드 작업용 PC · 임시 프로젝트 `klassic-api-test` · 이미지 태그 `issue100` · 포트 9703 · 26301)
+
+| 확인 | 결과 |
+|---|---|
+| 자동 시험 (격리 DB) | 단위 52(CIDR) + 통합 40(`admin.test.ts`), **backend 전체 284개 통과**. 계약 대조 포함 |
+| 시험이 실패를 잡는가 | 코드를 일부러 망가뜨려 8곳 확인 — 접속 검사 뺌(9개 실패) · 로그인 검사 뺌(4) · 로그아웃 막기 뺌(1) · 역할 확인 뺌(1) · 만료 확인 뺌(1) · 잠금 뺌(2) · 서비스 키 상태를 계약과 다르게(2, 계약 대조) · 프로세스 표식 검사 뺌(1) — 모두 시험이 실패 |
+| 실제 Nginx 경유 | health 200 · 로그인 전 me 401 · 틀린 비밀번호 401 · 로그인 200 + 쿠키(HttpOnly, path `/`, Secure 아님) · me 200 · 서비스 키 201 · 로그아웃 204 · 로그아웃한 쿠키 401 |
+| 접속 주소 실측 | 호스트 `127.0.0.1:26301` 접속이 Nginx 에 `172.18.0.1` 로 보임 → 기본 범위 안 |
+| 범위 좁히기(`10.0.0.0/8`) | 로그인 시도 403 `ADMIN_NETWORK_DENIED` · health 200 |
+| **발견 1 — 헤더 우회** | 위 범위에서 `X-Forwarded-For: 10.1.1.1` 을 보내면 **401 로 통과**했다(`admin.conf` 의 `set_real_ip_from`). 해당 블록을 지운 뒤 같은 요청 · `X-Real-IP` · `Forwarded` 모두 403. 기본 범위로 되돌리면 로그인 200 |
+| **발견 2 — 재시작 뒤 쿠키 부활** | 첫 구현에서 admin 을 다시 띄우면 로그아웃했던 쿠키가 200. 프로세스 시작 표식을 넣은 뒤 재시작 후 401, 다시 로그인하면 200 |
+| LAN 주소 접속 | 이 PC 의 Tailscale 주소로 `:26301` → 연결 안 됨(`000`). 이 PC 에는 다른 LAN 주소가 없어 Tailscale 주소로만 확인했다 |
+| 잘못된 `ADMIN_ALLOWED_CIDRS` | admin 시작 중단 · 출력에 키 이름만 있고 값은 없음 |
+| 기존 이미지 | `klassic/backend:dev` · `klassic/frontend:dev` 는 그대로 (시험 태그 `issue100` 으로 분리) |
+
+- **시험하지 않은 것:** 서버 PC(노트북)에서의 동작, 브라우저 화면(관리자 화면은 #101), 인증서(https) 접속에서의 Secure 쿠키(단위 시험으로만 확인), 두 운영자의 동시 사용, 로그인 실패가 쌓이는 gate_event 의 용량.
+- **알려진 한계:** 재시작하면 로그인이 풀린다(위). 계정 잠금은 사용자 로그인과 같은 계정 표를 쓰므로, 사용자 화면에서 틀려도 같은 잠금이 걸린다.
+
 ## 서버 PC 운영 (#47)
 
 서버 PC = 팀장 노트북(Windows · Docker Desktop · WSL2). 코드 작업은 다른 PC 에서 하므로, **서버 PC 설정을 바꾸면 이 표에 남긴다.**

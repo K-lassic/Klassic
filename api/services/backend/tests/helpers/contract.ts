@@ -36,7 +36,9 @@ export function checkResponse(method: string, template: string, status: number, 
   // 아직 만들지 않은 P2 · P3 경로의 404 는 정상 (대응표에 있어도 라우터가 없다)
   if (status === 404 && op['x-priority'] !== 'P1') return null;
   // 역할 판정(authz)은 모든 경로에 공통이라 경로마다 적지 않았다 — 오류 응답 모양만 본다
-  const def = op.responses[String(status)] ?? (status === 403 ? { $ref: '#/components/responses/Error' } : undefined);
+  // (#100) 관리자 경로는 로그인 검사(requireOperator)도 공통이라 401 을 경로마다 적지 않는다 — 접속 허용 범위 밖 403 과 같은 취급
+  const common = status === 403 || (status === 401 && template.startsWith('/admin/'));
+  const def = op.responses[String(status)] ?? (common ? { $ref: '#/components/responses/Error' } : undefined);
   if (!def) return `${method} ${template} — 계약에 없는 상태 ${status}: ${JSON.stringify(body).slice(0, 160)}`;
   const named = def.$ref?.replace('#/components/responses/', '');
   const content = named ? contract.components.responses[named].content : def.content;

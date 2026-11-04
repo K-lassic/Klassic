@@ -64,6 +64,9 @@ web ─▶ model-api (MODEL_API_URL, 서비스 키 SERVICE_API_KEY)
 | `src/services/fallback.ts` | (#34) 대체 결과 — `assets/templates/` · 없으면 `service_down` |
 | `src/services/modelApiClient.ts` · `modelStatus.ts` · `uploadInspect.ts` | (#34) model-api 호출 · 모델 상태 캐시 · PDF 검사 위임 |
 | `assets/` | (#34) 이미지에 굽는 예시 악보 · 대체 악보. 출처는 `assets/examples/SOURCES.md` |
+| `src/admin/networkGuard.ts` · `src/lib/cidr.ts` | (#100) 관리자 접속 허용 범위 `ADMIN_ALLOWED_CIDRS` — 밖이면 403 `ADMIN_NETWORK_DENIED`(G5). 판정할 수 없으면 막는다 |
+| `src/admin/auth.ts` | (#100) `/admin/login` · `logout` · `me` + `requireOperator` — 쿠키 `gugak_admin`(서명 · HttpOnly · SameSite=Strict · 8시간), 잠금 423, operator 역할 없으면 403 |
+| `src/admin/serviceKey.ts` | (#100) `POST /admin/service-key` — 명령줄 도구(#26)와 같은 `issueServiceKey` |
 | `src/config/env.ts` | 환경변수 zod 검증 — 빠진 키 이름만 알리고 값은 출력하지 않음 |
 | `src/config/shared.ts` | `api/shared` 읽기 — 오류 파일 세 개를 합침 (중복이면 시작 안 함) |
 | `src/config/settings.ts` | 처리 설정 판본(DB) — 5초 캐시 |
@@ -131,9 +134,9 @@ docker compose -p klassic-api-test down -v   # 시험용 프로젝트만 지운�
 | `migrate` | `migrate.test.ts` |
 | `unit/requestDeadline` | `storage.test.ts` |
 
-옮기지 않은 것 (P2 · P3 — 그 기능을 만들 때 옮긴다): `rbac` 의 키 신청 · 관리자 로그인, `us7_us8` 의 세션 2시간 정리, `admin_accounts` · `jobs` · `my_scores` · `shared_*` · `us9_admin` · `us10_keys` · `instrument_selection`.
+옮기지 않은 것 (P2 · P3 — 그 기능을 만들 때 옮긴다): `us7_us8` 의 세션 2시간 정리, `admin_accounts` · `jobs` · `my_scores` · `shared_*` · `us9_admin` · `us10_keys` · `instrument_selection`. (`rbac` 의 관리자 로그인은 #100 에서 옮겼다 — `tests/integration/admin.test.ts`)
 
-계약의 `POST /admin/service-key`(P1)는 API 가 아니라 명령줄 도구로 대신한다 (#26). 인식 · 렌더링을 실제 엔진으로 확인한 결과는 PR #73 · #74.
+계약의 `POST /admin/service-key` 는 처음에 P1 로 적혀 있었지만 명령줄 도구로 대신했고(#26), #100 에서 관리자 API 로도 만들어 P3 로 맞췄다. 도구는 그대로 둔다. 인식 · 렌더링을 실제 엔진으로 확인한 결과는 PR #73 · #74.
 
 ### 운영 명령줄 도구 (#26)
 

@@ -6,8 +6,8 @@
 //     web · admin ─▶ MariaDB(db) · web ─▶ model-api(서비스 이름)
 //   v0.1.1 과 다른 점: 화면 정적 파일은 내주지 않는다 — 화면은 Nginx(#21). 음원 /soundfonts 는 Nginx 를 거쳐 여기서 내준다 (#36).
 //   /api 요청 순서 (#27): /api/health(세션 없이) → sessionMiddleware → authz(경로 → UC → 권한표) → 라우터 → 404 → errorHandler
-//   붙인 라우터: 세션 · 인증 · 권한 #27 · 요청 · 예시 #34 / 모델 상태 #35 · 편집 · 내보내기 · 악기 · 음원 #36 / 붙일 것: 관리자 API (P3)
-import express, { type Express } from 'express';
+//   붙인 라우터: 세션 · 인증 · 권한 #27 · 요청 · 예시 #34 / 모델 상태 #35 · 편집 · 내보내기 · 악기 · 음원 #36 / 관리자 API 는 createAdminApp (#100, 접속 허용 · 운영자 로그인 · 서비스 키)
+import express, { Router, type Express } from 'express';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import { currentSettings } from './config/settings.js';
@@ -26,6 +26,9 @@ import { myScoresRouter } from './web/myScores.js';
 import { sharedRouter } from './web/shared.js';
 import { apiDocsRouter } from './web/apiDocs.js';
 import { keyApplicationsRouter } from './web/keyApplications.js';
+import { networkGuard } from './admin/networkGuard.js';
+import { authRouter, requireOperator } from './admin/auth.js';
+import { serviceKeyRouter } from './admin/serviceKey.js';
 
 function base(): Express {
   const app = express();
@@ -74,14 +77,26 @@ export function createWebApp(): Express {
   return app;
 }
 
+/**
+ * 관리자 API (#100) — /admin 요청 순서: /admin/health(검사 앞, 컨테이너 healthcheck 용) → 접속 허용 범위(networkGuard, 밖이면 403)
+ *   → 응답 캐시 금지 → 로그인 · 로그아웃 · 내 정보(authRouter, 로그인 전에도 열림) → 운영자 로그인 검사(requireOperator) → 관리자 라우터들 → 404 → errorHandler
+ * 로그인 뒤에 붙는 라우터는 모두 protectedRouters 에 더한다 — requireOperator 가 그 앞에 있어 검사를 빼먹을 수 없다(없는 경로도 로그인 전에는 401).
+ * 붙인 라우터: 서비스 키 / 붙일 것: 계정 · 키 · 신청 · 라이선스 · 설정 · 모델 · 현황 · 작업 · 감사 · 평가 · 공유 악보 (#100 나머지)
+ */
 export function createAdminApp(): Express {
   const app = base();
-  // compose healthcheck 용 — 관리자 server 는 127.0.0.1 에만 열리고(Nginx #22), 접속 허용 범위 검사는 관리자 API 이슈에서 붙인다
   app.get('/admin/health', wrap(async (_req, res) => {
     const r = await readiness();
     if (!r.ok) return sendError(res, new ApiError('SERVICE_NOT_READY', { reason: r.reason }));
     res.json({ status: 'ok', role: 'admin', setting_version: r.setting_version });
   }));
+  app.use('/admin', networkGuard());
+  app.use('/admin', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); }); // 키 · 계정 정보가 캐시에 남지 않게
+  app.use('/admin', authRouter);
+  const protectedRouters = Router();
+  protectedRouters.use(requireOperator);
+  protectedRouters.use(serviceKeyRouter);
+  app.use('/admin', protectedRouters);
   app.use('/admin', (_req, res) => sendError(res, new ApiError('REQUEST_NOT_FOUND')));
   app.use(errorHandler);
   return app;
