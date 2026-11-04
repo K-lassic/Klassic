@@ -18,6 +18,7 @@ let waitFor: typeof import('../helpers/db.js').waitFor;
 let guard: typeof import('../../src/admin/networkGuard.js');
 let cidr: typeof import('../../src/lib/cidr.js');
 let adminAuth: typeof import('../../src/admin/auth.js');
+let adminApp: typeof import('../../src/app.js').createAdminApp;
 let maxFailures = 5;
 let HASH = '';
 
@@ -28,7 +29,7 @@ beforeAll(async () => {
   if (!HAS_DB) return;
   ({ serve } = await import('../helpers/serve.js'));
   ({ waitFor } = await import('../helpers/db.js'));
-  const { createAdminApp } = await import('../../src/app.js');
+  ({ createAdminApp: adminApp } = await import('../../src/app.js'));
   db = await import('../../src/db/pool.js');
   ids = await import('../../src/lib/ids.js');
   keys = await import('../../src/lib/keys.js');
@@ -37,7 +38,7 @@ beforeAll(async () => {
   adminAuth = await import('../../src/admin/auth.js');
   maxFailures = (await (await import('../../src/config/settings.js')).currentSettings()).login_max_failures;
   HASH = await argon2.hash(PASSWORD, { type: argon2.argon2id });
-  app = serve(createAdminApp());
+  app = serve(adminApp());
 });
 afterAll(async () => { if (HAS_DB) await db.closePool(); });
 
@@ -116,6 +117,24 @@ describe.skipIf(!HAS_DB)('접속 허용 범위 (G5)', () => {
       const r = await request(app).get('/admin/me').set('X-Forwarded-For', forwarded).set('X-Real-IP', '127.0.0.1').set('Forwarded', 'for=127.0.0.1');
       expect(r.status, forwarded).toBe(403);
     }
+  });
+
+  // PR #167 리뷰(예은) 회귀 — 다른 컨테이너가 Nginx 를 거치지 않고 직접 붙어 X-Forwarded-For 로 허용 주소를 꾸며도 통과하면 안 된다.
+  //   시험 서버에 붙는 쪽(supertest)의 연결 주소는 127.0.0.1 이다. 이 주소를 "믿을 프록시"에서 빼면 직접 붙은 다른 컨테이너와 같은 처지가 된다.
+  it('믿을 프록시가 아닌 연결이 X-Forwarded-For 로 허용 주소를 꾸며도 403 이다 (직접 붙은 컨테이너)', async () => {
+    const direct = serve(adminApp({ trustedProxies: '10.9.9.9', allowedCidrs: '10.0.0.0/8' }));
+    for (const forwarded of ['10.1.1.1', '10.1.1.1, 10.2.2.2']) {
+      const r = await request(direct).get('/admin/me').set('X-Forwarded-For', forwarded).set('X-Real-IP', '10.1.1.1');
+      expect(r.status, forwarded).toBe(403);
+      expect(r.body.error.code).toBe('ADMIN_NETWORK_DENIED');
+    }
+    expect((await request(direct).post('/admin/login').set('X-Forwarded-For', '10.1.1.1').send({ login_id: 'x@test.kr', password: 'y' })).status).toBe(403);
+  });
+
+  it('믿을 프록시(Nginx)가 넘긴 X-Forwarded-For 는 읽는다 — 같은 요청이 범위 안이면 로그인 검사까지 간다', async () => {
+    const viaProxy = serve(adminApp({ trustedProxies: '127.0.0.1', allowedCidrs: '10.0.0.0/8' }));
+    expect((await request(viaProxy).get('/admin/me').set('X-Forwarded-For', '10.1.1.1')).status).toBe(401); // 범위 통과 → 로그인 전
+    expect((await request(viaProxy).get('/admin/me').set('X-Forwarded-For', '203.0.113.9')).status).toBe(403); // 범위 밖
   });
 
   it('로그인한 쿠키가 있어도 범위 밖이면 403 이고 아무것도 바뀌지 않는다', async () => {

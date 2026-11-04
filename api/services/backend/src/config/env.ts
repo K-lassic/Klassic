@@ -6,6 +6,7 @@
 //     model-api 주소가 서비스 이름(http://model-api:9543), shared 위치가 SHARED_DIR(이미지 안 /app/shared).
 import { z } from 'zod';
 import { parseCidrList } from '../lib/cidr.js';
+import { parseTrustList } from '../lib/trustedProxy.js';
 
 const schema = z.object({
   // DB (#20 · 서비스 이름 db)
@@ -28,6 +29,13 @@ const schema = z.object({
    */
   ADMIN_ALLOWED_CIDRS: z.string().default('127.0.0.1/32,::1/128,172.16.0.0/12')
     .refine((v) => parseCidrList(v) !== null, 'ADMIN_ALLOWED_CIDRS 는 CIDR 목록(예: 127.0.0.1/32,::1/128)이어야 합니다'),
+  /**
+   * #100 관리자 앱이 X-Forwarded-For(접속 주소)를 믿을 연결 상대 — loopback · IP · CIDR · 서비스 이름을 쉼표로.
+   * 기본값: 이 컨테이너 안(loopback)과 관리자 Nginx 가 있는 `frontend` 서비스. 다른 컨테이너가 Nginx 를 거치지 않고 붙어 헤더를 꾸며도 믿지 않는다(PR #167 리뷰).
+   * web 용 TRUST_PROXY 와 따로 둔다 — 그쪽은 사설망 전체를 믿는다. 비어 있거나 한 항목이라도 잘못이면 시작하지 않는다.
+   */
+  ADMIN_TRUSTED_PROXIES: z.string().default('loopback,frontend')
+    .refine((v) => parseTrustList(v) !== null, 'ADMIN_TRUSTED_PROXIES 는 loopback · IP · CIDR · 서비스 이름 목록(예: loopback,frontend)이어야 합니다'),
 
   // 다른 서비스 — 서비스 이름으로 부른다 (127.0.0.1 고정 없음)
   MODEL_API_URL: z.string().url().default('http://model-api:9543'),

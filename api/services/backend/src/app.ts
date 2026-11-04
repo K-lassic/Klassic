@@ -27,6 +27,8 @@ import { sharedRouter } from './web/shared.js';
 import { apiDocsRouter } from './web/apiDocs.js';
 import { keyApplicationsRouter } from './web/keyApplications.js';
 import { networkGuard } from './admin/networkGuard.js';
+import { ProxyTrust, parseTrustList } from './lib/trustedProxy.js';
+import { parseCidrList } from './lib/cidr.js';
 import { authRouter, requireOperator } from './admin/auth.js';
 import { serviceKeyRouter } from './admin/serviceKey.js';
 
@@ -83,14 +85,20 @@ export function createWebApp(): Express {
  * 로그인 뒤에 붙는 라우터는 모두 protectedRouters 에 더한다 — requireOperator 가 그 앞에 있어 검사를 빼먹을 수 없다(없는 경로도 로그인 전에는 401).
  * 붙인 라우터: 서비스 키 / 붙일 것: 계정 · 키 · 신청 · 라이선스 · 설정 · 모델 · 현황 · 작업 · 감사 · 평가 · 공유 악보 (#100 나머지)
  */
-export function createAdminApp(): Express {
+/** 시험만 opts 를 넣는다 — 믿을 프록시(trustedProxies) · 허용 범위(allowedCidrs). 실제 실행은 환경변수(env)를 쓴다 */
+export function createAdminApp(opts: { trustedProxies?: string; allowedCidrs?: string; proxyTrust?: ProxyTrust } = {}): Express {
   const app = base();
+  // 접속 주소는 믿을 프록시(관리자 Nginx)가 넘긴 X-Forwarded-For 에서만 읽는다 — web 용 사설망 전체 신뢰(base)를 이 앱에서는 좁힌다 (PR #167 리뷰)
+  const trust = opts.proxyTrust ?? new ProxyTrust(parseTrustList(opts.trustedProxies ?? env().ADMIN_TRUSTED_PROXIES) ?? { cidrs: [], hosts: [] });
+  app.set('trust proxy', (addr: string) => trust.isTrusted(addr));
+  void trust.refresh(true); // 시작할 때 한 번 — Nginx 가 아직 없으면 첫 요청에서 다시 풀어 본다
   app.get('/admin/health', wrap(async (_req, res) => {
     const r = await readiness();
     if (!r.ok) return sendError(res, new ApiError('SERVICE_NOT_READY', { reason: r.reason }));
     res.json({ status: 'ok', role: 'admin', setting_version: r.setting_version });
   }));
-  app.use('/admin', networkGuard());
+  app.use('/admin', (req, _res, next) => { void trust.refreshIfUnknown(req.socket.remoteAddress).finally(next); });
+  app.use('/admin', networkGuard(opts.allowedCidrs === undefined ? undefined : parseCidrList(opts.allowedCidrs) ?? []));
   app.use('/admin', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); }); // 키 · 계정 정보가 캐시에 남지 않게
   app.use('/admin', authRouter);
   const protectedRouters = Router();
