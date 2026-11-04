@@ -50,3 +50,21 @@ describe('211 4단계 나가기 경고 없음', () => {
     expect(t).not.toContain('<LeaveConfirm');
   });
 });
+
+describe('(2026-11-03 #146) 체험하기 장을 넘겨도 [다음] 버튼이 오르내리지 않음', () => {
+  it('여섯 장 제목 · 문장을 보이지 않게 겹쳐 높이를 맞추고, 그림 상자 높이는 고정', async () => {
+    const w = await mountTour();
+    const sizers = w.findAll('.tour-sizer');
+    expect(sizers).toHaveLength(6);
+    for (const s of sizers) expect(s.attributes('aria-hidden')).toBe('true');
+    // 높이 맞춤용 사본에는 id · 시험 표시가 없어 진짜 장과 겹치지 않는다
+    expect(w.findAll('#tour-title')).toHaveLength(1);
+    expect(w.findAll('[data-test="tour-pic"]')).toHaveLength(1);
+    const src = read('src/pages/S1Tour.vue');
+    const style = src.slice(src.indexOf('<style'));
+    expect(style).toContain('.tour-sizer { visibility: hidden;');
+    expect(style).toMatch(/\.pic \{[^}]*height: 260px;/);
+    expect(src).not.toContain('mode="out-in"');
+    w.unmount();
+  });
+});

@@ -35,21 +35,6 @@ function go(i: number) {
 const next = () => go(index.value + 1);
 const prev = () => go(index.value - 1);
 
-// (2026-11-03) 장마다 높이가 달라(윈도우 글꼴은 줄이 더 바뀐다) 넘길 때 창이 튀었다 — 앞 장과 새 장을 겹쳐 두고 높이를 부드럽게 옮긴다
-const stage = ref<HTMLElement | null>(null);
-function lockHeight() {
-  if (stage.value) stage.value.style.height = `${stage.value.offsetHeight}px`;
-}
-function growHeight(el: Element) {
-  const s = stage.value;
-  if (!s) return;
-  const h = (el as HTMLElement).offsetHeight;
-  requestAnimationFrame(() => { s.style.height = `${h}px`; });
-}
-function freeHeight() {
-  if (stage.value) stage.value.style.height = '';
-}
-
 function close() {
   // 앱 안에서 왔으면 그 화면으로, 주소로 바로 열었으면 1단계로
   const back = (window.history.state as { back?: string | null } | null)?.back;
@@ -92,88 +77,95 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
         </span>
       </div>
 
-      <div ref="stage" class="tour-stage">
-      <Transition :name="`slide-${dir}`" @before-leave="lockHeight" @enter="growHeight" @after-enter="freeHeight" @enter-cancelled="freeHeight">
-        <div :key="index" class="tour-slide" :data-test="`tour-slide-${index + 1}`">
-          <!-- (168번) 제목 → 문장 → 그림이 차례로 떠오른다 -->
-          <h2 id="tour-title" ref="titleEl" class="h2 tour-title rise" tabindex="-1">{{ slide.title }}</h2>
-          <div id="tour-lines">
-            <p v-for="(l, i) in slide.lines" :key="l" class="body tour-line rise" :style="{ animationDelay: `${0.12 + i * 0.12}s` }">{{ l }}</p>
-          </div>
-
-          <!-- 그 단계 화면을 흉내 낸 짧은 장면(168번: 한 바퀴 3.6초, 끝없이 되풀이) — 읽기 프로그램에는 문장이 같은 내용을 알린다 -->
-          <div class="pic rise" :class="`pic-${slide.pic}`" style="animation-delay: .36s" aria-hidden="true" data-test="tour-pic">
-            <!-- 1 소개: 사진 → 악보 → 소리가 차례로 켜지고 점이 흘러가며 소리 물결이 퍼진다 -->
-            <template v-if="slide.pic === 'intro'">
-              <div class="flow">
-                <span class="flow-line"><span class="flow-dot" /></span>
-                <span class="tile t1"><svg viewBox="0 0 40 48" width="44" height="52"><rect x="2" y="2" width="36" height="44" rx="3" fill="var(--color-white)" stroke="currentColor" stroke-width="2" /><path d="M8 14h24M8 22h24M8 30h24M8 38h16" stroke="currentColor" stroke-width="1.5" /></svg><span class="cap">사진</span></span>
-                <span class="tile t2"><svg viewBox="0 0 40 48" width="44" height="52"><ellipse cx="14" cy="36" rx="8" ry="6" fill="currentColor" /><path d="M21 36V6l12 5" stroke="currentColor" stroke-width="3" fill="none" /></svg><span class="cap">악보</span></span>
-                <span class="tile t3"><svg viewBox="0 0 56 48" width="60" height="52"><path d="M6 18h8l10-9v30l-10-9H6z" fill="currentColor" /><path class="wave w1" d="M31 16c4 4 4 12 0 16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" /><path class="wave w2" d="M37 11c7 7 7 19 0 26" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" /><path class="wave w3" d="M43 6c10 10 10 26 0 36" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" /></svg><span class="cap">소리</span></span>
-              </div>
-            </template>
-
-            <!-- 2 올리기: 커서가 사진을 끌어 놓으면 영역이 켜지고 진행 막대가 찬 뒤 "올렸습니다 ✓" -->
-            <template v-else-if="slide.pic === 'upload'">
-              <div class="mock-drop">
-                <span class="drag">
-                  <svg viewBox="0 0 36 44" width="36" height="44"><path d="M2 2h22l10 10v30H2z" fill="var(--color-white)" stroke="currentColor" stroke-width="2" /><path d="M8 18h20M8 25h20M8 32h14" stroke="currentColor" stroke-width="1.5" /></svg>
-                  <svg class="cursor" viewBox="0 0 16 22" width="16" height="22"><path d="M1 1l14 12H8l4 8-3 1-4-8-4 4z" fill="var(--color-ink-black)" stroke="var(--color-white)" stroke-width="1" /></svg>
-                </span>
-                <span class="drop-text small">파일을 여기에 끌어 놓으십시오</span>
-                <span class="bar"><span class="fill" /></span>
-                <span class="done small">올렸습니다 ✓</span>
-              </div>
-              <div class="pills"><span class="pill on">오선보</span><span class="pill">정간보</span></div>
-            </template>
-
-            <!-- 3 다른 악기: 악기 카드가 가야금 → 대금 → 해금으로 뒤집히고, 그때마다 음표 색이 바뀌며 재생 막대가 지나간다 -->
-            <template v-else-if="slide.pic === 'instrument'">
-              <div class="inst-scene">
-                <div class="mini-staff">
-                  <div class="lines"><i v-for="n in 5" :key="n" /></div>
-                  <span v-for="n in 6" :key="n" class="mnote" :style="{ left: `${6 + (n - 1) * 15}%`, top: `${[40, 28, 34, 18, 40, 24][n - 1]}%`, animationDelay: `calc(var(--loop) * ${(6 + (n - 1) * 15 - 3) / 100})` }"><span class="head" /></span>
-                  <span class="playhead" />
-                </div>
-                <div class="inst-card">
-                  <span class="small muted">악기</span>
-                  <span class="inst-swap"><span class="inst i1">가야금</span><span class="inst i2">대금</span><span class="inst i3">해금</span></span>
-                </div>
-              </div>
-            </template>
-
-            <!-- 4 음계: 커서가 음표를 누르면 골라지고 [▲ 반음 올리기]가 눌리며 음표가 올라가고 ♯ 가 붙는다 -->
-            <template v-else-if="slide.pic === 'pitch'">
-              <div class="pitch-scene">
-                <div class="lines"><i v-for="n in 5" :key="n" /></div>
-                <span class="pnote p1" /><span class="pnote p2"><span class="sharp">♯</span></span><span class="pnote p3" />
-                <svg class="cursor pcur" viewBox="0 0 16 22" width="16" height="22"><path d="M1 1l14 12H8l4 8-3 1-4-8-4 4z" fill="var(--color-ink-black)" stroke="var(--color-white)" stroke-width="1" /></svg>
-              </div>
-              <div class="pills"><span class="pill up">▲ 반음 올리기</span><span class="pill">▼ 반음 내리기</span></div>
-            </template>
-
-            <!-- 5 저장: MP3 · PDF 가 차례로 골라지고 [악보 다운받기]가 눌리면 화살표가 내려와 받은 파일에 ✓ -->
-            <template v-else-if="slide.pic === 'save'">
-              <div class="pills"><span class="pill fmt f1">MP3</span><span class="pill fmt f2">PDF</span><span class="pill">MIDI</span><span class="pill">MusicXML</span></div>
-              <span class="pill dl-btn">악보 다운받기</span>
-              <div class="down">
-                <svg class="dl-arrow" viewBox="0 0 48 40" width="48" height="40"><path d="M24 2v30M12 22l12 12 12-12" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                <span class="tray"><span class="got small">받았습니다 ✓</span></span>
-              </div>
-            </template>
-
-            <!-- 6 공유: [공유하기]가 눌리면 새 줄이 목록 위로 들어오고, 하트가 채워지며 뛰고 수가 12 → 13 으로 오른다 -->
-            <template v-else>
-              <span class="pill share-btn">공유하기</span>
-              <div class="share-list">
-                <div class="share-row new-row"><span>내 악보</span><span class="small muted">오선보</span><span class="heart"><span class="h-off">♡ 12</span><span class="h-on">♥ 13</span><span class="h-fly">♥</span></span></div>
-                <div class="share-row"><span>아리랑</span><span class="small muted">오선보</span><span class="heart plain">♥ 8</span></div>
-                <div class="share-row"><span>타령</span><span class="small muted">정간보</span><span class="heart plain">♡ 5</span></div>
-              </div>
-            </template>
-          </div>
+      <!-- (2026-11-03) 장마다 높이가 달라(윈도우 글꼴은 줄이 더 바뀐다) [다음] 버튼이 오르내렸다.
+           여섯 장의 제목 · 문장을 보이지 않게 같은 칸에 겹쳐 두어, 칸 높이가 가장 긴 장에 맞춰 늘 같다. 그림 상자 높이는 고정 -->
+      <div class="tour-stage">
+        <div v-for="s in slides" :key="`sizer-${s.title}`" class="tour-slide tour-sizer" aria-hidden="true">
+          <p class="h2 tour-title">{{ s.title }}</p>
+          <div><p v-for="l in s.lines" :key="l" class="body tour-line">{{ l }}</p></div>
+          <div class="pic" />
         </div>
-      </Transition>
+        <Transition :name="`slide-${dir}`">
+          <div :key="index" class="tour-slide" :data-test="`tour-slide-${index + 1}`">
+            <!-- (168번) 제목 → 문장 → 그림이 차례로 떠오른다 -->
+            <h2 id="tour-title" ref="titleEl" class="h2 tour-title rise" tabindex="-1">{{ slide.title }}</h2>
+            <div id="tour-lines">
+              <p v-for="(l, i) in slide.lines" :key="l" class="body tour-line rise" :style="{ animationDelay: `${0.12 + i * 0.12}s` }">{{ l }}</p>
+            </div>
+
+            <!-- 그 단계 화면을 흉내 낸 짧은 장면(168번: 한 바퀴 3.6초, 끝없이 되풀이) — 읽기 프로그램에는 문장이 같은 내용을 알린다 -->
+            <div class="pic rise" :class="`pic-${slide.pic}`" style="animation-delay: .36s" aria-hidden="true" data-test="tour-pic">
+              <!-- 1 소개: 사진 → 악보 → 소리가 차례로 켜지고 점이 흘러가며 소리 물결이 퍼진다 -->
+              <template v-if="slide.pic === 'intro'">
+                <div class="flow">
+                  <span class="flow-line"><span class="flow-dot" /></span>
+                  <span class="tile t1"><svg viewBox="0 0 40 48" width="44" height="52"><rect x="2" y="2" width="36" height="44" rx="3" fill="var(--color-white)" stroke="currentColor" stroke-width="2" /><path d="M8 14h24M8 22h24M8 30h24M8 38h16" stroke="currentColor" stroke-width="1.5" /></svg><span class="cap">사진</span></span>
+                  <span class="tile t2"><svg viewBox="0 0 40 48" width="44" height="52"><ellipse cx="14" cy="36" rx="8" ry="6" fill="currentColor" /><path d="M21 36V6l12 5" stroke="currentColor" stroke-width="3" fill="none" /></svg><span class="cap">악보</span></span>
+                  <span class="tile t3"><svg viewBox="0 0 56 48" width="60" height="52"><path d="M6 18h8l10-9v30l-10-9H6z" fill="currentColor" /><path class="wave w1" d="M31 16c4 4 4 12 0 16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" /><path class="wave w2" d="M37 11c7 7 7 19 0 26" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" /><path class="wave w3" d="M43 6c10 10 10 26 0 36" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" /></svg><span class="cap">소리</span></span>
+                </div>
+              </template>
+
+              <!-- 2 올리기: 커서가 사진을 끌어 놓으면 영역이 켜지고 진행 막대가 찬 뒤 "올렸습니다 ✓" -->
+              <template v-else-if="slide.pic === 'upload'">
+                <div class="mock-drop">
+                  <span class="drag">
+                    <svg viewBox="0 0 36 44" width="36" height="44"><path d="M2 2h22l10 10v30H2z" fill="var(--color-white)" stroke="currentColor" stroke-width="2" /><path d="M8 18h20M8 25h20M8 32h14" stroke="currentColor" stroke-width="1.5" /></svg>
+                    <svg class="cursor" viewBox="0 0 16 22" width="16" height="22"><path d="M1 1l14 12H8l4 8-3 1-4-8-4 4z" fill="var(--color-ink-black)" stroke="var(--color-white)" stroke-width="1" /></svg>
+                  </span>
+                  <span class="drop-text small">파일을 여기에 끌어 놓으십시오</span>
+                  <span class="bar"><span class="fill" /></span>
+                  <span class="done small">올렸습니다 ✓</span>
+                </div>
+                <div class="pills"><span class="pill on">오선보</span><span class="pill">정간보</span></div>
+              </template>
+
+              <!-- 3 다른 악기: 악기 카드가 가야금 → 대금 → 해금으로 뒤집히고, 그때마다 음표 색이 바뀌며 재생 막대가 지나간다 -->
+              <template v-else-if="slide.pic === 'instrument'">
+                <div class="inst-scene">
+                  <div class="mini-staff">
+                    <div class="lines"><i v-for="n in 5" :key="n" /></div>
+                    <span v-for="n in 6" :key="n" class="mnote" :style="{ left: `${6 + (n - 1) * 15}%`, top: `${[40, 28, 34, 18, 40, 24][n - 1]}%`, animationDelay: `calc(var(--loop) * ${(6 + (n - 1) * 15 - 3) / 100})` }"><span class="head" /></span>
+                    <span class="playhead" />
+                  </div>
+                  <div class="inst-card">
+                    <span class="small muted">악기</span>
+                    <span class="inst-swap"><span class="inst i1">가야금</span><span class="inst i2">대금</span><span class="inst i3">해금</span></span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 4 음계: 커서가 음표를 누르면 골라지고 [▲ 반음 올리기]가 눌리며 음표가 올라가고 ♯ 가 붙는다 -->
+              <template v-else-if="slide.pic === 'pitch'">
+                <div class="pitch-scene">
+                  <div class="lines"><i v-for="n in 5" :key="n" /></div>
+                  <span class="pnote p1" /><span class="pnote p2"><span class="sharp">♯</span></span><span class="pnote p3" />
+                  <svg class="cursor pcur" viewBox="0 0 16 22" width="16" height="22"><path d="M1 1l14 12H8l4 8-3 1-4-8-4 4z" fill="var(--color-ink-black)" stroke="var(--color-white)" stroke-width="1" /></svg>
+                </div>
+                <div class="pills"><span class="pill up">▲ 반음 올리기</span><span class="pill">▼ 반음 내리기</span></div>
+              </template>
+
+              <!-- 5 저장: MP3 · PDF 가 차례로 골라지고 [악보 다운받기]가 눌리면 화살표가 내려와 받은 파일에 ✓ -->
+              <template v-else-if="slide.pic === 'save'">
+                <div class="pills"><span class="pill fmt f1">MP3</span><span class="pill fmt f2">PDF</span><span class="pill">MIDI</span><span class="pill">MusicXML</span></div>
+                <span class="pill dl-btn">악보 다운받기</span>
+                <div class="down">
+                  <svg class="dl-arrow" viewBox="0 0 48 40" width="48" height="40"><path d="M24 2v30M12 22l12 12 12-12" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                  <span class="tray"><span class="got small">받았습니다 ✓</span></span>
+                </div>
+              </template>
+
+              <!-- 6 공유: [공유하기]가 눌리면 새 줄이 목록 위로 들어오고, 하트가 채워지며 뛰고 수가 12 → 13 으로 오른다 -->
+              <template v-else>
+                <span class="pill share-btn">공유하기</span>
+                <div class="share-list">
+                  <div class="share-row new-row"><span>내 악보</span><span class="small muted">오선보</span><span class="heart"><span class="h-off">♡ 12</span><span class="h-on">♥ 13</span><span class="h-fly">♥</span></span></div>
+                  <div class="share-row"><span>아리랑</span><span class="small muted">오선보</span><span class="heart plain">♥ 8</span></div>
+                  <div class="share-row"><span>타령</span><span class="small muted">정간보</span><span class="heart plain">♡ 5</span></div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </Transition>
       </div>
 
       <!-- 점 표시(1/6) · 장 번호는 aria-live 로 읽힌다 -->
@@ -209,9 +201,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 }
 .tour-top { display: flex; align-items: center; justify-content: space-between; }
 .btn-x { min-width: 44px; min-height: 44px; padding: 6px 12px; }
-/* 앞 장과 새 장이 한 칸에 겹친다 — 높이는 lockHeight · growHeight 가 옮긴다 */
-.tour-stage { display: grid; align-items: start; transition: height .35s ease; }
+/* 앞 장 · 새 장 · 높이 맞춤용 여섯 장이 한 칸에 겹친다 */
+.tour-stage { display: grid; align-items: start; }
 .tour-stage > .tour-slide { grid-area: 1 / 1; }
+.tour-sizer { visibility: hidden; pointer-events: none; }
 .tour-slide { display: grid; gap: var(--spacing-8); justify-items: center; text-align: center; }
 .tour-title { margin: 0; outline: none; }
 .tour-line { margin: 0; }
@@ -231,7 +224,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 
 /* ── 그림(모형) 공통 ── */
 .pic {
-  position: relative; width: 100%; min-height: 220px; margin-top: var(--spacing-16); padding: var(--spacing-24);
+  position: relative; width: 100%; height: 260px; margin-top: var(--spacing-16); padding: var(--spacing-24);
   display: grid; gap: var(--spacing-16); justify-items: center; align-content: center;
   background: var(--color-canvas-cream); border: 1px solid var(--color-hairline); border-radius: var(--rounded-stadium);
   color: var(--color-ink-black); box-sizing: border-box; overflow: hidden;
@@ -245,8 +238,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 
 /* 1 소개 */
 .flow { position: relative; display: flex; align-items: flex-end; justify-content: space-between; width: min(360px, 100%); }
-.flow-line { position: absolute; left: 12%; right: 12%; top: 26px; height: 3px; border-radius: 2px; background: var(--color-dust-taupe); }
-.flow-dot { position: absolute; top: -5px; left: 0; width: 13px; height: 13px; border-radius: var(--rounded-circle); background: var(--color-gold); animation: intro-dot var(--loop) ease-in-out infinite; }
+/* (2026-11-03) 처음부터 선이 다 그려져 흐린 아이콘 위로 비쳤다 — 선은 점 뒤로 그어지고, 아이콘은 점이 닿을 때 나타난다 */
+.flow-line { position: absolute; left: 12%; right: 12%; top: 26px; height: 3px; }
+.flow-line::before { content: ""; position: absolute; inset: 0; border-radius: 2px; background: var(--color-dust-taupe); transform-origin: left; animation: intro-line var(--loop) linear infinite; }
+.flow-dot { position: absolute; top: -5px; left: 0; width: 13px; height: 13px; border-radius: var(--rounded-circle); background: var(--color-gold); animation: intro-dot var(--loop) linear infinite; }
 .tile { position: relative; z-index: 1; display: grid; justify-items: center; gap: 4px; padding: 8px; border-radius: var(--rounded-sm); background: var(--color-canvas-cream); color: var(--color-primary); animation: intro-lit var(--loop) ease-in-out infinite; }
 .t2 { animation-name: intro-lit2; }
 .t3 { animation-name: intro-lit3; }
@@ -316,14 +311,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 
 @keyframes tour-rise-in { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-/* 1 소개 — 한 바퀴 3.6초 */
-@keyframes intro-dot { 0%, 8% { left: 0; opacity: 0; } 12% { opacity: 1; } 75% { left: calc(100% - 13px); opacity: 1; } 85%, 100% { left: calc(100% - 13px); opacity: 0; } }
-@keyframes intro-lit { 0% { transform: scale(1); opacity: .35; } 8%, 20% { transform: scale(1.18); opacity: 1; } 32%, 90% { transform: scale(1); opacity: 1; } 100% { opacity: .35; } }
-@keyframes intro-lit2 { 0%, 32% { transform: scale(1); opacity: .35; } 40%, 52% { transform: scale(1.18); opacity: 1; } 62%, 90% { transform: scale(1); opacity: 1; } 100% { opacity: .35; } }
-@keyframes intro-lit3 { 0%, 64% { transform: scale(1); opacity: .35; } 72%, 84% { transform: scale(1.18); opacity: 1; } 92% { transform: scale(1); opacity: 1; } 100% { opacity: .35; } }
-@keyframes intro-wave { 0%, 70% { opacity: 0; } 76% { opacity: 1; } 96%, 100% { opacity: 0; } }
-@keyframes intro-wave2 { 0%, 76% { opacity: 0; } 82% { opacity: 1; } 98%, 100% { opacity: 0; } }
-@keyframes intro-wave3 { 0%, 82% { opacity: 0; } 88% { opacity: 1; } 100% { opacity: 0; } }
+/* 1 소개 — 한 바퀴 3.6초. 점은 8% → 75% 를 같은 빠르기로 가서 사진(8%) · 악보(41%) · 소리(75%)에 닿는다 */
+@keyframes intro-dot { 0%, 8% { left: 0; opacity: 0; } 10% { opacity: 1; } 75% { left: calc(100% - 13px); opacity: 1; } 85%, 100% { left: calc(100% - 13px); opacity: 0; } }
+@keyframes intro-line { 0%, 8% { transform: scaleX(0); opacity: 1; } 75%, 90% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes intro-lit { 0%, 4% { transform: scale(.6); opacity: 0; } 10% { transform: scale(1.18); opacity: 1; } 16%, 90% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes intro-lit2 { 0%, 38% { transform: scale(.6); opacity: 0; } 44% { transform: scale(1.18); opacity: 1; } 50%, 90% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes intro-lit3 { 0%, 71% { transform: scale(.6); opacity: 0; } 77% { transform: scale(1.18); opacity: 1; } 83%, 90% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes intro-wave { 0%, 78% { opacity: 0; } 82% { opacity: 1; } 96%, 100% { opacity: 0; } }
+@keyframes intro-wave2 { 0%, 82% { opacity: 0; } 86% { opacity: 1; } 98%, 100% { opacity: 0; } }
+@keyframes intro-wave3 { 0%, 86% { opacity: 0; } 90% { opacity: 1; } 100% { opacity: 0; } }
 
 /* 2 올리기 */
 @keyframes up-drag {
@@ -379,7 +375,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 /* (2026-10-01 황송해 210번) 전에는 운영체제 동작 줄이기(@media prefers-reduced-motion)에 걸었다 — 이제 [움직임 줄이기]를 누른 창(.calm)에만 */
 .tour.calm .slide-next-enter-active, .tour.calm .slide-next-leave-active, .tour.calm .slide-prev-enter-active, .tour.calm .slide-prev-leave-active { transition: opacity .35s ease; }
 .tour.calm .slide-next-enter-from, .tour.calm .slide-next-leave-to, .tour.calm .slide-prev-enter-from, .tour.calm .slide-prev-leave-to { transform: none; }
-.tour.calm .dot::before, .tour.calm .tour-stage { transition: none; }
+.tour.calm .dot::before { transition: none; }
 .tour.calm .rise { animation-name: tour-fade-in; }
 .tour.calm .pic *, .tour.calm .pic *::before, .tour.calm .pic *::after { animation: none; }
 .tour.calm .drag, .tour.calm .flow-dot, .tour.calm .dl-arrow, .tour.calm .h-fly, .tour.calm .playhead, .tour.calm .pcur { display: none; }
@@ -388,6 +384,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 .tour.calm .tile { animation: rm-lit1 var(--loop) ease-in-out infinite; }
 .tour.calm .t2 { animation-name: rm-lit2; }
 .tour.calm .t3 { animation-name: rm-lit3; }
+.tour.calm .flow-line::before { animation: rm-line var(--loop) ease-in-out infinite; }
 .tour.calm .w1 { animation: intro-wave var(--loop) ease-out infinite; }
 .tour.calm .w2 { animation: intro-wave2 var(--loop) ease-out infinite; }
 .tour.calm .w3 { animation: intro-wave3 var(--loop) ease-out infinite; }
@@ -414,9 +411,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
 .tour.calm .h-on { animation: rm-hon var(--loop) ease-in-out infinite; }
 /* 동작 줄이기용 — 위치 · 크기 변화 없이 투명도 · 색만 */
 @keyframes tour-fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes rm-lit1 { 0% { opacity: .35; } 8%, 90% { opacity: 1; } 100% { opacity: .35; } }
-@keyframes rm-lit2 { 0%, 32% { opacity: .35; } 40%, 90% { opacity: 1; } 100% { opacity: .35; } }
-@keyframes rm-lit3 { 0%, 64% { opacity: .35; } 72%, 92% { opacity: 1; } 100% { opacity: .35; } }
+@keyframes rm-lit1 { 0%, 4% { opacity: 0; } 12%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes rm-lit2 { 0%, 38% { opacity: 0; } 46%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes rm-lit3 { 0%, 71% { opacity: 0; } 79%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes rm-line { 0%, 4% { opacity: 0; } 12%, 90% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes rm-done { 0%, 78% { opacity: 0; } 84%, 94% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes rm-inst { 0% { opacity: 0; } 5%, 30% { opacity: 1; } 35%, 100% { opacity: 0; } }
 @keyframes rm-pitch { 0%, 28% { background: var(--color-ink-black); box-shadow: none; } 32%, 92% { background: var(--color-primary); box-shadow: 0 0 0 4px var(--color-gold); } 100% { background: var(--color-ink-black); box-shadow: none; } }
