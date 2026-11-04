@@ -144,6 +144,37 @@ pwsh api/deploy/funnel.ps1 stop
 - proto_type(v0.1.1)은 9503 · 26101 을 쓴다. `api/` 는 **9603 · 26201**(`API_PUBLIC_PORT` · `API_ADMIN_PORT`)로 띄워서 둘이 같이 떠 있게 한다 (#20).
 - 발표에 쓸 쪽을 정하면 `start -Port <포트>` 로 Funnel 이 가리키는 곳만 바꾼다. 컨테이너는 끄지 않는다.
 
+## 엔진 자가 검사 — 재구성 이미지 사용 (#142)
+
+구조에서의 위치: 운영자의 `tools` 명령 → api model-api 이미지 → 읽기 전용 엔진 볼륨.
+필요한 것은 `api/`에서 빌드한 model-api 이미지와 설치 완료된 엔진 볼륨이다.
+`ENGINE_CHECK_IMAGE`가 비어 있으면 `MODEL_API_IMAGE`를 사용하고, 둘 다 없으면
+`klassic/model-api:0.2.2`를 선택한다. 기준판 이미지나 실행 중인 DB·서비스 키는 검사에 필요하지 않다.
+
+`api/`에서 Git Bash/Linux 셸로 실행한다. 임시 프로젝트·임시 볼륨 이름을 명시한다.
+
+```bash
+export ENGINES_VOLUME_NAME=klassic_issue138_fresh
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml build model-api
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml --profile tools config -q
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml --profile tools run --rm --no-deps engine-selftest
+docker compose -p klassic-api-issue142 --env-file .env -f compose.yaml down
+unset ENGINES_VOLUME_NAME
+```
+
+Compose 전체를 해석하기 위한 로컬 `.env`는 필요하지만, 검사 컨테이너에는 DB 비밀번호·키를 전달하지 않는다.
+네트워크는 차단하고 엔진·루트 파일시스템은 읽기 전용이며, 임시 파일만 `/tmp`에 기록한다.
+마지막 JSON의 `ok=true`, 각 엔진의 `ok=true`, 종료 코드 0을 확인한다.
+`ENGINE_CHECK_IMAGE`에 별도 태그를 지정하려면 해당 재구성 이미지가 로컬에 먼저 있어야 한다.
+기존 `klassic/klassic-model-api:0.1.1` 이미지는 아래 예비 시연·롤백용으로 보존하며 삭제하지 않는다 (#145).
+
+2026-11-03 임시 프로젝트 `klassic-api-issue142`에서 `api/`로 빌드한 model-api 이미지와
+임시 엔진 볼륨 `klassic_issue138_fresh`로 확인했다. homr 약 3.5초, 정간보 약 14.6초,
+전체 약 18.1초에 모두 `ok=true`, 종료 코드 0이었다. UID 1000·읽기 전용 엔진 마운트를 확인했고,
+검사 이미지 명시 → 서비스 이미지 → 기본 이미지 순서의 설정 선택도 확인했다.
+전체 Compose를 `up -d --build --wait`로 실행해 상시 서비스 healthy와 브라우저 API활용 화면 표시를
+확인한 뒤 같은 프로젝트·환경 파일로 `down`했다. 잔여 컨테이너는 없고 엔진·DB 볼륨과 롤백 이미지는 보존했다.
+
 ## model-api 대역 (#49)
 
 재구성 model-api(#24 · #28~#31)가 발표까지 갖춰지지 않을 때를 대비해, **v0.1.1 이미지를 `model-api` 이름으로 `api/` 에 붙인다.** 코드는 고치지 않는다. 파일은 [compose.standin.yaml](compose.standin.yaml) · [model-standin.env](model-standin.env)(키 이름만) 두 개다.
@@ -154,7 +185,8 @@ web ──┐
 Nginx ┘
 ```
 
-필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`. proto_type 컨테이너는 떠 있지 않아도 된다.
+대역을 선택할 때만 필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`.
+위 #142의 재구성 엔진 자가 검사에는 이 이미지가 필요하지 않다. proto_type 컨테이너는 떠 있지 않아도 된다.
 
 **처음 한 번 — 서비스 키 만들기** (서버 PC · Git Bash · `api/` 폴더)
 
@@ -450,6 +482,50 @@ docker run --rm --network none --read-only --tmpfs /tmp \
   --entrypoint python klassic/engines-installer:0.2.2 \
   -B -m unittest discover -s /tests -v
 ```
+
+## proto_type 없는 새 환경 시험 (#144, 2026-11-04)
+
+새로 클론한 저장소에서 `proto_type/` 을 지운 뒤 `api/` 만으로 빌드 · 기동 · 엔진 설치 · 인식 · 내보내기 · 공유 · 외부 키까지 돌렸다. **원본 폴더와 실제 서비스 볼륨은 건드리지 않았다.**
+
+**구성**
+
+| 항목 | 값 |
+|---|---|
+| 코드 | main `4a74780` (#150 ~ #153 병합 후) 새 클론, 사본에서만 `proto_type/` 삭제 |
+| PC | 코드 작업용 PC (Ryzen 5 7500F · Docker 6코어 · 31GiB · amd64 · GPU 없음). **서버 PC 측정값이 아니다** |
+| 프로젝트 · 포트 | `-p klassic-standalone-test -f compose.yaml` · 9713 · 26311 |
+| `.env` | 임시 값으로 새로 만듦 (비밀값은 무작위 생성, 시험 뒤 삭제) · 이미지 태그 `issue144` 로 분리 |
+| 엔진 | 빈 볼륨 `klassic_issue144_engines` 에 #138 설치기로 새로 설치 |
+| DB | 새 볼륨 — 마이그레이션 → 운영자 · 서비스 키 · 외부 키 · 라이선스 승인 모두 이 임시 DB 에서만 |
+
+**결과 — 모두 통과**
+
+| 확인 | 결과 |
+|---|---|
+| 런타임 경로의 `proto_type` | **0건** — `api/` 안 59건은 모두 주석 · 문서 · 시험 주석 (compose 머리 주석, `vite.config.ts` 주석, 마이그레이션 머리말 등) |
+| 이미지 빌드 | backend · frontend · model-api · api-demo · engines-installer 5개 성공 (빌드 캐시 재사용, 25초 · 27초) |
+| 엔진 설치 (#138) | 3분 6초 · homr 23초 · 정간보 160초 · 두 엔진 `INSTALL_MANIFEST.json` 생성 · 볼륨 6,001,168,548 B (#138 기록과 2,394 B 차이) |
+| 기동 | 23초 뒤 db · web · admin · model-api · frontend 모두 Healthy |
+| 공개 점검 `check-public.ps1 -Local` | 15개 모두 통과 (인식 · 렌더링 경로가 재구성판임을 확인) |
+| 예시 3개 인식 | 아리랑 세마치 9.2초 · 미뉴에트 8.1초 · 타령 PDF 2쪽 8.1초 — 모두 `route=recognize` · `fallback=false` · `trust` (homr 0.7.0 · `jeongganbo-omr@e95045f+ckpt-v1.0.0`) |
+| 직접 올리기 (타령 PDF) | upload-check 통과 → 7.1초 · `recognize` · 대체 아님 |
+| 4형식 (오선보 · 정간보, 전조 +2 편집) | MIDI · MusicXML 바로, PDF 1.2~2.2초 (`verovio 5.7.0-7135340`), MP3 2.6~3.1초 (`fluidsynth 2.3.1+lame3.100`) — 파일 머리 확인 |
+| 라이선스 승인 전 MP3 | 웹 내보내기에 「팀 내부 시연용」 안내가 붙음 · 도구 상태 「외부 키 MP3 보류」 |
+| 공유 | 공유하기 200 → 다른 계정의 공유 목록에 1건 · 공유 악보 받기 200 |
+| 외부 키 (승인 후) | 키 없음 401 · 접수 202 → 7.3초 완료 · `recognize` · 대체 아님 · MusicXML · MIDI · MP3 파일 3개 받음 · 다른 키로 상태 조회 404 · `/api/v1/shared-scores` 200 |
+| model-api 메모리 | 웹 흐름 중 최대 1.958GiB (`mem_limit` 4g, 2초 간격 `docker stats`) |
+
+**발견한 것**
+
+- **외부 키 결과의 파일 주소에 포트가 빠진다.** `http://127.0.0.1/api/v1/files/<token>` 처럼 나온다 (입구가 9713 인데 포트 없음). Nginx 가 `proxy_set_header Host $host` 로 넘겨 포트가 떨어지고, model-api 가 `request.url_for` 로 주소를 만든다. 공개 주소(Funnel HTTPS 443)는 기본 포트라 영향이 없을 것으로 보지만 (추정), 로컬 · 임시 프로젝트 · 9603 직접 접속에서는 주소를 그대로 열 수 없다. `$http_host` 로 바꾸는 방안을 별도 이슈로 검토한다. 이번 시험은 주소의 경로만 떼어 받았다.
+- Git Bash 에서 임시 폴더(`AppData\Local\Temp\...`) 아래 사본을 빌드하면 Compose 5.6 의 bake 가 `--allow=fs.read=...` 권한을 요구하며 멈췄다. 같은 명령이 PowerShell 에서는 되고, 원래 저장소 경로에서는 Git Bash 로도 된다. 경로 문제로 보이며 프로젝트 코드와는 관계없다 (추정).
+- `compose run` 뒤에 이름 없는 빈 볼륨 2개가 남았다 (위 「CPU 전용 엔진 볼륨 시험」 7번과 같은 현상).
+
+**선행 이슈 상태:** #138 · #139 · #140 · #143 완료(병합). **#141 (엔진 볼륨 백업) · #142 (engine-selftest 이미지) 는 열린 채로 시험했다.** `engine-selftest` 는 아직 v0.1.1 이미지(`klassic/klassic-model-api:0.1.1`, `pull_policy: never`)를 쓰므로 그 이미지가 없는 PC 에서는 실행되지 않는다 (추정 — 이 PC 에는 이미지가 있어 확인하지 못함). 기본 서비스 · 설치기와는 관계없다.
+
+**시험하지 않은 것:** 브라우저 화면 · 소리 (#49 범위), 외부 Funnel, 동시 사용, 빌드 캐시 없는 빌드 시간, 엔진 볼륨 백업 · 복원 (#141).
+
+**정리:** 컨테이너 · 네트워크와 `klassic-standalone-test_*` 볼륨 3개는 지웠다. 남은 것 — 빈 익명 볼륨 2개, 이미지 `*:issue144` 5개, 새로 설치한 엔진 볼륨 `klassic_issue144_engines` (6.0GB, 서버 전환이나 #141 시험에 다시 쓸 수 있어 남김).
 
 ## 백업 · 복원 (#97)
 
