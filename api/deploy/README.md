@@ -303,7 +303,7 @@ main `425c1e8` (#131 · #136 · #137 · #147 포함)로 model-api · web · admi
 | 4 | demo(`klassic/api-demo:0.2.2`) 켬 — `docker compose --profile demo up -d --wait demo` | Healthy, `/demo/` 200, 목록 3곡 · 악기 6개 |
 | 5 | 예시 공유 악보 등록 — `shared-seed --confirm-rights` | 1차 `added 1`, 2차 `skipped 1`. 아리랑 세마치장단 `S-1103-PYQ5Q86G` 만료 2037년 |
 | 6 | backend 다시 빌드 · web · admin 다시 만듦 (`confirmLicense` 도구 포함) | 두 컨테이너 Id 일치 |
-| 7 | 음원 라이선스 승인 — 운영자 `admin_jsg` (`confirmLicense --confirm`) | `v_mp3_license` = 1 · 0 · 1, `change_history` 에 false → true |
+| 7 | 음원 라이선스 승인 — 운영자 `admin_jsg` (`confirmLicense --confirm`) | `v_mp3_license` = `license_confirmed` 1 · `web_mp3_internal_only` 0 · `api_mp3_allowed` 1, `change_history` 에 false → true |
 | 8 | `/demo/api/bgm` 요청 | 승인 전 409 `MP3_WITHHELD`, 승인 뒤 200 `audio/mpeg` — 가야금 741,040B · 대금 736,025B (서로 다름) |
 
 - 사용자 확인 (2026-11-03, 외부 주소로 접속): 듣기 · 변환이 된다. 화면에 「팀 내부 시연용」 안내가 보이지 않는다. (어느 네트워크에서 접속했는지는 기록하지 않았다.)
@@ -326,7 +326,11 @@ docker compose --profile demo stop demo
 ```
 
 - model-api 를 0.2.1 로 — **이미지 이름만 바꾸면 안 된다.** 현재 compose 의 `shared-storage-init` 이 0.2.2 에만 있는 도구(`app.tools.init_shared_storage`)를 부르므로 0.2.1 이미지로는 기동이 막힌다 (추정, 시험하지 않음). 이전 이미지 `model-api:0.2.1` 은 남겨 두었지만, 되돌려야 하면 compose 도 0.2.1 시점(`45cb4af`)으로 같이 되돌려야 한다. 같은 폴더의 `deploy/nginx` 도 그 시점 것으로 바뀌어 `/demo` 연결이 빠지므로, 되돌리기 전에 담당자와 상의한다.
-- backend 이전 이미지(`confirmLicense` 도구 없음) — `backend:before-license`:
+- backend 이전 이미지(`confirmLicense` 도구 없음) — `backend:before-license`. **순서: 위의 라이선스 승인 취소를 먼저 하고, 그다음 backend 를 되돌린다.** `before-license` 에는 `confirmLicense.js` 가 없어서 승인 취소를 먼저 해야 한다. 지금 이미지는 태그를 남겨 둔 뒤 되돌린다 (다시 앞으로 올 때 빌드하지 않도록):
+
+```bash
+docker tag klassic/backend:dev klassic/backend:with-license
+```
 
 ```bash
 docker tag klassic/backend:before-license klassic/backend:dev
@@ -335,6 +339,8 @@ docker tag klassic/backend:before-license klassic/backend:dev
 ```bash
 docker compose up -d --force-recreate --no-deps --wait web admin
 ```
+
+되돌린 뒤 앞으로 가려면 `docker tag klassic/backend:with-license klassic/backend:dev` 로 태그를 되돌리고 같은 `up` 을 한다.
 
 ## CPU 전용 엔진 볼륨 시험 (2026-11-02)
 
