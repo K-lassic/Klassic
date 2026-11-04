@@ -89,10 +89,20 @@ export function gateMessage(code: string, extra: { reason?: string | null; fix?:
 export function gateFromError(e: unknown, pageNames: string[] = []): GateView {
   if (e instanceof GateError) {
     const b: ApiErrorBody = e.body;
-    const reason = resolutionReason(b) ?? b.message ?? CODES[b.code]?.message ?? null;
+    const reason = hourlyLimitReason(b) ?? resolutionReason(b) ?? b.message ?? CODES[b.code]?.message ?? null;
     return gateMessage(b.code, { reason: reason ? pagePrefix(b, pageNames) + reason : null, fix: b.fix ?? null, gate: b.gate, retryAfter: b.retry_after });
   }
   return gateMessage('INTERNAL_ERROR');
+}
+
+function hourlyLimitReason(b: ApiErrorBody): string | null {
+  if (b.code !== 'WEB_HOURLY_LIMIT') return null;
+  const cap = b.details?.cap;
+  const scope = b.details?.scope;
+  if (typeof cap !== 'number' || !Number.isInteger(cap) || cap < 1) return null;
+  if (scope === 'addr') return `같은 접속 주소에서 최근 1시간 동안 악보를 최대 ${cap}회 올릴 수 있습니다. 같은 주소를 쓰는 계정의 업로드도 함께 셉니다.`;
+  if (scope === 'account') return `이 계정은 최근 1시간 동안 악보를 최대 ${cap}회 올릴 수 있습니다.`;
+  return `최근 1시간 동안 악보를 최대 ${cap}회 올릴 수 있습니다.`;
 }
 
 /** 여러 쪽 반려의 쪽 표시 — details.page(1부터)가 없으면 빈 글 */
