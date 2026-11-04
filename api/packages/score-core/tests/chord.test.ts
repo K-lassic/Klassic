@@ -29,3 +29,18 @@ describe('화음 안의 음 하나 고치기', () => {
     expect(back.parts[0].notes.map((n) => n.pitch).sort()).toEqual([60, 63, 64]);
   });
 });
+
+it('한 MusicXML 파트의 두 보표를 따로 편집하고 내보낸다', () => {
+  const xml = CHORD.replace('</divisions>', '</divisions><staves>2</staves>')
+    .replace('</measure>', `<backup><duration>4</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><staff>2</staff></note>
+      </measure>`);
+  const doc = parseMusicXml(xml);
+  expect(doc.parts.map((p) => p.notes.map((n) => n.pitch).sort((a, b) => a - b))).toEqual([[60, 62, 64], [48]]);
+  expect(doc.parts.map((p) => p.notes[0].startTick)).toEqual([0, 0]);
+  const edited = applyOps(doc, [
+    { op: 'change_instrument', part: 0, instrument: 'gayageum' },
+    { op: 'change_instrument', part: 1, instrument: 'daegeum' },
+  ]);
+  expect(parseMusicXml(toMusicXml(edited)).parts.map((p) => p.instrument)).toEqual(['gayageum', 'daegeum']);
+});
