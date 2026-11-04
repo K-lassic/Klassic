@@ -6,8 +6,8 @@
 //     web · admin ─▶ MariaDB(db) · web ─▶ model-api(서비스 이름)
 //   v0.1.1 과 다른 점: 화면 정적 파일은 내주지 않는다 — 화면은 Nginx(#21). 음원 /soundfonts 는 Nginx 를 거쳐 여기서 내준다 (#36).
 //   /api 요청 순서 (#27): /api/health(세션 없이) → sessionMiddleware → authz(경로 → UC → 권한표) → 라우터 → 404 → errorHandler
-//   붙인 라우터: 세션 · 인증 · 권한 #27 · 요청 · 예시 #34 / 모델 상태 #35 · 편집 · 내보내기 · 악기 · 음원 #36 / 붙일 것: 관리자 API (P3)
-import express, { type Express } from 'express';
+//   붙인 라우터: 세션 · 인증 · 권한 #27 · 요청 · 예시 #34 / 모델 상태 #35 · 편집 · 내보내기 · 악기 · 음원 #36 / 관리자 API 는 createAdminApp (#100, 접속 허용 · 운영자 로그인 · 서비스 키)
+import express, { Router, type Express } from 'express';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import { currentSettings } from './config/settings.js';
@@ -26,6 +26,11 @@ import { myScoresRouter } from './web/myScores.js';
 import { sharedRouter } from './web/shared.js';
 import { apiDocsRouter } from './web/apiDocs.js';
 import { keyApplicationsRouter } from './web/keyApplications.js';
+import { networkGuard } from './admin/networkGuard.js';
+import { ProxyTrust, parseTrustList } from './lib/trustedProxy.js';
+import { parseCidrList } from './lib/cidr.js';
+import { authRouter, requireOperator } from './admin/auth.js';
+import { serviceKeyRouter } from './admin/serviceKey.js';
 
 function base(): Express {
   const app = express();
@@ -74,14 +79,32 @@ export function createWebApp(): Express {
   return app;
 }
 
-export function createAdminApp(): Express {
+/**
+ * 관리자 API (#100) — /admin 요청 순서: /admin/health(검사 앞, 컨테이너 healthcheck 용) → 접속 허용 범위(networkGuard, 밖이면 403)
+ *   → 응답 캐시 금지 → 로그인 · 로그아웃 · 내 정보(authRouter, 로그인 전에도 열림) → 운영자 로그인 검사(requireOperator) → 관리자 라우터들 → 404 → errorHandler
+ * 로그인 뒤에 붙는 라우터는 모두 protectedRouters 에 더한다 — requireOperator 가 그 앞에 있어 검사를 빼먹을 수 없다(없는 경로도 로그인 전에는 401).
+ * 붙인 라우터: 서비스 키 / 붙일 것: 계정 · 키 · 신청 · 라이선스 · 설정 · 모델 · 현황 · 작업 · 감사 · 평가 · 공유 악보 (#100 나머지)
+ */
+/** 시험만 opts 를 넣는다 — 믿을 프록시(trustedProxies) · 허용 범위(allowedCidrs). 실제 실행은 환경변수(env)를 쓴다 */
+export function createAdminApp(opts: { trustedProxies?: string; allowedCidrs?: string; proxyTrust?: ProxyTrust } = {}): Express {
   const app = base();
-  // compose healthcheck 용 — 관리자 server 는 127.0.0.1 에만 열리고(Nginx #22), 접속 허용 범위 검사는 관리자 API 이슈에서 붙인다
+  // 접속 주소는 믿을 프록시(관리자 Nginx)가 넘긴 X-Forwarded-For 에서만 읽는다 — web 용 사설망 전체 신뢰(base)를 이 앱에서는 좁힌다 (PR #167 리뷰)
+  const trust = opts.proxyTrust ?? new ProxyTrust(parseTrustList(opts.trustedProxies ?? env().ADMIN_TRUSTED_PROXIES) ?? { cidrs: [], hosts: [] });
+  app.set('trust proxy', (addr: string) => trust.isTrusted(addr));
+  void trust.refresh(true); // 시작할 때 한 번 — Nginx 가 아직 없으면 첫 요청에서 다시 풀어 본다
   app.get('/admin/health', wrap(async (_req, res) => {
     const r = await readiness();
     if (!r.ok) return sendError(res, new ApiError('SERVICE_NOT_READY', { reason: r.reason }));
     res.json({ status: 'ok', role: 'admin', setting_version: r.setting_version });
   }));
+  app.use('/admin', (req, _res, next) => { void trust.refreshIfNeeded(req.socket.remoteAddress).finally(next); }); // 처음 보는 주소이거나 유효기간이 지난 주소면 이름을 다시 푼 뒤에 req.ip 를 읽는다
+  app.use('/admin', networkGuard(opts.allowedCidrs === undefined ? undefined : parseCidrList(opts.allowedCidrs) ?? []));
+  app.use('/admin', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); }); // 키 · 계정 정보가 캐시에 남지 않게
+  app.use('/admin', authRouter);
+  const protectedRouters = Router();
+  protectedRouters.use(requireOperator);
+  protectedRouters.use(serviceKeyRouter);
+  app.use('/admin', protectedRouters);
   app.use('/admin', (_req, res) => sendError(res, new ApiError('REQUEST_NOT_FOUND')));
   app.use(errorHandler);
   return app;

@@ -919,11 +919,17 @@ paths:
       tags: [admin]
       summary: 서비스 전용 키 발급 (이전 키 폐기 · 원문은 이 응답에서 한 번만)
       description: |
-        backend → model-api 호출(`X-API-Key`)에 쓰는 키. 발급 뒤 `.env` 의 `SERVICE_API_KEY` 에 넣는다.
-        **관리자 API 가 늦어지면 이 기능만 명령줄 도구로 먼저 만든다**(#5 ※).
+        backend → model-api 호출(`X-API-Key`)에 쓰는 키. 발급 뒤 `.env` 의 `SERVICE_API_KEY` 에 넣고 web 을 다시 만든다.
+        (#100) 관리자 API 로 구현했다. 첫 시연에서 먼저 필요했던 이 기능은 명령줄 도구로 대신했고(#26 `issueServiceKey`),
+        그 도구는 관리자 화면 없이 서버에서 발급할 때를 위해 그대로 둔다. 둘이 같은 함수(`services/accessKeys.issueServiceKey`)를 쓴다.
+        화면 흐름(#101)이 아직 없어서 우선순위는 다른 관리자 API 와 같은 P3 다.
+        응답은 v0.1.1 처럼 201 `{ key_id, api_key, key_prefix, revoked_key_ids, notice }` — `api_key` 원문은 이 응답에서 한 번만 나온다.
       security: [{ admin: [] }]
-      x-priority: P1
-      responses: { "200": { $ref: "#/components/responses/AdminObject" } }
+      x-priority: P3
+      responses:
+        "201": { $ref: "#/components/responses/AdminObject" }
+        "401": { $ref: "#/components/responses/Error" }   # ADMIN_LOGIN_REQUIRED
+        "403": { $ref: "#/components/responses/Error" }   # ADMIN_NETWORK_DENIED (G5)
   /admin/applications:
     get:
       tags: [admin]
