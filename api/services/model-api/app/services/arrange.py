@@ -51,7 +51,7 @@ class Assignment:
         return DB_MODE[self.mode]
 
 
-def parse_assignment(raw: str | None) -> Assignment:
+def parse_assignment(raw: str | None, *, allow_melodic: bool = False) -> Assignment:
     """폼의 instruments(JSON 글자) → Assignment. 알 수 없는 악기 코드는 VALIDATION_ERROR(422, 2026-09-30)."""
     if raw is None or not raw.strip():
         return Assignment()
@@ -77,6 +77,10 @@ def parse_assignment(raw: str | None) -> Assignment:
             raise ApiError("VALIDATION_ERROR", details={"field": f"instruments.tracks[{i}].instrument",
                                                    "allowed": sorted(catalog)})
         part = t.get("part", i)
+        if (allow_melodic and mode == "custom" and part == "melodic"
+                and len(data["tracks"]) == 1 and not catalog[t["instrument"]].is_percussion):
+            tracks.append({"part": part, "instrument": t["instrument"], "sf2_ref": t.get("sf2_ref")})
+            continue
         if not isinstance(part, int) or isinstance(part, bool) or part < 0:
             raise ApiError("VALIDATION_ERROR", details={"field": f"instruments.tracks[{i}].part"})
         tracks.append({"part": part, "instrument": t["instrument"], "sf2_ref": t.get("sf2_ref")})
@@ -111,7 +115,11 @@ def apply_tracks(score, tracks: list[dict]) -> list[str]:
 def arrange(score, *, assignment: Assignment, codes: list[str] | None, transpose: int, volume: float) -> list[str]:
     """악기 → 조옮김 → 음량 순서로 score 를 바꾼다. 실제로 놓인 악기 코드를 돌려준다(original 이면 빈 목록)."""
     if assignment.mode == "custom":
-        used = apply_tracks(score, assignment.tracks)
+        tracks = assignment.tracks
+        if tracks and tracks[0]["part"] == "melodic":
+            tracks = [{**tracks[0], "part": i} for i, part in enumerate(score.parts)
+                      if not scoreio.is_percussion_part(part)]
+        used = apply_tracks(score, tracks)
     elif assignment.mode == "original" and codes is None:
         used = []
     else:

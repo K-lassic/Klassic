@@ -2081,7 +2081,8 @@ components:
     InstrumentAssignment:
       description: instruments 폼 필드에 넣는 JSON 문자열의 해석 규칙. mode 생략 시 tracks가 있으면 custom, 없으면 default. explicit은 custom의
         호환 이름. part 생략 시 tracks의 인덱스 사용. custom에는 tracks가 필요하다. sf2_ref는 gugak.sf2·gugak·FluidR3_GM.sf2·gm(대소문자
-        무시)만 허용한다. 이 스키마는 해석된 객체의 설명용이며 실제 전송 자료형은 string이다.
+        무시)만 허용한다. MP3 렌더링에서는 custom의 단일 트랙에 part를 melodic으로 지정해 선택한 선율 악기를
+        모든 비타악 성부에 적용할 수 있다. 이 스키마는 해석된 객체의 설명용이며 실제 전송 자료형은 string이다.
       type: object
       properties:
         mode:
@@ -2098,8 +2099,11 @@ components:
             type: object
             properties:
               part:
-                type: integer
-                minimum: 0
+                oneOf:
+                - type: integer
+                  minimum: 0
+                - type: string
+                  enum: [melodic]
               instrument:
                 type: string
               sf2_ref:

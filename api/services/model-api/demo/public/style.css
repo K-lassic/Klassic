@@ -1,2 +1,23 @@
 :root{font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif;color:#28382f;background:#f7f4ed;color-scheme:light}
 *{box-sizing:border-box}body{margin:0}header,footer{max-width:1080px;margin:auto;padding:28px 32px}.brand{color:inherit;text-decoration:none;font-weight:800;font-size:23px;letter-spacing:-1px}.brand span{font-size:12px;letter-spacing:0;font-weight:400;margin-left:14px;color:#667268}main{max-width:780px;margin:48px auto 60px;padding:0 24px}.eyebrow{font-size:12px;font-weight:700;letter-spacing:3px;color:#916348}h1{font-family:Georgia,"Batang",serif;font-size:clamp(42px,7vw,68px);font-weight:500;line-height:1.25;letter-spacing:-2px;margin:20px 0}h2{font-size:19px;margin:0 0 26px}.intro{color:#667268;line-height:1.8}.player{background:#fffdf8;border:1px solid #dedfd5;border-radius:20px;padding:32px;margin-top:36px;box-shadow:0 15px 45px #28382f08}form{display:grid;grid-template-columns:48px 1fr;gap:16px;align-items:center}label{font-size:14px;font-weight:600}select,button{font:inherit;border-radius:8px;padding:13px 16px}select{min-width:0;width:100%;border:1px solid #c9cfc6;background:white;color:inherit}button{cursor:pointer;border:0;background:#304f3e;color:white;font-weight:600}button:disabled{opacity:.5;cursor:default}#prepare{grid-column:2}#reload{background:transparent;border:1px solid #d3d8ce;color:#425346;font-size:13px;padding:8px 12px}#status{font-size:14px;line-height:1.8;min-height:30px;margin:24px 0}audio{width:100%;margin-bottom:24px}.note,footer{font-size:12px;color:#6f786f;line-height:1.9}footer{border-top:1px solid #e0e2d8}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #a97b4c;outline-offset:4px}@media(max-width:520px){main{margin-top:28px}.player{padding:24px 20px}form{grid-template-columns:1fr;gap:10px}#prepare{grid-column:1;margin-top:8px}header,footer{padding:24px}}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+.brand-name {
+  font-family: Georgia, "Batang", serif;
+  white-space: nowrap;
+}
+.brand span {
+  margin-left: 2px;
+  padding-left: 12px;
+  border-left: 1px solid #c9cfc6;
+  white-space: nowrap;
+}
