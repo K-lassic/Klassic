@@ -137,6 +137,41 @@ describe.skipIf(!HAS_DB)('접속 허용 범위 (G5)', () => {
     expect((await request(viaProxy).get('/admin/me').set('X-Forwarded-For', '203.0.113.9')).status).toBe(403); // 범위 밖
   });
 
+  // PR #167 리뷰 2차(예은) 회귀 — Nginx 가 쓰던 IP 가 다른 컨테이너에 배정된 뒤에도 이전 신뢰가 남으면, 그 컨테이너가 헤더로 허용 주소를 꾸밀 수 있다.
+  //   시험 서버에 붙는 쪽(supertest)의 연결 주소 127.0.0.1 을 "frontend 의 이전 주소"로 삼는다. 이름 풀이기와 시계는 시험이 움직인다.
+  describe('Nginx 주소가 바뀐 뒤의 신뢰 (이름 풀이 유효기간)', () => {
+    const setup = async () => {
+      const { ProxyTrust, parseTrustList, TRUST_TTL_MS } = await import('../../src/lib/trustedProxy.js');
+      let t = 0;
+      const dns = { answer: ['127.0.0.1'] as string[] | Error };
+      const trust = new ProxyTrust(parseTrustList('frontend')!, async () => { if (dns.answer instanceof Error) throw dns.answer; return dns.answer; }, 0, TRUST_TTL_MS, () => t);
+      const srv = serve(adminApp({ proxyTrust: trust, allowedCidrs: '10.0.0.0/8' }));
+      const forge = () => request(srv).get('/admin/me').set('X-Forwarded-For', '10.1.1.1'); // 허용 범위 안 주소로 꾸민 헤더
+      return { dns, forge, advance: (ms: number) => { t += ms; }, ttl: TRUST_TTL_MS };
+    };
+
+    it('frontend 의 주소가 바뀐 뒤 (유효기간이 지나면) 이전 주소에서 꾸민 헤더는 403 이다', async () => {
+      const s = await setup();
+      expect((await s.forge()).status).toBe(401); // 확인된 Nginx 주소인 동안은 헤더를 읽는다 → 범위 통과 → 로그인 전
+      s.dns.answer = ['172.30.0.11']; // frontend 가 다시 만들어져 주소가 바뀜 — 이전 주소(127.0.0.1)는 다른 컨테이너 몫
+      expect((await s.forge()).status).toBe(401); // 유효기간 안이라 아직 믿는다(최대 TTL 만큼)
+      s.advance(s.ttl);
+      const r = await s.forge(); // 이전 주소를 받은 컨테이너가 먼저 요청 — 이미 믿던 주소라고 건너뛰지 않고 다시 풀어야 한다
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe('ADMIN_NETWORK_DENIED');
+    });
+
+    it('이름 풀이가 실패하는 동안 유효기간이 지나면 그 주소의 꾸민 헤더는 403 이고, 풀이가 돌아오면 다시 읽는다', async () => {
+      const s = await setup();
+      expect((await s.forge()).status).toBe(401);
+      s.dns.answer = new Error('DNS 장애');
+      s.advance(s.ttl);
+      expect((await s.forge()).status).toBe(403); // 갱신 실패 → 만료된 주소는 되살아나지 않는다
+      s.dns.answer = ['127.0.0.1']; // 풀이가 돌아오고 같은 주소가 확인됨
+      expect((await s.forge()).status).toBe(401);
+    });
+  });
+
   it('로그인한 쿠키가 있어도 범위 밖이면 403 이고 아무것도 바뀌지 않는다', async () => {
     const agent = await operatorAgent();
     const before = await db.one<{ n: number }>("SELECT COUNT(*) AS n FROM access_key WHERE key_kind = 'service'");

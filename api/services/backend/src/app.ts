@@ -97,7 +97,7 @@ export function createAdminApp(opts: { trustedProxies?: string; allowedCidrs?: s
     if (!r.ok) return sendError(res, new ApiError('SERVICE_NOT_READY', { reason: r.reason }));
     res.json({ status: 'ok', role: 'admin', setting_version: r.setting_version });
   }));
-  app.use('/admin', (req, _res, next) => { void trust.refreshIfUnknown(req.socket.remoteAddress).finally(next); });
+  app.use('/admin', (req, _res, next) => { void trust.refreshIfNeeded(req.socket.remoteAddress).finally(next); }); // 처음 보는 주소이거나 유효기간이 지난 주소면 이름을 다시 푼 뒤에 req.ip 를 읽는다
   app.use('/admin', networkGuard(opts.allowedCidrs === undefined ? undefined : parseCidrList(opts.allowedCidrs) ?? []));
   app.use('/admin', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); }); // 키 · 계정 정보가 캐시에 남지 않게
   app.use('/admin', authRouter);
