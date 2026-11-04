@@ -1,4 +1,4 @@
-"""#25: 읽기 전용 엔진 볼륨에서 기존 런타임의 probe·모델 warmup을 검사한다.
+"""#25·#142 구조에서의 위치: tools 검사 → api 엔진 어댑터 → 읽기 전용 엔진 볼륨.
 
 서버·DB·키 없이 실행하며 설치·다운로드는 하지 않는다. 상세 결과는 stdout JSON이다.
 이 스크립트는 #29의 새 엔진 어댑터 구현을 대신하지 않는다.
@@ -50,7 +50,7 @@ async def check_engine(root: Path, name: str, timeout: float) -> dict:
     result = {"engine": name, "ok": False}
     adapter = None
     try:
-        # 기존 이미지에 있는 어댑터·별도 프로세스 실행기를 그대로 사용한다.
+        # 재구성 이미지에 있는 어댑터·별도 프로세스 실행기를 사용한다.
         from app.engines.homr import HomrEngine
         from app.engines.jeongganbo import JeongganboEngine
 

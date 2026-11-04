@@ -171,13 +171,15 @@ services:
   engine-selftest:
     <<: *engine-runtime
     profiles: [tools]
-    # 기존 Linux model-api 런타임을 검사에만 사용한다. 로컬 빌드/보유가 선행돼야 한다.
-    image: ${ENGINE_CHECK_IMAGE:-klassic/klassic-model-api:0.1.1}
+    # #142 구조에서의 위치: tools 자가 검사 → api의 model-api 이미지 → 읽기 전용 엔진 볼륨.
+    # 명시한 검사 이미지가 없으면 서비스와 같은 이미지를 사용한다. 먼저 model-api를 빌드한다.
+    image: ${ENGINE_CHECK_IMAGE:-${MODEL_API_IMAGE:-klassic/model-api:0.2.2}}
     pull_policy: never
     user: "1000:1000"
     environment:
       <<: *engine-environment
-      PYTHONPATH: /app/model-api
+      PYTHONPATH: /app/services/model-api
+      TMPDIR: /tmp
     entrypoint: [python, -B, /checks/engine_selftest.py]
     command: []
     healthcheck:
