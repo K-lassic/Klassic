@@ -199,7 +199,7 @@ paths:
                 file:
                   description: 사진이면 여러 개(같은 이름 `file` 반복, 올린 순서), PDF 면 한 개
                   type: array
-                  maxItems: 10
+                  maxItems: 30
                   items: { type: string, format: binary }
                 score_type: { $ref: "#/components/schemas/ScoreType" }
       responses:
