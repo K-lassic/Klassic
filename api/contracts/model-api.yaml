@@ -14,7 +14,7 @@ info:
     기준 gateway는 /api/v1/internal/*를 404로 차단하므로 공개 입구를 통한 내부 호출은 불가능하다.
 
     사진 업로드는 PNG·JPG(JPEG)·WEBP 여러 장(순서 유지), 또는 PDF 한 개다. PDF 여러 개·사진 혼합은 거절한다.
-    기준값: 최대 10쪽, 파일당 20MiB, 사진 짧은 변 300px 미만 거절, 650px 미만은 1000px 사본으로 인식.
+    기준값: 최대 30쪽, 파일당 20MiB, 사진 짧은 변 300px 미만 거절, 650px 미만은 1000px 사본으로 인식.
     PDF는 각 쪽을 300dpi로 처리한다. DB 처리 설정이 지정되면 용량·시간 등 설정값이 우선한다.
     MIDI·MusicXML은 /recommend·/render/* 입력으로만 받으며 /performances·/omr/*에서는 거절한다(기준 파일당 5MiB).
 
@@ -286,7 +286,7 @@ paths:
       - 내부
       summary: 웹 업로드 검사 위임 (사진·PDF, 2026-09-29)
       description: |-
-        웹 서비스가 PDF 를 접수하기 전에 부른다 — 열기(손상·암호) · 쪽수(10쪽 넘으면 UPLOAD_TOO_MANY_PAGES) · 20MB ·
+        웹 서비스가 PDF 를 접수하기 전에 부른다 — 열기(손상·암호) · 쪽수(30쪽 넘으면 UPLOAD_TOO_MANY_PAGES) · 20MB ·
         쪽마다 300dpi 로 그렸을 때의 사진 크기(300px 미만 반려, 2026-09-30 119번) · 악보 종류를 연주 API·/v1/omr 과 같은 검사기(checks/upload.py,
         pypdfium2)로 판정한다(SC-015, UC3 A7 · E2 · E9). 그림은 그리지 않고 쪽 크기로 잰다(인식 때 다시 그린다).
         통과면 쪽수·쪽마다 사진 크기를, 반려면 G1 사유 코드(UPLOAD_*) 오류를 돌려준다. 요청은 만들지 않는다.
@@ -2117,7 +2117,7 @@ components:
             contentMediaType: application/octet-stream
           type: array
           title: Score
-          description: '악보 한 곡: PDF 한 개(모든 쪽 변환) 또는 사진(PNG·JPG·WEBP) 여러 장(올린 순서) — 최대 10쪽'
+          description: '악보 한 곡: PDF 한 개(모든 쪽 변환) 또는 사진(PNG·JPG·WEBP) 여러 장(올린 순서) — 최대 30쪽'
         score_type:
           anyOf:
           - type: string
@@ -2160,7 +2160,7 @@ components:
             contentMediaType: application/octet-stream
           type: array
           title: Image
-          description: '악보 한 곡: PDF 한 개(모든 쪽을 300dpi 로 바꿔 인식) 또는 사진(PNG·JPG·WEBP) 여러 장(올린 순서) — 최대 10쪽, 파일마다 20MB
+          description: '악보 한 곡: PDF 한 개(모든 쪽을 300dpi 로 바꿔 인식) 또는 사진(PNG·JPG·WEBP) 여러 장(올린 순서) — 최대 30쪽, 파일마다 20MB
             이하, 쪽마다 사진 크기 300px 이상(650px 보다 작으면 1000px 로 키워 인식, 2026-09-30)'
         request_no:
           anyOf:
@@ -2187,7 +2187,7 @@ components:
             contentMediaType: application/octet-stream
           type: array
           title: Image
-          description: '정간보 한 곡: PDF 한 개(모든 쪽을 300dpi 로 바꿔 인식) 또는 사진 여러 장(올린 순서) — 최대 10쪽'
+          description: '정간보 한 곡: PDF 한 개(모든 쪽을 300dpi 로 바꿔 인식) 또는 사진 여러 장(올린 순서) — 최대 30쪽'
         request_no:
           anyOf:
           - type: string
@@ -2515,8 +2515,8 @@ x-error-catalog:
   UPLOAD_TOO_MANY_PAGES:
     http: 422
     gate: G1
-    message: 한 번에 10쪽까지 올릴 수 있습니다.
-    fix: 사진은 10장까지, PDF 는 10쪽까지 한 번에 올릴 수 있습니다. 나눠서 따로 올려 주십시오.
+    message: 한 번에 30쪽까지 올릴 수 있습니다.
+    fix: 사진은 30장까지, PDF 는 30쪽까지 한 번에 올릴 수 있습니다. 나눠서 따로 올려 주십시오.
   UPLOAD_UNSUPPORTED_TYPE:
     http: 415
     gate: G1

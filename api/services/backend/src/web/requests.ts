@@ -29,11 +29,11 @@ import { logger } from '../lib/logger.js';
 
 function limits() {
   const r = shared().uploadRules;
-  return { maxPages: r.max_pages ?? 10, maxBytes: Math.max(...r.user_upload_kinds.map((k) => r.kinds[k].max_bytes)) };
+  return { maxPages: r.max_pages ?? 30, maxBytes: Math.max(...r.user_upload_kinds.map((k) => r.kinds[k].max_bytes)) };
 }
 
 let upload: multer.Multer | null = null;
-/** 파일은 메모리로 받아 검사한 뒤에만 저장한다. 메모리 상한 = 한 장 상한 × 장 수 → Nginx 본문 상한(210m) 안 */
+/** 파일은 메모리로 받아 검사한 뒤에만 저장한다. 메모리 상한 = 한 장 상한 × 장 수(30) — 실제 본문은 Nginx 본문 상한(210m)이 먼저 막는다 */
 function uploader(): multer.Multer {
   const { maxPages, maxBytes } = limits();
   upload ??= multer({ storage: multer.memoryStorage(), limits: { fileSize: maxBytes, files: maxPages }, defParamCharset: 'utf8' });

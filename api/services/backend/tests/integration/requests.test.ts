@@ -90,7 +90,7 @@ describe.skipIf(!HAS_DB)('악보 올리기', () => {
     expect(big.body.error).toMatchObject({ code: 'UPLOAD_TOO_LARGE', gate: 'G1' });
     expect(await lastGate('G1')).toBe('UPLOAD_TOO_LARGE');
     let many = u.post('/api/requests').field('score_type', 'staff');
-    for (let i = 0; i < 11; i++) many = many.attach('file', makePng(400, 400), `${i}.png`);
+    for (let i = 0; i < 31; i++) many = many.attach('file', makePng(400, 400), `${i}.png`);
     const r = await many;
     expect(r.status).toBe(400);
     expect(r.body.error.code).toBe('UPLOAD_TOO_MANY_PAGES');

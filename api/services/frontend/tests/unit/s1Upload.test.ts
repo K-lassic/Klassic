@@ -45,7 +45,7 @@ describe('S1Upload', () => {
     await flushPromises();
     expect(w.get('h1').text()).toBe('국악보 사진이나 파일을 올리십시오');
     // (2026-09-30 T188 여러 쪽) SD_02 S1 올리기 도면 문구
-    expect(w.get('.page-head p').text()).toBe('악보 종류를 먼저 고른 뒤 사진 여러 장이나 PDF 한 개를 올리십시오 (한 곡, 최대 10쪽)');
+    expect(w.get('.page-head p').text()).toBe('악보 종류를 먼저 고른 뒤 사진 여러 장이나 PDF 한 개를 올리십시오 (한 곡, 최대 30쪽)');
     // (2026-09-30 황송해) 받는 형식 · 올리기 영역 첫 줄 문구
     expect(w.get('[data-test="accepted-formats"]').text()).toBe('변환 가능한 파일 형식 : PNG · JPG(JPEG) · WEBP · PDF');
     expect(w.get('.dropzone .lead').text()).toBe('파일을 여기에 끌어 놓거나 골라 주십시오');
@@ -180,7 +180,7 @@ describe('S1Upload', () => {
     expect(useRequestStore().gate).toBeNull();
     expect(w.find('[data-test="kind-chip"]').exists()).toBe(false);
     expect(w.get('[data-test="page-list"] thead').text()).toBe('순서파일사진 크기빼기');
-    expect(w.get('[data-test="page-list"] caption').text()).toContain('3/10쪽');
+    expect(w.get('[data-test="page-list"] caption').text()).toContain('3/30쪽');
     expect(rows(w).map((r) => r[0])).toEqual(['1쪽', '2쪽', '3쪽']);
     expect(rows(w).map((r) => r[1].split(' ')[0])).toEqual(['page1.png', 'page2.png', 'page3.png']);
     // 사진 크기는 브라우저가 잰다(jsdom 은 못 재서 '알 수 없음')
@@ -210,15 +210,15 @@ describe('S1Upload', () => {
     expect(type).toBe('staff');
   });
 
-  it('PDF 와 사진 섞기 · PDF 두 개 → UPLOAD_TOO_MANY_FILES, 11장 → UPLOAD_TOO_MANY_PAGES (고른 목록은 그대로)', async () => {
+  it('PDF 와 사진 섞기 · PDF 두 개 → UPLOAD_TOO_MANY_FILES, 31장 → UPLOAD_TOO_MANY_PAGES (고른 목록은 그대로)', async () => {
     const w = mountPage();
     const store = useRequestStore();
     await drop(w, [png('p1.png')]);
     await drop(w, [new File(['%PDF'], 's.pdf')]);
     expect(store.gate).toMatchObject({ code: 'UPLOAD_TOO_MANY_FILES', gate: 'G1', reason: errorCodes.gate_codes.UPLOAD_TOO_MANY_FILES.message });
     expect(rows(w).length).toBe(1);
-    await drop(w, Array.from({ length: 10 }, (_, i) => png(`q${i}.png`)));
-    expect(store.gate).toMatchObject({ code: 'UPLOAD_TOO_MANY_PAGES', reason: '한 번에 10쪽까지 올릴 수 있습니다.' });
+    await drop(w, Array.from({ length: 30 }, (_, i) => png(`q${i}.png`)));
+    expect(store.gate).toMatchObject({ code: 'UPLOAD_TOO_MANY_PAGES', reason: '한 번에 30쪽까지 올릴 수 있습니다.' });
     expect(rows(w).length).toBe(1);
     // 목록을 고치면(더하기 성공) 반려 안내가 사라진다
     await drop(w, [png('p2.png')]);

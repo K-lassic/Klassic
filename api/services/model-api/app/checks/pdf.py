@@ -6,7 +6,7 @@
 
 - 변환 도구: pypdfium2(Apache-2.0 / BSD-3, PDFium). PyMuPDF(AGPL)는 쓰지 않는다.
 - 손상됐거나 암호가 걸린 PDF → 열지 못함(UPLOAD_CORRUPTED, UC3 E2).
-- (2026-09-29 여러 쪽 결정) 한 요청 = 악보 한 곡 — 모든 쪽(최대 10쪽)을 render_dpi(기본 300)로 그린다(render_pages).
+- (2026-09-29 여러 쪽 결정) 한 요청 = 악보 한 곡 — 모든 쪽(최대 30쪽)을 render_dpi(기본 300)로 그린다(render_pages).
   사진 크기 검사는 그리기 전에 쪽 크기로 계산한다(page_sizes — 그린 그림과 같은 계산, 웹 검사 위임은 그리지 않는다).
 - PDFium 은 여러 스레드에서 동시에 부르면 안 되므로 호출은 한 줄로 세운다(_LOCK).
 """
