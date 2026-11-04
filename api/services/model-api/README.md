@@ -359,7 +359,7 @@ Docker healthcheck는 `/health`의 `status=ok`·`db=ok`와 **실제 FluidSynth �
 | `SOUNDFONTS_DIR` | `/app/shared/soundfonts` |
 | `JEONGGANBO_DEVICE` | `cpu` (현재 검증 범위) |
 | `MODEL_LOAD_TIMEOUT_SECONDS` | 엔진별 120초, 최대 600초 |
-| `MODEL_API_IMAGE` | 기본 후보 `klassic/model-api:0.2.2`. 기존 0.2.0·0.2.1 및 검증한 이전 이미지는 되돌리기용으로 보존 |
+| `MODEL_API_IMAGE` | 기본 후보 `klassic/model-api:0.2.3`(#168 업로드 30쪽). 기존 0.2.0·0.2.1·0.2.2 및 검증한 이전 이미지는 되돌리기용으로 보존 |
 
 아래는 `api/`에서 실행한다. 새 프로젝트를 쓴다면 DB 초기화 대상·볼륨을 먼저 확인한다.
 
@@ -455,7 +455,7 @@ Get-Content -Raw tests/container_smoke.py | docker compose -f ../../compose.yaml
 | 엔진 제공 | Docker 외부 볼륨 `klassic_engines`, `external: true` |
 | 소비 경로 | `ENGINES_DIR=/opt/gugak-engines`, 마운트 `read_only: true`, `nocopy: true` |
 | 아키텍처 | `linux/amd64` 고정. ARM64용으로 검증하지 않음 |
-| 검사 런타임 | #142부터 `MODEL_API_IMAGE`와 같은 재구성 이미지(기본 `klassic/model-api:0.2.2`). `ENGINE_CHECK_IMAGE`로 별도 지정 가능 |
+| 검사 런타임 | #142부터 `MODEL_API_IMAGE`와 같은 재구성 이미지(기본 `klassic/model-api:0.2.3`). `ENGINE_CHECK_IMAGE`로 별도 지정 가능 |
 | #25 당시 검증 이미지 ID (과거 기록) | `sha256:908e979868cd0c2275932488668757efe7b7f8459cae2d262a7678b8fabff749`, `klassic/klassic-model-api:0.1.1` |
 | 이미지 배포 상태 | `api/`에서 로컬 빌드한 이미지 사용. Docker Hub 게시 여부와 구분 |
 | 검사 실행 | `engine-selftest`, `tools` 프로필의 일회성 도구. uid/gid 1000, 네트워크 차단, 호스트 포트 없음 |
@@ -501,7 +501,7 @@ $env:ENGINE_CHECK_IMAGE = 'klassic/model-api:issue142-check'
 |---|---|---|
 | `ENGINES_VOLUME_NAME` | `klassic_engines` | Docker에서 확인한 실제 설치 완료 볼륨명. 없는 볼륨은 자동 생성하지 않음 |
 | `ENGINES_DIR` | `/opt/gugak-engines` | 엔진 가상환경의 절대 경로와 Python 심볼릭 링크 때문에 기존 볼륨 재사용 시 유지 |
-| `ENGINE_CHECK_IMAGE` | 비어 있으면 `MODEL_API_IMAGE`, 그마저 없으면 `klassic/model-api:0.2.2` | 로컬에 빌드한 재구성 Linux/amd64 이미지. 명시한 검사 이미지가 있으면 우선 사용 |
+| `ENGINE_CHECK_IMAGE` | 비어 있으면 `MODEL_API_IMAGE`, 그마저 없으면 `klassic/model-api:0.2.3` | 로컬에 빌드한 재구성 Linux/amd64 이미지. 명시한 검사 이미지가 있으면 우선 사용 |
 
 homr의 Python은 이미지 내부 `/usr/local/bin/python3.11`을 사용한다. 정간보의 Python 3.8.20은 볼륨 안 `.uv-python/cpython-3.8.20-linux-x86_64-gnu/`를 가리킨다. 엔진 폴더만 떼어 다른 위치에 마운트하거나 다른 Python·OS 이미지에 붙이면 실행 파일이 있어도 불러오지 못할 수 있다. Debian bookworm 계열의 기존 model-api 이미지로 검증했으며, 다른 런타임은 다시 selftest해야 한다.
 
