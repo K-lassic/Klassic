@@ -137,6 +137,28 @@ describe.skipIf(!HAS_DB)('PDF 검사 위임 (#28 model-api)', () => {
     expect(f).toMatchObject({ pdf_page_count: 3, image_short_side_px: 2126, file_no: 1 });
   });
 
+  // #168 상한(max_pages)만큼은 검사뿐 아니라 저장까지 된다 — DB CHECK 제약이 10 에 묶여 11쪽부터 500 이 났던 것
+  it('규칙의 max_pages 만큼(PDF 30쪽 · 사진 30장) 접수까지 되고, model-api 가 쓰는 쪽 행도 그 번호까지 들어간다', async () => {
+    const { shared } = await import('../../src/config/shared.js');
+    const max = shared().uploadRules.max_pages!;
+    fake.on('post', '/v1/internal/upload-check', (_q, s) => { s.json({ ok: true, kind: 'pdf', short_edge_px: 2126, pdf_page_count: max, page_count: max, pages: [] }); });
+    const u = await loggedInAgent(app, 'maxpdf');
+    const pdf = await u.post('/api/requests').field('score_type', 'staff').attach('file', PDF, 'score.pdf');
+    expect(pdf.status).toBe(202);
+    expect(pdf.body).toMatchObject({ pdf_page_count: max, page_count: max });
+    const id = await h.requestIdOf(pdf.body.id);
+    await db.exec(`INSERT INTO request_page (request_id, page_no, file_no, source, outcome) VALUES (?, ?, 1, 'pdf_page', 'pending')`, [id, max]);
+
+    const v = await loggedInAgent(app, 'maxphoto');
+    let photos = v.post('/api/requests').field('score_type', 'staff');
+    for (let i = 0; i < max; i++) photos = photos.attach('file', makePng(400, 400), `${i}.png`);
+    const r = await photos;
+    expect(r.status).toBe(202);
+    const f = await db.one<{ n: number; last: number }>(
+      'SELECT COUNT(*) AS n, MAX(u.file_no) AS last FROM upload_file u JOIN score_request r USING (request_id) WHERE r.request_no = ?', [r.body.id]);
+    expect(f).toMatchObject({ n: max, last: max });
+  });
+
   it('쪽별 상태 · 일부 쪽 실패 안내 (model-api 가 적은 request_page 를 읽는다)', async () => {
     const u = await loggedInAgent(app, 'pdf2');
     const up = await u.post('/api/requests').field('score_type', 'staff').attach('file', PDF, 'score.pdf');
