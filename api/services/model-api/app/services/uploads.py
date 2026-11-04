@@ -5,7 +5,7 @@
 
 2026-09-29(사진·PDF 입력): 사용자 업로드 창구는 USER_UPLOAD 로 부른다. 원본(data)은 PDF 그대로 저장한다.
 2026-09-29(여러 쪽 — 황송해 결정): 한 요청 = 악보 한 곡 — PDF 한 개(모든 쪽을 PNG 로) 또는 사진 여러 장(올린 순서),
-최대 10쪽. 검사가 돌려준 쪽 목록(pages)을 쪽마다 인식한다(services/recognize.py). 일부 쪽을 못 읽으면
+최대 30쪽(upload-rules.json max_pages). 검사가 돌려준 쪽 목록(pages)을 쪽마다 인식한다(services/recognize.py). 일부 쪽을 못 읽으면
 안내 PAGES_PARTIAL "N쪽 중 M쪽 변환했어요 (못 읽은 쪽: 3·7쪽)"(pages_notice). 'PDF 첫 쪽만' 안내는 더 내지 않는다.
 """
 
@@ -82,6 +82,11 @@ def page_inputs(checked: CheckedUpload, paths: list[Path]) -> list:
             for p, path in zip(checked.pages, paths, strict=True)]
 
 
+def max_files_for(rules: dict) -> int:
+    """사용자 업로드에서 받는 파일 수 상한 — 앱이 읽은 upload-rules.json 의 max_pages."""
+    return int(rules.get("max_pages", 30))
+
+
 def page_rows_notice(rows: list[dict]) -> dict | None:
     """request_page 행(page_no · outcome)으로 부분 실패 안내를 만든다(상태 조회용). 아직 처리 중인 쪽이 있으면 None."""
     if len(rows) <= 1 or any(r["outcome"] == "pending" for r in rows):
@@ -90,7 +95,8 @@ def page_rows_notice(rows: list[dict]) -> dict | None:
     return pages_notice(len(rows), failed)
 
 
-async def read_files(files: list[UploadFile] | None, *, max_bytes=20 * 1024 * 1024, max_files=10) -> list[tuple[str, bytes]]:
+async def read_files(files: list[UploadFile] | None, *, max_bytes=20 * 1024 * 1024, max_files=30) -> list[tuple[str, bytes]]:
+    # (2026-11-04 황송해 #168) 사용자 업로드는 부르는 쪽이 upload-rules.json max_pages 를 넘긴다(max_files_for) — 10 으로 박아 두면 11장째에서 막혔다
     if len(files or []) > max_files:
         raise ApiError("UPLOAD_TOO_MANY_FILES", details={"max_files": max_files})
     out = []
