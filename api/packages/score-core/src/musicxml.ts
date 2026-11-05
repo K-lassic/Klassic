@@ -202,7 +202,10 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
   let time: ScoreDoc['timeSignature'] | undefined;
   let fifths: number | undefined;
 
-  for (const pe of children(root, 'part')) {
+  const xmlParts = children(root, 'part');
+  const partIds = new Set(xmlParts.map((part) => part.attrs.id));
+  const additionalStaves: Part[] = [];
+  for (const pe of xmlParts) {
     const id = pe.attrs.id;
     const meta = metas.get(id) ?? { name: id, program: null, unpitched: new Map(), percussion: false };
     let divisions = 1;
@@ -211,7 +214,8 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
     let sawUnpitched = false;
     let percClef = false;
     const notes: Note[] = [];
-    const openTies = new Map<number, Note>();
+    const openTies = new Map<string, Note>();
+    const noteStaves = new Map<Note, number>();
 
     for (const m of children(pe, 'measure')) {
       let pos = 0;                               // 마디 안 위치(틱)
@@ -292,15 +296,18 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
             const tieStop = ties.includes('stop');
             const tieStart = ties.includes('start');
 
-            const open = openTies.get(pitch);
+            const staff = num(childText(el, 'staff')) ?? 1;
+            const tieKey = `${staff}:${pitch}`;
+            const open = openTies.get(tieKey);
             if (tieStop && open && Math.abs(open.startTick + open.durationTicks - absStart) <= 1) {
               open.durationTicks = absStart + dur - open.startTick;
-              if (!tieStart) openTies.delete(pitch);
+              if (!tieStart) openTies.delete(tieKey);
               break;
             }
             const n: Note = { id: '', startTick: absStart, durationTicks: dur, pitch, velocity };
             notes.push(n);
-            if (tieStart) openTies.set(pitch, n); else openTies.delete(pitch);
+            noteStaves.set(n, staff);
+            if (tieStart) openTies.set(tieKey, n); else openTies.delete(tieKey);
             break;
           }
           default: break;
@@ -312,8 +319,25 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
     }
 
     sortNotes(notes).forEach((n, i) => { n.id = noteId(id, i); });
-    doc.parts.push(buildPart(id, meta, notes, meta.percussion || sawUnpitched || percClef, catalog));
+    const percussion = meta.percussion || sawUnpitched || percClef;
+    const byStaff = new Map<number, Note[]>();
+    for (const note of notes) {
+      const staff = noteStaves.get(note) ?? 1;
+      const staffNotes = byStaff.get(staff) ?? [];
+      staffNotes.push(note);
+      byStaff.set(staff, staffNotes);
+    }
+    const [firstStaff, ...otherStaves] = [...byStaff.keys()].sort((a, b) => a - b);
+    doc.parts.push(buildPart(id, meta, firstStaff === undefined ? notes : byStaff.get(firstStaff)!, percussion, catalog));
+    // 기존 MusicXML 파트 번호와 음표 ID를 유지하고 새 보표만 뒤에 추가한다.
+    for (const staff of otherStaves) {
+      let staffId = `${id}-staff-${staff}`;
+      while (partIds.has(staffId)) staffId += '-';
+      partIds.add(staffId);
+      additionalStaves.push(buildPart(staffId, meta, byStaff.get(staff)!, percussion, catalog));
+    }
   }
+  doc.parts.push(...additionalStaves);
 
   doc.tempoBpm = Math.round((tempo ?? 120) * 100) / 100;
   doc.timeSignature = time ?? { beats: 4, beatType: 4 };
