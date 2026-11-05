@@ -104,7 +104,7 @@ describe.skipIf(!HAS_DB)('인식', () => {
 });
 
 describe.skipIf(!HAS_DB)('대체 결과', () => {
-  afterEach(async () => { await h.setSettings(BASE); });
+  afterEach(async () => { vi.restoreAllMocks(); await h.setSettings(BASE); });
 
   it.each([
     ['NO_SCORE_STRUCTURE', 'NO_SCORE_STRUCTURE'],
@@ -171,7 +171,7 @@ describe.skipIf(!HAS_DB)('대체 결과', () => {
 });
 
 describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
-  afterEach(async () => { await h.setSettings(BASE); });
+  afterEach(async () => { vi.restoreAllMocks(); await h.setSettings(BASE); });
 
   /** 다른 종류 같다고 답하는 model-api — 처리 작업 행은 model-api 가 적는다 */
   const mismatchOnce = () => {
@@ -201,6 +201,7 @@ describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
     const u = await loggedInAgent(app, 't2');
     const no = await upload(u);
     const before = await asking(u, no);
+    advanceMonotonic(175_000); // 첫 처리 마감 직전에도 재인식에는 새 처리 시간이 주어진다
     // 서버 PC 시계가 수십 ms 뒤로 밀려도 비교가 틀리지 않을 만큼 기다린다 (#105 — 60ms 밀린 것을 봤다)
     await new Promise((r) => setTimeout(r, 300));
     const r = await u.post(`/api/requests/${no}/type-confirmation`).send({ change_to: 'jeongganbo' });
@@ -208,7 +209,9 @@ describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
     expect(new Date(r.body.deadline_at).getTime()).toBeGreaterThan(new Date(before.deadline_at).getTime());
     const done = await finished(u, no);
     expect(done).toMatchObject({ status: 'completed', score_type: 'jeongganbo', fallback: false });
-    expect(fake.calls.filter((c) => c.path === 'POST /v1/omr/jeongganbo').length).toBe(1);
+    const calls = fake.calls.filter((c) => c.path === 'POST /v1/omr/jeongganbo');
+    expect(calls).toHaveLength(1);
+    expect(new Date(calls[0].deadline!).getTime() - Date.now()).toBeGreaterThan(170_000);
   });
 
   it('답이 없으면 마감에 고른 종류 결과로 끝낸다 (감시)', async () => {
@@ -309,10 +312,14 @@ describe.skipIf(!HAS_DB)('벽시계가 튀어도 마감은 그대로 (#105)', ()
     fake.calls.length = 0;
     fake.on('post', '/v1/omr/staff', ok);
     const u = await loggedInAgent(app, 'c4');
+    const jumpedWallTime = Date.now() + 3_600_000;
+    vi.spyOn(Date, 'now').mockReturnValue(jumpedWallTime);
     const no = await upload(u);
     await finished(u, no);
-    const left = new Date(fake.calls.at(-1)!.deadline!).getTime() - Date.now();
-    expect(left).toBeGreaterThan(0);
+    const call = fake.calls.find((c) => c.path === 'POST /v1/omr/staff' && c.fields.request_no === no);
+    expect(call?.deadline).toBeDefined();
+    const left = new Date(call!.deadline!).getTime() - jumpedWallTime;
+    expect(left).toBeGreaterThan(170_000);
     expect(left).toBeLessThanOrEqual(180_000);
   });
 });

@@ -61,19 +61,14 @@ const phaseStarts = new Map<string, number>();
  * 그만큼 거슬러 올라간 값으로 기록하고, 그 뒤로는 벽시계를 다시 읽지 않는다 (#105).
  * DB 시각이 미래라 경과가 음수면 0 으로 본다.
  */
-function phaseStart(requestId: number, phase: 'wait' | 'run', elapsedMs: number | null): number {
+function phaseStart(requestId: number, phase: 'wait' | 'run', elapsedMs: number | null, refresh = false): number {
   const key = `${requestId}:${phase}`;
   let t = phaseStarts.get(key);
-  if (t === undefined) {
+  if (refresh || t === undefined) {
     t = monotonicNowMs() - Math.max(0, Math.round(Number(elapsedMs) || 0));
     phaseStarts.set(key, t);
   }
   return t;
-}
-
-function forgetPhases(requestId: number): void {
-  phaseStarts.delete(`${requestId}:wait`);
-  phaseStarts.delete(`${requestId}:run`);
 }
 
 /** DB 가 같은 시각 기준으로 잰 경과 시간(ms) — 두 시각의 차이만 쓰고, 지금 시각 자체는 가져오지 않는다 */
@@ -82,7 +77,6 @@ const QUEUE_ENDED_SQL = `(SELECT t.ended_at FROM stage_timing t WHERE t.request_
 
 /**
  * 요청의 마감(밀리초, 벽시계) — 화면(deadline_at) 표시 전용이다. 감시 · 대기 상한 판단에는 쓰지 않는다 (#105).
- * 처리를 시작했으면 그때 + 제한 × 쪽 수 (+ 여유), 아니면 대기 상한(접수 + 제한 × 쪽 수). 줄에서 기다린 시간은 처리 시간에서 깎지 않는다.
  * 처리를 시작했으면 그때 + 제한 × 쪽 수 (+ 여유), 아니면 대기 상한(접수 + 제한 × 쪽 수). 줄에서 기다린 시간은 처리 시간에서 깎지 않는다.
  */
 export function requestDeadlineMs(receivedAt: Date, startedAt: Date | null, timeoutSeconds: number | null,
@@ -99,10 +93,10 @@ async function limitsOf(requestId: number): Promise<{ waitUntil: number; limitMs
             (SELECT ${ELAPSED_MS_SQL('t.ended_at')} FROM stage_timing t WHERE t.request_id = r.request_id AND t.stage_code = 'queue' AND t.ended_at IS NOT NULL) AS run_ms
        FROM score_request r WHERE r.request_id = ?`, [requestId]);
   if (!r) throw new Error(`요청 없음: ${requestId}`);
-  const limitMs = (await timeoutForVersion(r.setting_version_id)) * 1000 * Math.max(1, Number(r.page_count) || 1);
-  // 이미 처리를 시작했던 요청(재시작 · 재인식)은 그 시작부터 — 감시(watchdogTick)와 같은 기준. 모두 단조 시계 값
-  const startedMono = r.run_ms === null ? null : phaseStart(requestId, 'run', r.run_ms);
-  return { waitUntil: (startedMono ?? phaseStart(requestId, 'wait', r.waited_ms)) + limitMs, limitMs, startedMono };
+  const limitMs = limitMsOf(await timeoutForVersion(r.setting_version_id), r.page_count);
+  // 다시 대기열에 넣을 때는 감시가 남긴 이전 단계 값 대신 현재 DB 기록을 기준으로 삼는다 (#105).
+  const startedMono = r.run_ms === null ? null : phaseStart(requestId, 'run', r.run_ms, true);
+  return { waitUntil: (startedMono ?? phaseStart(requestId, 'wait', r.waited_ms, true)) + limitMs, limitMs, startedMono };
 }
 
 /** 요청을 대기열에 넣는다. 대기 시간을 재기 시작한다 */
@@ -110,7 +104,6 @@ export async function enqueueRecognition(requestId: number): Promise<void> {
   const r = await one<{ request_no: string; chosen_score_type: 'staff' | 'jeongganbo' }>(
     'SELECT request_no, chosen_score_type FROM score_request WHERE request_id = ?', [requestId]);
   if (!r) return;
-  forgetPhases(requestId); // 다시 줄을 서는 요청은 DB 의 현재 기록으로 단계를 새로 잰다
   const { waitUntil, limitMs, startedMono } = await limitsOf(requestId);
   await exec("UPDATE score_request SET status = 'queued' WHERE request_id = ? AND status = 'received'", [requestId]);
   await exec(
