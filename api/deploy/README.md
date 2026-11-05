@@ -578,6 +578,61 @@ docker run --rm --network none --read-only --tmpfs /tmp \
 
 **정리:** 컨테이너 · 네트워크와 `klassic-standalone-test_*` 볼륨 3개는 지웠다. 남은 것 — 빈 익명 볼륨 2개, 이미지 `*:issue144` 5개, 새로 설치한 엔진 볼륨 `klassic_issue144_engines` (6.0GB, 서버 전환이나 #141 시험에 다시 쓸 수 있어 남김).
 
+## homr 작업자 2개 시험 · 첫 쪽 미리보기 (2026-11-04)
+
+여러 쪽 악보는 쪽마다 차례로 읽는다 (homr 상주 작업자 1개). 작업자를 2개로 늘려 쪽을 동시에 읽으면 빨라지는지 실제로 쟀다. **빨라지지 않아서 늘리지 않았다.** 그 대신 먼저 변환된 쪽을 전체 결과 전에 화면에 보이도록 바꿨다.
+
+**측정 구성**
+
+| 항목 | 값 |
+|---|---|
+| PC | 노트북 (Ryzen 7 3700U · Docker **4코어** · 메모리 3.83GiB + 스왑 2GiB · GPU 없음). **서버 PC 측정값이 아니다** — 서버 PC 도 Docker 4코어(16GB) |
+| 방법 | 실행 중인 model-api(`0.2.3`, `mem_limit` 4g) 컨테이너 안에서 homr 가상환경 파이썬으로 `homr_runner.py` 를 따로 띄워 같은 4쪽을 인식. 0.1초마다 작업자 RSS + 스왑, cgroup `memory.current` · `swap.current`, `cpu.stat`, `/proc/vmstat` 스왑 입출력 기록 |
+| 입력 | 오선보 4쪽 — 아리랑 세마치 · 미뉴에트 (`services/backend/assets/examples`) · `ok_staff.png` (`shared/fixtures/upload`) · 아리랑 98 1000px (`proto_type` 예시) |
+| 비교 | ① 작업자 1개가 차례로 (지금 방식) ② 작업자 2개가 동시에 ③ ②에 작업자마다 onnxruntime 스레드 2개 제한 (homr 코드는 고치지 않고 `InferenceSession` 기본값만 바꾼 측정용 감싸기) |
+
+**결과** — 4쪽 모두 정상 인식, OOM 0건
+
+| 구성 | 4쪽 시간 | ① 대비 | CPU 평균 | homr 작업자 최대 (RSS+스왑) | 스왑 내보냄 |
+|---|---|---|---|---|---|
+| ① 작업자 1개 · 차례로 | 123.8초 · 132.4초 (2회) | 기준 | 3.3코어 | 1.72GB | 9MB |
+| ② 작업자 2개 · 동시 | **164.1초 · 164.0초** (2회) | **약 32% 느림** | 2.9코어 | **3.09GB** (1개당 약 1.6GB) | 428MB |
+| ③ 작업자 2개 · 스레드 2개씩 | 117.2초 | 약 5% 빠름 | 3.0코어 | 3.07GB | 559MB |
+
+- **CPU 가 먼저 막힌다.** 작업자 1개가 이미 4코어 중 3.3코어를 쓴다. onnxruntime 은 코어 수만큼 스레드를 쓰므로 2개면 4코어에 스레드 8개가 겹친다 — 동시에 읽는 쪽 하나가 30초 안팎에서 65~95초로 늘었다. 스레드를 나눠도 5% 남짓이다.
+- **메모리도 한도를 넘는다.** homr 작업자는 대기 약 0.8GB, 인식 중 1개당 약 1.6GB. 대기 중 컨테이너에서 homr 를 뺀 나머지가 약 1.44GB 라서, 2개가 동시에 읽으면 약 1.44 + 2 × 1.6 ≈ **4.6GB** 로 `mem_limit` 4g 를 넘는다. 렌더링(6건 동시 3.35GiB)이 겹치면 더 커진다.
+- 측정 때 운영 homr 작업자(대기 0.8GB)가 따로 떠 있어 cgroup 합계(최대 RAM 3.37GB + 스왑 → 5.06GB)는 실제 2개 구성보다 그만큼 크다. 위 4.6GB 는 그 몫을 뺀 추정이다. 이 PC 는 VM 메모리가 작아 ②③ 에 스왑이 섞였지만, 스왑이 없던 ① 에서 이미 CPU 가 3.3코어로 차 있어 결론은 같다.
+- 다시 볼 조건: Docker 에 6~8코어를 배정할 수 있을 때 작업자 2개 · 스레드를 코어 절반씩으로 다시 잰다. 그때는 `mem_limit` 도 약 6g 가 필요하다.
+
+**바꾼 것 — 첫 쪽 미리보기**
+
+```text
+model-api  쪽마다 끝나면 먼저 변환된 쪽 하나를 메모리에 둠 (웹 요청 · 2쪽 이상만, 끝나면 지움)
+           └ GET /v1/internal/omr/preview/{request_no}  서비스 키 전용 · 공개 gateway 는 막힘
+backend    /v1/omr/* 응답을 기다리는 동안 3초마다 위 경로를 읽어 받으면 멈춤 (메모리, 다시 켜지면 사라짐)
+           └ 상태 RequestStatus.preview · GET /api/requests/{no}/preview (없으면 409 no_preview)
+frontend   변환 중 화면에 "3쪽 중 1쪽 읽음" + 먼저 변환된 쪽 악보 · 연주 막대 · 악기 바꾸기 (2026-11-05, #181)
+           └ 바꾼 악기는 같은 요청의 편집 기록(성부 번호)에 남아 전체 악보에 이어진다 · 3단계 이동 · 저장은 전체 결과 뒤
+```
+
+- DB · 파일 · 마이그레이션은 없다. 미리보기를 못 받아도 전체 결과는 원래대로 나온다.
+- 미리보기를 물을 때마다 model-api `api_call_log` 에 한 줄 남는다 (3초 간격, 받으면 멈춤 — 2쪽 이상 요청 하나에 첫 쪽 시간 ÷ 3 줄 안팎).
+
+**전체 흐름 확인** (같은 노트북, `klassic/model-api:0.2.4-preview` · `klassic/backend:preview` · `klassic/frontend:preview`, 컨테이너 이미지 ID 대조 일치)
+
+| 확인 | 결과 |
+|---|---|
+| 3쪽 사진 올리기 (아리랑 세마치 · 미뉴에트 · 아리랑 98) | **48초**에 상태 `converting` · `preview {page_no:1, page_count:3}` · 쪽 상태 `converted, pending, pending` → 미리보기 MusicXML 20,365B |
+| 전체 결과 | **119초** `completed` · 대체 아님 · 3쪽 모두 `converted` · MusicXML 72,578B · `preview` null |
+| 끝난 뒤 미리보기 | 409 |
+| 시험 | model-api pytest 332개 · ruff · backend vitest 194개 (시험용 DB 프로젝트 `klassic-api-test`) · frontend vue-tsc · vitest 298개 통과 |
+
+사용자는 3쪽 요청에서 결과 악보를 처음 보기까지 119초 → 48초로 기다린다 (전체 완료 시간은 같다).
+
+**시험하지 않은 것:** 서버 PC · 정간보 여러 쪽 실제 엔진 · 브라우저 화면 눈으로 확인 · 종류 확인 질문과 미리보기가 겹치는 경우의 실제 엔진 흐름.
+
+**정리:** 측정 스크립트와 `/tmp/bench` 는 지웠다. 측정 때문에 model-api 스왑이 0.72GB → 1.7GB 로 늘었으나 컨테이너를 다시 만들며 풀렸다. 미리보기 브랜치는 #168(30쪽) 병합 전 main 에서 갈라져, 확인 뒤 원래 이미지로 되돌렸다 — `MODEL_API_IMAGE=klassic/model-api:0.2.3 docker compose up -d --no-deps web frontend model-api` (`APP_TAG` 없이 = `dev`), 컨테이너 이미지 ID 대조 일치. 미리보기 이미지 `*:preview` · `model-api:0.2.4-preview` 는 지우지 않았다 (병합 뒤 판본 태그로 다시 빌드한다). 시험 계정 `preview-test-*@example.com` 1개가 개발 DB 에 남아 있다.
+
 ## 백업 · 복원 (#97)
 
 **자동으로 돌지 않는다.** 사람이 정한 때 실행한다. 권장 시점: 발표 리허설 전 · 발표 직전 · 마이그레이션이나 큰 변경 전.
