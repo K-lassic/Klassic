@@ -11,6 +11,12 @@ const STATIC = new Map([
   ['/demo/', ['index.html', 'text/html; charset=utf-8']],
   ['/demo/app.js', ['app.js', 'text/javascript; charset=utf-8']],
   ['/demo/style.css', ['style.css', 'text/css; charset=utf-8']],
+  ['/demo2/', ['demo2/index.html', 'text/html; charset=utf-8']],
+  ['/demo2/app.js', ['demo2/app.js', 'text/javascript; charset=utf-8']],
+  ['/demo2/style.css', ['demo2/style.css', 'text/css; charset=utf-8']],
+  ...['ajaeng', 'buk', 'daegeum', 'gayageum', 'geomungo', 'haegeum', 'janggu', 'piri'].map(
+    (name) => [`/demo2/img/${name}.jpg`, [`demo2/img/${name}.jpg`, 'image/jpeg']],
+  ),
 ]);
 const HEADERS = {
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
@@ -82,7 +88,10 @@ export function createDemo({ apiBase, apiKey, fetchImpl = fetch, now = Date.now,
         const [scores, instruments] = await Promise.all([json('/v1/shared-scores?sort=likes&limit=50'), json('/v1/instruments')]);
         if (!Array.isArray(scores.items) || !Array.isArray(instruments.items)) throw new Failure(502, 'API_INVALID', '목록을 읽지 못했습니다.');
         const body = {
-          scores: scores.items.filter((s) => SHARE.test(s.share_no)).map((s) => ({ share_no: s.share_no, title: redact(s.title), score_type: s.score_type })),
+          scores: scores.items.filter((s) => SHARE.test(s.share_no)).map((s) => ({
+            share_no: s.share_no, title: redact(s.title), score_type: s.score_type,
+            likes: Number(s.likes) || 0, example: s.example === true,
+          })),
           instruments: instruments.items.filter((i) => i.is_gugak && !i.is_percussion).map((i) => ({ code: i.code, name: redact(i.name) })),
         };
         listCache = { at: now(), body };
@@ -105,13 +114,13 @@ export function createDemo({ apiBase, apiKey, fetchImpl = fetch, now = Date.now,
         if (parts > 64) throw new Failure(502, 'SCORE_TOO_COMPLEX', '성부 수가 너무 많아 재생할 수 없습니다.');
         const form = new FormData();
         form.append('score', new Blob([score.musicxml], { type: 'application/vnd.recordare.musicxml+xml' }), 'score.musicxml');
-        // 악기 선택은 첫 선율(0번 성부)만 바꾼다. 장구 등 나머지 성부는 원래 악기·장단을 유지한다.
-        form.append('instruments', JSON.stringify({ mode: 'custom', tracks: [{ part: 0, instrument }] }));
+        // 렌더러가 읽은 모든 선율 성부에 적용하고 기존 타악 성부는 유지한다.
+        form.append('instruments', JSON.stringify({ mode: 'custom', tracks: [{ part: 'melodic', instrument }] }));
         const audio = await upstream('/v1/render/mp3', { method: 'POST', body: form }, 20 * 1024 * 1024);
         if (audio.type === 'application/json') {
           let body;
           try { body = JSON.parse(audio.data); } catch { /* 아래 공통 응답으로 처리한다. */ }
-          if (body?.mp3_withheld) throw new Failure(409, 'MP3_WITHHELD', '음원 이용 조건 확인 전이라 외부 MP3 재생을 제공하지 않습니다.');
+          if (body?.mp3_withheld) throw new Failure(409, 'MP3_WITHHELD', '운영자가 음원과 MP3 변환 도구의 이용 조건을 확인한 뒤 재생할 수 있습니다.');
         }
         if (audio.type !== 'audio/mpeg' || !audio.data.length) throw new Failure(502, 'API_INVALID', 'MP3를 만들지 못했습니다.');
         return audio.data;
@@ -131,15 +140,19 @@ export function createDemo({ apiBase, apiKey, fetchImpl = fetch, now = Date.now,
       const url = new URL(req.url ?? '/', 'http://demo');
       if (!['GET', 'HEAD'].includes(req.method)) return send(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } }, { Allow: 'GET, HEAD' });
       if (url.pathname === '/health') return send(res, 200, { status: 'ok' });
-      if (url.pathname === '/demo') return send(res, 302, '', { Location: '/demo/' });
+      if (url.pathname === '/demo' || url.pathname === '/demo2') {
+        return send(res, 302, '', { Location: `${url.pathname}/` });
+      }
       if (STATIC.has(url.pathname)) {
         const [file, type] = STATIC.get(url.pathname);
         const data = await readFile(resolve(HERE, 'public', file));
         return send(res, 200, req.method === 'HEAD' ? undefined : data, { 'Content-Type': type });
       }
       if (req.method !== 'GET') return send(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } });
-      if (url.pathname === '/demo/api/music') return send(res, 200, await music());
-      if (url.pathname === '/demo/api/bgm') {
+      if (url.pathname === '/demo/api/music' || url.pathname === '/demo2/api/music') {
+        return send(res, 200, await music());
+      }
+      if (url.pathname === '/demo/api/bgm' || url.pathname === '/demo2/api/bgm') {
         const share = url.searchParams.get('share') ?? '', instrument = url.searchParams.get('inst') ?? '';
         if (!SHARE.test(share) || [...url.searchParams.keys()].some((k) => !['share', 'inst'].includes(k))) {
           throw new Failure(400, 'BAD_SELECTION', '곡과 악기를 골라 주세요.');

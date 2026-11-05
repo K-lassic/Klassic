@@ -48,6 +48,8 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 켜기 · 끄기는 PR #131 병합 뒤 `api/` 에서 `docker compose --profile demo up -d demo` · `docker compose stop demo`. Nginx 는 다시 띄우지 않아도 된다. 남은 확인: 실제 demo 서버 · 외부 키 · Funnel 브라우저 재생 (#49).
 
+데모의 전체 선율 악기 지정(`part: "melodic"`)을 배포할 때는 `model-api`를 먼저 갱신하고 healthy를 확인한 다음 데모를 갱신한다. 구버전 모델 API는 새 데모의 요청에 422를 반환한다. 되돌릴 때는 이전 데모를 먼저 올리고 그다음 이전 `model-api`로 되돌린다. `/demo2/` 경로를 추가하거나 되돌릴 때는 Nginx 설정도 다시 읽힌다.
+
 - 도메인 없이 `*.ts.net` 주소와 HTTPS 인증서를 받는다. 공유기 포트를 열지 않는다.
 - **Tailscale 은 Windows 앱(서비스)으로 돌린다** (#9 결정). 컨테이너로 돌리지 않으므로 인증 키(`TS_AUTHKEY`)가 필요 없다 — 로그인은 앱에서 사람이 한다.
 - 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(proto_type 9503 또는 api/ 9603)이고, 관리자 · 내부 포트(26101 · 26201 · 9523 · 9543 · 3306)는 스크립트가 거부한다.

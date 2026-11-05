@@ -25,7 +25,9 @@ docker compose --profile demo up -d model-api demo
 docker compose -f compose.yaml -f services/model-api/demo/compose.local.yaml --profile demo up -d model-api demo
 ```
 
-주소는 `http://127.0.0.1:9733/demo/`이며 외부에 포트를 열지 않는다. 실제 서버 적용은 Nginx 연결·외부 키·이용 조건을 담당자와 맞춘 뒤 진행한다.
+기본 미리보기 주소는 `http://127.0.0.1:9733/demo/`(한 곡)와 `http://127.0.0.1:9733/demo2/`(국악기 이야기)이며 로컬에서만 접근할 수 있다. 포트는 `DEMO_PREVIEW_PORT`로 지정할 수 있다.
+
+`/demo2/`는 프로토타입의 국악기 소개 화면과 사진 출처를 복원한 경로다. 두 화면은 같은 데모 서버에서 곡 목록과 MP3를 받는다. 실제 서버에는 데모와 모델 API를 함께 업데이트하고, Nginx 설정을 다시 읽힌 뒤 두 경로를 확인한다.
 
 ## 동작·보호
 
