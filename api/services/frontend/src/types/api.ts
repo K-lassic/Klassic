@@ -53,7 +53,12 @@ export interface RequestStatus {
   /** 일부 쪽만 못 읽었으면 "N쪽 중 M쪽 변환했어요 (못 읽은 쪽: 3·7쪽)" (status_codes PAGES_PARTIAL).
    *  ~~여러 쪽 PDF: "PDF 첫 쪽만 변환했어요"(PDF_FIRST_PAGE_ONLY)~~ — 2026-09-29 여러 쪽 결정으로 더 오지 않는다 */
   notice?: { code: string; message: string; pages: number; converted?: number; failed_pages?: number[] } | null;
+  /** (2026-11-04, #181) 여러 쪽을 읽는 동안 먼저 변환된 쪽 — 있으면 GET /api/requests/{id}/preview 로 그 쪽 악보를 받는다 */
+  preview?: { page_no: number; page_count: number } | null;
 }
+
+/** GET /api/requests/{id}/preview — 먼저 변환된 쪽 악보(화면 미리보기용, 편집 · 연주에는 쓰지 않는다) */
+export interface PreviewResponse { page_no: number; page_count: number; musicxml: string }
 
 /** 쪽별 상태 (2026-09-29 여러 쪽 — INTERFACES §4 PageStatus) */
 export interface PageStatus {

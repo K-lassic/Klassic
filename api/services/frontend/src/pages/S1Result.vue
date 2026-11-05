@@ -18,7 +18,7 @@ import { useInstrumentStore } from '@/stores/instruments';
 import { statusText } from '@/i18n/gateMessages';
 import { applyDefaultEnsemble, ensembleLabel, type InstrumentChoice } from '@/lib/ensemble';
 import { DEFAULT_MELODY, DEFAULT_PERCUSSION, instrumentName } from '@/lib/instruments';
-import { applyOps } from '@/lib/scoreCore';
+import { applyOps, parseMusicXml } from '@/lib/scoreCore';
 import { LIMITS } from '@/lib/uploadKind';
 import { judgmentReasons, loadAccepted, measureCount, needsJudgment, saveAccepted } from '@/lib/judgment';
 import { useEditorStore } from '@/stores/editor';
@@ -90,19 +90,37 @@ async function askFallback() {
 // 직행인데 음표가 없음 — 대체 없이 결과는 그대로(SD_03 §18 #8)
 const noNotes = computed(() => !!req.score && s.value?.route === 'direct' && req.score.scoredoc.parts.every((p) => p.notes.length === 0));
 
+// (2026-11-04 황송해, #181) 여러 쪽은 쪽마다 차례로 읽어 오래 걸린다 — 읽은 쪽 수와, 먼저 변환된 쪽 악보를 전체 결과 전에 보인다.
+// 4코어 서버에서 쪽을 동시에 읽으면 오히려 느려서(deploy README 「homr 작업자 2개 시험」) 기다리는 동안 볼 것을 준다
+const pagesRead = computed(() => {
+  const st = s.value;
+  if (!st || (st.page_count ?? 1) < 2 || st.status !== 'converting') return '';
+  const done = (st.pages ?? []).filter((p) => p.outcome !== 'pending').length;
+  return `${st.page_count}쪽 중 ${done}쪽 읽음`;
+});
+const preview = computed(() => (s.value?.status === 'converting' ? req.preview : null));
+
 // ---------- 연주 · 악기 바꾸기 ----------
 // (2026-09-30 황송해 112번, SD_02 머리말) 악기 바꾸기([악기 선택] · 확인/취소)와 재생 빠르기를 2단계로 옮겼다.
 // 기준 악보 = 결과 악보 + 기본 국악기 구성. 바꾼 악기는 편집 기록(change_instrument, 기기 자동 저장)으로 남아
 // 3단계(S2) · 4단계(S3, MP3 · 편집 반영 파일)에 그대로 이어진다.
 const ed = useEditorStore();
-watch(() => [s.value?.status, s.value?.id] as const, async ([st, id]) => {
-  if (st !== 'completed' || !id || expired.value) return;
+// (2026-11-04, #181) 먼저 변환된 쪽도 연주 · 악기 바꾸기를 할 수 있다 — 같은 요청 번호의 편집 기록이라 바꾼 악기가 전체 악보에 이어진다
+watch(() => [s.value?.status, s.value?.id, !!preview.value] as const, async ([st, id, hasPreview]) => {
+  if ((st !== 'completed' && !hasPreview) || !id || expired.value) return;
   await ed.open(id);
   // 같은 흐름 안이므로 지난 자동 저장본은 묻지 않고 이어서 쓴다(3단계를 바로 열면 S2 가 복원을 묻는다, UC6 A2)
   if (ed.pendingRestore) ed.restore();
 }, { immediate: true });
+// 미리보기 쪽은 화면에서 ScoreDoc 으로 바꾼다. 전체 결과가 오면 그것으로 바뀐다(이어 붙인 악보도 성부 순서는 첫 쪽과 같다)
+const previewDoc = computed<ScoreDoc | null>(() => {
+  const p = preview.value;
+  if (!p) return null;
+  try { return parseMusicXml(p.musicxml); } catch { return null; }
+});
+const showResult = computed(() => s.value?.status === 'completed' && !!band.value && !judging.value);
 const baseDoc = computed<ScoreDoc | null>(() => {
-  const base = req.score?.scoredoc;
+  const base = showResult.value ? req.score?.scoredoc : previewDoc.value;
   if (!base) return null;
   try { return applyDefaultEnsemble(base, inst.catalog); } catch { return base; }
 });
@@ -208,6 +226,18 @@ const engineHelp = computed(() => {
           <h1 id="proc-h" class="h2" data-test="proc-title">{{ procTitle }}</h1>
           <p>결과가 나오면 이 화면에 바로 보여 드립니다.</p>
         </div>
+        <!-- (2026-11-04 황송해) 여러 쪽은 읽은 쪽 수를 알린다 (#181) -->
+        <p v-if="pagesRead" class="small muted center-h pages-read" role="status" data-test="pages-read">{{ pagesRead }}</p>
+
+        <!-- (2026-11-04 황송해) 먼저 변환된 쪽 — 악보 · 연주 · 악기 바꾸기 (#181) -->
+        <template v-if="preview">
+          <div class="notice" role="status" data-test="page-preview">
+            <span class="chip on-white">미리 보기</span>
+            <span class="title">{{ preview.page_no }}쪽을 먼저 보여 드립니다</span>
+            <p>나머지 쪽을 다 읽으면 {{ preview.page_count }}쪽 전체 악보로 바뀝니다. 지금 연주해 보고 악기를 바꿀 수 있으며, 바꾼 악기는 전체 악보에도 그대로 이어집니다.</p>
+          </div>
+          <ScoreView :musicxml="preview.musicxml" :label="`${preview.page_no}쪽 미리 보기`" hide-label :part-names="false" />
+        </template>
 
         <div v-if="s.status === 'awaiting_type_answer' && s.detected_type" class="notice" data-test="type-question">
           <span class="chip s-waiting">종류 확인</span>
@@ -246,7 +276,7 @@ const engineHelp = computed(() => {
         </div>
       </section>
 
-      <template v-if="s?.status === 'completed' && band && !judging">
+      <template v-if="showResult && s && band">
         <div class="page-head center-h">
           <h1 class="h2">{{ band === 'fallback' ? '대체 악보를 드렸습니다' : '결과 악보' }}</h1>
         </div>
@@ -285,6 +315,10 @@ const engineHelp = computed(() => {
 
         <!-- (2026-09-30 112번) 악기 바꾸기 — 3단계에서 옮김. 바꾼 악기는 3 · 4단계에도 이어진다 -->
         <p v-if="lowPagesText" class="small low-pages" role="status" data-test="low-pages">{{ lowPagesText }}</p>
+      </template>
+
+      <!-- (2026-11-04, #181) 악기 변경 · 연주 막대 — 결과 악보와 먼저 변환된 쪽(미리보기)이 같이 쓴다 -->
+      <template v-if="(showResult || preview) && s">
 
         <!-- (2026-09-30 127 · 128번) 악기 목록은 표 오른쪽 패널(좁은 화면은 아래) · 고르면 바로 적용([확인] · [취소] 없음) -->
         <section v-if="playDoc" class="section track-card" aria-labelledby="tracks2-h" data-test="step2-tracks">
@@ -337,6 +371,9 @@ const engineHelp = computed(() => {
           />
         </div>
 
+      </template>
+
+      <template v-if="showResult && s">
         <!-- 모두에게 공유는 2026-09-30 105번으로 4단계(S3 내려받기)로 옮겼다(UC18) -->
 
         <!-- (2026-09-30 SD_02 ㊷) [파일로 받기] · [새 악보 올리기] 삭제, [편집하기] → [다음](오른쪽 끝) -->
@@ -366,6 +403,7 @@ const engineHelp = computed(() => {
 @media (min-width: 901px) { .track-layout.split { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); } }
 .track-panel { position: sticky; top: 120px; max-height: 70vh; overflow-y: auto; }
 .low-pages { margin: 0; color: var(--color-clay-deep); }
+.pages-read { margin: 0; }
 .judge .reasons { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .judge h1.title { margin: 0; font: inherit; font-weight: 700; }
 .btn-sm { padding: 8px 16px; min-height: 44px; }
