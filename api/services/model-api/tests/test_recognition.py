@@ -281,3 +281,62 @@ def test_models_public_contract():
     assert row["name"] == "homr" and row["state"] == "ready"
     assert {"installed", "enabled", "expected_seconds", "elapsed_seconds", "load_started_at", "error"} <= row.keys()
     assert "config_json" not in row and "password" not in response.text
+
+
+def test_first_converted_page_is_previewed_while_running(tmp_path, monkeypatch):
+    # 2026-11-04 #181 여러 쪽 웹 요청은 먼저 변환된 쪽을 끝나기 전에 내준다. 1쪽이 실패하면 2쪽, 끝나면 지운다
+    from app.services import page_preview
+
+    db, registry, inp = setup_pipeline(tmp_path, monkeypatch, count=3)
+    calls = iter(["fail", "pass", "pass"])
+    monkeypatch.setattr(engine_api, "check_structure", lambda *args: SimpleNamespace(
+        verdict=next(calls), type_mismatch=False, detected_type="staff"))
+    monkeypatch.setattr("app.services.safe_midi.musicxml_to_midi_safe", AsyncMock(return_value=b"MThd"))
+    seen = []
+
+    async def recognize(*args):
+        p = page_preview.get(inp.request_no)
+        seen.append(p and replace(p))  # 그때 값으로 남긴다(같은 객체를 뒤에 고친다)
+        return EngineResult("success", None, XML, b"MThd-test", "homr", "0.7", None, 1)
+
+    registry.adapter.recognize.side_effect = recognize
+    out = asyncio.run(run_recognition(db, Limiter(inp.settings), registry, inp))
+    assert not out.fallback and out.converted_pages == 2
+    assert seen[0] is None  # 2쪽 엔진을 부를 때 아직 변환된 쪽이 없다(1쪽은 구조 실패)
+    assert (seen[1].page_no, seen[1].page_count, seen[1].pages_done, seen[1].musicxml) == (2, 3, 2, XML)
+    assert page_preview.get(inp.request_no) is None
+
+
+def test_single_page_or_api_request_has_no_preview(tmp_path, monkeypatch):
+    from app.services import page_preview
+
+    for count, is_web in ((1, True), (2, False)):
+        db, registry, inp = setup_pipeline(tmp_path, monkeypatch, count=count)
+        inp.is_web = is_web
+        monkeypatch.setattr("app.services.safe_midi.musicxml_to_midi_safe", AsyncMock(return_value=b"MThd"))
+        seen = []
+
+        async def recognize(*args):
+            seen.append(page_preview.get(inp.request_no))
+            return EngineResult("success", None, XML, b"MThd-test", "homr", "0.7", None, 1)
+
+        registry.adapter.recognize.side_effect = recognize
+        asyncio.run(run_recognition(db, Limiter(inp.settings), registry, inp))
+        assert seen and all(p is None for p in seen)
+
+
+def test_preview_endpoint_is_service_key_only(recognition_client):
+    from app.services import page_preview
+
+    client, _, _ = recognition_client
+    no = "R-1104-PREVIEW1"
+    assert client.get(f"/v1/internal/omr/preview/{no}", headers={"X-API-Key": "service-secret"}).json()["preview"] is None
+    page_preview.begin(no)
+    page_preview.page_done(no, 1, 4, XML)
+    try:
+        body = client.get(f"/v1/internal/omr/preview/{no}", headers={"X-API-Key": "service-secret"}).json()
+        assert body["preview"] == {"page_no": 1, "page_count": 4, "pages_done": 1, "musicxml": XML}
+        external = client.get(f"/v1/internal/omr/preview/{no}", headers={"X-API-Key": "external-secret"})
+        assert external.status_code == 403
+    finally:
+        page_preview.end(no)
