@@ -32,7 +32,8 @@ async def render_response(request, caller, files, kind, assignment=None):
         checked = await asyncio.to_thread(uploads.check, await uploads.read_files(files, max_bytes=read_limit, max_files=1),
             settings=state.settings.current, score_type=None, require_score_type=False,
             allowed_kinds=("midi", "musicxml"), render_pdf=False, rules=state.upload_rules)
-        assigned = parse_assignment(assignment) if kind == "mp3" else None
+        # #93 전체 선율 성부 선택은 MP3 렌더링 요청에서만 허용한다.
+        assigned = parse_assignment(assignment, allow_melodic=True) if kind == "mp3" else None
         if assigned:
             check_sf2_refs(assigned)
         if kind == "mp3" and not caller.is_service:
