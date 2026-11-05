@@ -31,7 +31,7 @@ const ROUTES: readonly [RegExp, string, string][] = [
   [/^\/api\/shared-scores$/, 'GET', 'UC18'],
   [/^\/api\/shared-scores\/[^/]+\/(score|like|use)$/, '*', 'UC18'],
   [/^\/api\/requests\/[^/]+\/(type-confirmation|events)$/, 'POST', 'UC1'],
-  [/^\/api\/requests\/[^/]+(\/score)?$/, 'GET', 'UC1'],
+  [/^\/api\/requests\/[^/]+(\/score|\/preview)?$/, 'GET', 'UC1'],
 ];
 
 export function ucOf(method: string, path: string): string | null {

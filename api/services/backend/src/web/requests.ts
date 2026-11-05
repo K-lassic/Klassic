@@ -1,4 +1,4 @@
-// #34 악보 요청 API — 올리기 → 상태 → 결과 악보 · 종류 확인 답 · 대체 결과 요청 (UC1 · UC2, web-api.yaml).
+// #34 악보 요청 API — 올리기 → 상태 → (여러 쪽이면 첫 쪽 미리보기) → 결과 악보 · 종류 확인 답 · 대체 결과 요청 (UC1 · UC2, web-api.yaml).
 //
 //   구조에서의 위치: 화면 → Nginx(/api/*) → web(이 파일, authz 다음 단계) → 볼륨 storage(원본 파일) · DB(score_request · upload_file)
 //     PDF 는 저장 전에 model-api 검사(uploadInspect.ts). 인식은 작업자(#35)가 대기열에서 꺼내 model-api 를 부른다.
@@ -20,7 +20,7 @@ import { receiveExample } from './examples.js';
 import { recordGate } from '../services/gateEvents.js';
 import { inspectPdf } from '../services/uploadInspect.js';
 import { readStored, removeRequestDir, saveFile } from '../services/storage.js';
-import { answerTypeQuestion, enqueueRecognition } from '../services/requestWorker.js';
+import { answerTypeQuestion, enqueueRecognition, pagePreview } from '../services/requestWorker.js';
 import { switchToUserFallback } from '../services/fallback.js';
 import { buildRequestStatus } from '../services/requestStatus.js';
 import { recordInitialSelection } from '../services/placedEnsemble.js';
@@ -176,6 +176,14 @@ requestsRouter.get('/requests/:no/score', wrap(async (req, res) => {
     fallback_message: reason?.message ?? null,
     retry_hint: reason?.retry_hint ?? null,
   });
+}));
+
+// 여러 쪽을 읽는 동안 먼저 변환된 쪽(2026-11-04, #181) — 상태의 preview 가 있을 때만. 끝났거나 아직 없으면 409
+requestsRouter.get('/requests/:no/preview', wrap(async (req, res) => {
+  const r = await loadOwnedRequest(req);
+  const p = pagePreview(r.request_id);
+  if (!p) throw new ApiError('REQUEST_NOT_FOUND', { reason: 'no_preview', status: r.status }, null, 409);
+  res.json({ page_no: p.pageNo, page_count: p.pageCount, musicxml: p.musicxml });
 }));
 
 requestsRouter.post('/requests/:no/fallback', wrap(async (req, res) => {
