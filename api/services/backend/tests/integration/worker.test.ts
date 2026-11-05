@@ -1,7 +1,7 @@
 // #35 인식 작업자 통합 시험 — 실제 MariaDB 필요 (TEST_DB_HOST 가 있을 때만 돈다). model-api 는 가짜.
 //   v0.1.1 us1_upload_to_result · us2_fallback 과, 재시작 복구 · 마감 · 종류 확인을 시험한다.
 import { HAS_DB } from '../helpers/env.js';
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import request from 'supertest';
@@ -40,6 +40,12 @@ beforeAll(async () => {
   await worker.startWorker();
 });
 afterAll(async () => { if (HAS_DB) { worker.stopWorker(); await fake.close(); await db.closePool(); } });
+
+/** 단조 시계(performance.now)를 ms 만큼 앞으로 보낸다 — 마감을 단조 시계로만 재므로 DB 시각을 고치는 대신 이것으로 시간을 보낸다 (#105) */
+const advanceMonotonic = (ms: number) => {
+  const real = performance.now.bind(performance);
+  vi.spyOn(performance, 'now').mockImplementation(() => real() + ms);
+};
 
 const upload = async (u: Agent, type = 'staff') => {
   const up = await u.post('/api/requests').field('score_type', type).attach('file', makePng(1000, 900), 'a.png');
@@ -98,7 +104,7 @@ describe.skipIf(!HAS_DB)('인식', () => {
 });
 
 describe.skipIf(!HAS_DB)('대체 결과', () => {
-  afterEach(async () => { await h.setSettings(BASE); });
+  afterEach(async () => { vi.restoreAllMocks(); await h.setSettings(BASE); });
 
   it.each([
     ['NO_SCORE_STRUCTURE', 'NO_SCORE_STRUCTURE'],
@@ -165,7 +171,7 @@ describe.skipIf(!HAS_DB)('대체 결과', () => {
 });
 
 describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
-  afterEach(async () => { await h.setSettings(BASE); });
+  afterEach(async () => { vi.restoreAllMocks(); await h.setSettings(BASE); });
 
   /** 다른 종류 같다고 답하는 model-api — 처리 작업 행은 model-api 가 적는다 */
   const mismatchOnce = () => {
@@ -195,6 +201,7 @@ describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
     const u = await loggedInAgent(app, 't2');
     const no = await upload(u);
     const before = await asking(u, no);
+    advanceMonotonic(175_000); // 첫 처리 마감 직전에도 재인식에는 새 처리 시간이 주어진다
     // 서버 PC 시계가 수십 ms 뒤로 밀려도 비교가 틀리지 않을 만큼 기다린다 (#105 — 60ms 밀린 것을 봤다)
     await new Promise((r) => setTimeout(r, 300));
     const r = await u.post(`/api/requests/${no}/type-confirmation`).send({ change_to: 'jeongganbo' });
@@ -202,7 +209,9 @@ describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
     expect(new Date(r.body.deadline_at).getTime()).toBeGreaterThan(new Date(before.deadline_at).getTime());
     const done = await finished(u, no);
     expect(done).toMatchObject({ status: 'completed', score_type: 'jeongganbo', fallback: false });
-    expect(fake.calls.filter((c) => c.path === 'POST /v1/omr/jeongganbo').length).toBe(1);
+    const calls = fake.calls.filter((c) => c.path === 'POST /v1/omr/jeongganbo');
+    expect(calls).toHaveLength(1);
+    expect(new Date(calls[0].deadline!).getTime() - Date.now()).toBeGreaterThan(170_000);
   });
 
   it('답이 없으면 마감에 고른 종류 결과로 끝낸다 (감시)', async () => {
@@ -211,8 +220,10 @@ describe.skipIf(!HAS_DB)('악보 종류 확인', () => {
     const u = await loggedInAgent(app, 't3');
     const no = await upload(u);
     await asking(u, no);
-    await db.exec("UPDATE stage_timing SET ended_at = CURRENT_TIMESTAMP(3) - INTERVAL 1 MINUTE, started_at = CURRENT_TIMESTAMP(3) - INTERVAL 2 MINUTE WHERE request_id = ? AND stage_code = 'queue'", [await h.requestIdOf(no)]);
-    expect(await finished(u, no)).toMatchObject({ status: 'completed', fallback: false });
+    advanceMonotonic(60_000); // 1분이 흘렀다 (제한 1초 + 여유 15초를 넘김)
+    const done = await finished(u, no);
+    vi.restoreAllMocks();
+    expect(done).toMatchObject({ status: 'completed', fallback: false });
   });
 });
 
@@ -248,10 +259,68 @@ describe.skipIf(!HAS_DB)('재시작 복구', () => {
     worker.stopWorker();
     const u = await loggedInAgent(app, 'r2');
     const no = await upload(u);
-    await db.exec('UPDATE score_request SET received_at = CURRENT_TIMESTAMP(3) - INTERVAL 1 HOUR WHERE request_no = ?', [no]);
+    advanceMonotonic(3_600_000); // 1시간이 흘렀다
     await worker.watchdogTick();
+    vi.restoreAllMocks();
     expect((await u.get(`/api/requests/${no}`)).body).toMatchObject({ status: 'completed', fallback_reason: 'TIMEOUT' });
     await worker.startWorker();
+  });
+});
+
+// #105 마감은 단조 시계로만 잰다 — 벽시계(Date.now)가 튀어도 마감 판단이 따라가지 않는다.
+//   DB 가 잰 경과 시간은 그대로이고 Date.now 만 튀게 해서, 마감 계산에 벽시계가 섞이면 결과가 바뀌는지 본다.
+describe.skipIf(!HAS_DB)('벽시계가 튀어도 마감은 그대로 (#105)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('감시: 벽시계가 1시간 앞으로 튀어도 아직 시간이 남은 요청을 끝내지 않는다', async () => {
+    fake.on('post', '/v1/omr/staff', ok);
+    worker.stopWorker();
+    const u = await loggedInAgent(app, 'c1');
+    const no = await upload(u);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3_600_000);
+    await worker.watchdogTick();
+    vi.restoreAllMocks();
+    expect((await u.get(`/api/requests/${no}`)).body.status).toBe('queued');
+    await worker.startWorker();
+    expect((await finished(u, no)).status).toBe('completed');
+  });
+
+  it('감시: 벽시계가 1시간 뒤로 가도 마감을 넘긴 요청은 대체로 끝낸다', async () => {
+    fake.on('post', '/v1/omr/staff', ok);
+    worker.stopWorker();
+    const u = await loggedInAgent(app, 'c2');
+    const no = await upload(u);
+    advanceMonotonic(3_600_000); // 1시간이 흘렀는데 벽시계는 오히려 1시간 뒤로 갔다
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() - 3_600_000);
+    await worker.watchdogTick();
+    vi.restoreAllMocks();
+    expect((await u.get(`/api/requests/${no}`)).body).toMatchObject({ status: 'completed', fallback_reason: 'TIMEOUT' });
+    await worker.startWorker();
+  });
+
+  it('처리: 벽시계가 마감(180초)보다 크게 튀어 있어도 정상 인식은 대체로 끝나지 않는다', async () => {
+    fake.on('post', '/v1/omr/staff', ok);
+    const u = await loggedInAgent(app, 'c3');
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 200_000);
+    const no = await upload(u);
+    const done = await finished(u, no);
+    vi.restoreAllMocks();
+    expect(done).toMatchObject({ status: 'completed', route: 'recognize', fallback: false });
+  });
+
+  it('처리: model-api 에 넘기는 마감(X-Deadline)은 지금부터 제한 시간 안이다', async () => {
+    fake.calls.length = 0;
+    fake.on('post', '/v1/omr/staff', ok);
+    const u = await loggedInAgent(app, 'c4');
+    const jumpedWallTime = Date.now() + 3_600_000;
+    vi.spyOn(Date, 'now').mockReturnValue(jumpedWallTime);
+    const no = await upload(u);
+    await finished(u, no);
+    const call = fake.calls.find((c) => c.path === 'POST /v1/omr/staff' && c.fields.request_no === no);
+    expect(call?.deadline).toBeDefined();
+    const left = new Date(call!.deadline!).getTime() - jumpedWallTime;
+    expect(left).toBeGreaterThan(170_000);
+    expect(left).toBeLessThanOrEqual(180_000);
   });
 });
 

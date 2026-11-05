@@ -8,6 +8,7 @@
 //     undici 는 Node 22.21.1 내장과 같은 6.22.0 으로 고정하고 fetch · Agent 를 둘 다 거기서 가져와 짝을 맞춘다.
 import { Agent, fetch, type RequestInit } from 'undici';
 import { env } from '../config/env.js';
+import { monotonicNowMs } from '../lib/clock.js';
 
 // 전역 dispatcher 는 바꾸지 않는다 — model-api 호출에만 쓴다
 const modelAgent = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
@@ -20,7 +21,8 @@ export class ModelApiDown extends Error {
   }
 }
 
-interface CallOpts { timeoutMs?: number; deadline?: Date; headers?: Record<string, string> }
+/** deadlineMono = 단조 시계(monotonicNowMs) 기준 마감. 벽시계 값은 model-api 에 넘길 때 한 번만 만든다 (#105) */
+interface CallOpts { timeoutMs?: number; deadlineMono?: number; headers?: Record<string, string> }
 
 async function call(method: string, path: string, body?: FormData | object, opts: CallOpts = {}): Promise<Response> {
   const headers: Record<string, string> = { 'X-API-Key': env().SERVICE_API_KEY, ...(opts.headers ?? {}) };
@@ -28,8 +30,9 @@ async function call(method: string, path: string, body?: FormData | object, opts
   // 내장 FormData 와 undici FormData 는 같은 판(6.22.0)이지만 타입 선언이 달라 맞춰 준다
   if (body instanceof FormData) payload = body as unknown as RequestInit['body'];
   else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
-  if (opts.deadline) headers['X-Deadline'] = opts.deadline.toISOString();
-  const timeoutMs = opts.deadline ? Math.max(1, opts.deadline.getTime() - Date.now()) : (opts.timeoutMs ?? 15000);
+  const remainingMs = opts.deadlineMono === undefined ? undefined : Math.max(1, opts.deadlineMono - monotonicNowMs());
+  if (remainingMs !== undefined) headers['X-Deadline'] = new Date(Date.now() + remainingMs).toISOString();
+  const timeoutMs = remainingMs ?? opts.timeoutMs ?? 15000;
   try {
     return await fetch(`${env().MODEL_API_URL}${path}`,
       { method, headers, body: payload, signal: AbortSignal.timeout(timeoutMs), dispatcher: modelAgent }) as unknown as Response;
