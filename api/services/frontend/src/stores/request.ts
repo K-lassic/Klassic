@@ -1,7 +1,7 @@
 // 현재 요청 상태 — 올리기, 1초 폴링(research R7), 처리 단계 매핑(C1), 결과 악보 (T069)
 import { defineStore } from 'pinia';
 import { api } from '@/api/client';
-import type { RequestStatus, ScoreResponse, ScoreType, RequestState } from '@/types/api';
+import type { PreviewResponse, RequestStatus, ScoreResponse, ScoreType, RequestState } from '@/types/api';
 import { gateFromError, gateMessage, type GateView } from '@/i18n/gateMessages';
 
 export type StepState = 'done' | 'current' | 'todo' | 'fallback' | 'blocked';
@@ -53,6 +53,8 @@ export type JourneyStep = 1 | 2 | 3 | 4;
 interface State {
   status: RequestStatus | null;
   score: ScoreResponse | null;
+  /** (2026-11-04, #181) 여러 쪽을 읽는 동안 먼저 변환된 쪽 — 전체 결과가 나오면 지운다 */
+  preview: PreviewResponse | null;
   uploading: boolean;
   gate: GateView | null;          // 올리기 반려(G1·G12) 또는 G4
   loadError: GateView | null;     // 요청을 못 찾음 등
@@ -63,7 +65,7 @@ interface State {
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 export const useRequestStore = defineStore('request', {
-  state: (): State => ({ status: null, score: null, uploading: false, gate: null, loadError: null, pollMs: 1000, lastEventSent: {} }),
+  state: (): State => ({ status: null, score: null, preview: null, uploading: false, gate: null, loadError: null, pollMs: 1000, lastEventSent: {} }),
   getters: {
     requestNo: (s) => s.status?.id ?? null,
     processingSteps: (s): RailStep[] => (s.status ? mapProcessingSteps(s.status) : []),
@@ -75,12 +77,12 @@ export const useRequestStore = defineStore('request', {
   actions: {
     reset() {
       this.stopPolling();
-      this.status = null; this.score = null; this.gate = null; this.loadError = null; this.lastEventSent = {};
+      this.status = null; this.score = null; this.preview = null; this.gate = null; this.loadError = null; this.lastEventSent = {};
     },
     /** 올리기 — 파일 한 개(사진·PDF) 또는 사진 여러 장(올린 순서대로 'file' 을 여러 번, 2026-09-30 T188 여러 쪽) */
     async upload(file: File | File[], scoreType: ScoreType | null): Promise<boolean> {
       this.stopPolling();
-      this.gate = null; this.score = null; this.status = null; this.lastEventSent = {};
+      this.gate = null; this.score = null; this.preview = null; this.status = null; this.lastEventSent = {};
       this.uploading = true;
       const files = Array.isArray(file) ? file : [file];
       try {
@@ -100,7 +102,7 @@ export const useRequestStore = defineStore('request', {
     /** 예시 악보로 올리기(2026-09-30 황송해 72번) — 예시 id 만 보내고 서버가 서버 전용 폴더의 파일로 접수한다 */
     async uploadExample(exampleId: string, scoreType: ScoreType | null): Promise<boolean> {
       this.stopPolling();
-      this.gate = null; this.score = null; this.status = null; this.lastEventSent = {};
+      this.gate = null; this.score = null; this.preview = null; this.status = null; this.lastEventSent = {};
       this.uploading = true;
       try {
         this.status = await api.post<RequestStatus>('/api/requests/example', { example_id: exampleId, score_type: scoreType });
@@ -141,7 +143,8 @@ export const useRequestStore = defineStore('request', {
         this.loadError = null;
         if (next.status === 'expired') { this.gate = gateMessage('RESULT_EXPIRED'); this.stopPolling(); }
         if (next.status === 'completed' && !wasDone) await this.fetchScore();
-        if (isTerminal(next.status)) this.stopPolling();
+        if (isTerminal(next.status)) { this.stopPolling(); this.preview = null; }
+        else if (next.preview && next.preview.page_no !== this.preview?.page_no) await this.fetchPreview();
       } catch (e) {
         const g = gateFromError(e);
         if (g.code === 'RESULT_EXPIRED') { this.gate = g; if (this.status) this.status = { ...this.status, status: 'expired' }; }
@@ -158,6 +161,13 @@ export const useRequestStore = defineStore('request', {
         if (g.code === 'RESULT_EXPIRED') this.gate = g; else this.loadError = g;
       }
     },
+    /** 먼저 변환된 쪽 받기 — 못 받아도 화면은 그대로 전체 결과를 기다린다(덤이라 오류 안내를 띄우지 않는다) */
+    async fetchPreview(): Promise<void> {
+      if (!this.status) return;
+      try {
+        this.preview = await api.get<PreviewResponse>(`/api/requests/${encodeURIComponent(this.status.id)}/preview`);
+      } catch { /* 이미 끝났거나(409) 다시 켜져 사라짐 — 다음 상태에서 다시 본다 */ }
+    },
     startPolling() {
       this.stopPolling();
       const tick = async () => {
@@ -173,6 +183,7 @@ export const useRequestStore = defineStore('request', {
     },
     async confirmType(changeTo: ScoreType | null) {
       if (!this.status) return;
+      if (changeTo) this.preview = null; // 다른 종류로 다시 읽으므로 먼저 보인 쪽은 버린다
       this.status = await api.post<RequestStatus>(`/api/requests/${encodeURIComponent(this.status.id)}/type-confirmation`, { change_to: changeTo });
       this.startPolling();
     },
