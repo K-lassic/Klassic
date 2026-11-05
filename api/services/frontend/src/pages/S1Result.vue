@@ -6,6 +6,7 @@ import C2GateBlock from '@/components/C2GateBlock.vue';
 import C9StepBar from '@/components/C9StepBar.vue';
 import C3ResultBand from '@/components/C3ResultBand.vue';
 import C5PlayerBar from '@/components/C5PlayerBar.vue';
+import C10Working from '@/components/C10Working.vue';
 import C4InstrumentPicker from '@/components/C4InstrumentPicker.vue';
 import HelpTip from '@/components/HelpTip.vue';
 import LeaveConfirm from '@/components/LeaveConfirm.vue';
@@ -203,11 +204,12 @@ const engineHelp = computed(() => {
 
       <!-- 처리 중 -->
       <section v-if="req.isProcessing && s" class="section" aria-labelledby="proc-h">
+        <!-- (2026-11-04 황송해) "처리 중" 눈썹 · "결과가 나오면 이 화면에 바로 보여 드립니다." 문구는 뺐다 — 제목과 애니메이션만 -->
         <div class="page-head center-h">
-          <span class="eyebrow">처리 중</span>
           <h1 id="proc-h" class="h2" data-test="proc-title">{{ procTitle }}</h1>
-          <p>결과가 나오면 이 화면에 바로 보여 드립니다.</p>
         </div>
+        <!-- (2026-11-04 황송해) 기다리는 동안 화면이 멈춘 것처럼 보이지 않게 처리 중 애니메이션 — 종류 확인 질문 중에는 뺀다 -->
+        <C10Working v-if="s.status !== 'awaiting_type_answer'" />
 
         <div v-if="s.status === 'awaiting_type_answer' && s.detected_type" class="notice" data-test="type-question">
           <span class="chip s-waiting">종류 확인</span>
