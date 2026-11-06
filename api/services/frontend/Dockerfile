@@ -24,7 +24,9 @@ COPY tsconfig.json vite.config.ts index.html admin.html ./
 COPY public ./public
 COPY src ./src
 # api/shared · api/packages/score-core 는 compose 의 additional_contexts(shared · score-core)로 받는다
-COPY --from=shared . /app/shared
+# 필요한 파일만 넣는다 — 사운드폰트(.sf2, 약 170MB)는 화면 빌드에 쓰지 않는다 (PR #183)
+COPY --from=shared errors /app/shared/errors
+COPY --from=shared instruments.json upload-rules.json /app/shared/
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.28.0-bookworm
