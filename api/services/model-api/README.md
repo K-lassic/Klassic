@@ -256,7 +256,7 @@ python -m app.engines.selftest --engine jeongganbo
 
 ### 호출·결과·저장 경계
 
-- multipart `image`를 사진 순서대로 반복하거나 PDF 한 개를 보낸다. 최대 10쪽이며 PDF는 모든 쪽을 300dpi PNG로 만든다. 인증은 `X-API-Key`와 DB의 UC12 권한을 따른다. 기존 키 누락·잘못된 키 401, 폐기 키 403 기준을 유지한다.
+- multipart `image`를 사진 순서대로 반복하거나 PDF 한 개를 보낸다. 최대 30쪽이며 PDF는 모든 쪽을 300dpi PNG로 만든다. 인증은 `X-API-Key`와 DB의 UC12 권한을 따른다. 기존 키 누락·잘못된 키 401, 폐기 키 403 기준을 유지한다.
 - 서비스 키와 `request_no`가 있으면 기존 웹 요청에 판정만 기록한다. 호환 필드 `request_id`도 받을 수 있다. 없는 웹 요청은 404이며 새 API 요청으로 바꾸지 않는다. 성공 결과 파일은 응답으로 보내 backend가 저장한다. 웹 대체 응답에는 MusicXML·MIDI를 넣거나 별도 결과 파일을 저장하지 않는다.
 - `request_no` 없는 호출은 API 요청·원본을 만들고 결과 위치를 DB에 기록한다. 파일은 전용 `model-storage` 볼륨의 `/storage/api/<request_no>`에 저장한다. 엔진용 사본·중간 산출물은 `/tmp`에서 처리 후 제거한다. API 인식 실패에는 이미지에 포함한 api_server 대체 템플릿을 쓸 수 있으며, 템플릿 누락은 `service_down=true`다. 파일 보관 한도·정리 작업은 후속 범위다.
 - 쪽마다 구조 → 설정된 엔진 순서 → 타당성을 검사하고 `request_page`, `engine_attempt`, `processing_job`, `validity_check_item`, `stage_timing`에 기록한다. 구조가 없으면 엔진을 호출하지 않는다. 타당성 항목은 요청 전체로 합치며 음 개수는 합, 나머지는 가장 낮은 값이다.
@@ -291,7 +291,7 @@ python -m app.engines.selftest
 
 - 기준판의 업로드·PDF 검사 코드를 가져와 앱별 `SHARED_DIR/upload-rules.json`을 사용하도록 분리했다. 다른 앱·호출의 규칙이 섞이지 않게 ContextVar로 적용·해제한다.
 - 순서: 파일 개수 → 확장자·실제 파일 형식 → PDF 혼합 여부 → 손상·암호·PDF 쪽 수 → 파일 용량 → 쪽별 사진 크기 → 악보 종류. 여러 문제가 있으면 계약에 맞게 먼저 검사한 사유를 반환한다.
-- 사진은 PNG·JPEG·WEBP, PDF는 한 개만 허용한다. 사진 최대 10장 또는 PDF 최대 10쪽, 기본 파일당 20MiB다. MIDI·MusicXML은 이 사용자 업로드 경로에서 거절한다.
+- 사진은 PNG·JPEG·WEBP, PDF는 한 개만 허용한다. 사진 최대 30장 또는 PDF 최대 30쪽, 기본 파일당 20MiB다. MIDI·MusicXML은 이 사용자 업로드 경로에서 거절한다.
 - 사진은 짧은 변 300px 미만을 거절한다. 검사 API에서는 확대 사본을 만들지 않는다. 인식 경로에서만 300~649px를 원본 bytes를 유지한 채 1000px PNG 사본으로 만든다. `PageImage.image`에 사본, `short_edge_px`에 원래 크기, `upscaled_short_side_px`에 사본 크기를 남긴다. API 응답 필드는 기존 계약 그대로이며 사본 데이터는 보내지 않는다.
 - 검사 API는 PDF를 그림으로 만들지 않고 모든 쪽의 크기를 300dpi 기준으로 계산한다. 인식 단계가 사용할 공통 helper에서는 명시적으로 `render_pdf=True`인 경우만 페이지 렌더링·확대 사본을 생성한다.
 - PDFium 호출은 lock으로 직렬화하고 검사는 작업 스레드로 보내 HTTP 이벤트 루프를 막지 않는다. 사용한 UploadFile은 성공·오류 모두 닫는다. 외부 프로세스 실행이나 별도 파일 저장은 없다.
@@ -359,7 +359,7 @@ Docker healthcheck는 `/health`의 `status=ok`·`db=ok`와 **실제 FluidSynth �
 | `SOUNDFONTS_DIR` | `/app/shared/soundfonts` |
 | `JEONGGANBO_DEVICE` | `cpu` (현재 검증 범위) |
 | `MODEL_LOAD_TIMEOUT_SECONDS` | 엔진별 120초, 최대 600초 |
-| `MODEL_API_IMAGE` | 기본 후보 `klassic/model-api:0.2.2`. 기존 0.2.0·0.2.1 및 검증한 이전 이미지는 되돌리기용으로 보존 |
+| `MODEL_API_IMAGE` | 기본 후보 `klassic/model-api:0.2.3`(#168 업로드 30쪽). 기존 0.2.0·0.2.1·0.2.2 및 검증한 이전 이미지는 되돌리기용으로 보존 |
 
 아래는 `api/`에서 실행한다. 새 프로젝트를 쓴다면 DB 초기화 대상·볼륨을 먼저 확인한다.
 
@@ -455,7 +455,7 @@ Get-Content -Raw tests/container_smoke.py | docker compose -f ../../compose.yaml
 | 엔진 제공 | Docker 외부 볼륨 `klassic_engines`, `external: true` |
 | 소비 경로 | `ENGINES_DIR=/opt/gugak-engines`, 마운트 `read_only: true`, `nocopy: true` |
 | 아키텍처 | `linux/amd64` 고정. ARM64용으로 검증하지 않음 |
-| 검사 런타임 | #142부터 `MODEL_API_IMAGE`와 같은 재구성 이미지(기본 `klassic/model-api:0.2.2`). `ENGINE_CHECK_IMAGE`로 별도 지정 가능 |
+| 검사 런타임 | #142부터 `MODEL_API_IMAGE`와 같은 재구성 이미지(기본 `klassic/model-api:0.2.3`). `ENGINE_CHECK_IMAGE`로 별도 지정 가능 |
 | #25 당시 검증 이미지 ID (과거 기록) | `sha256:908e979868cd0c2275932488668757efe7b7f8459cae2d262a7678b8fabff749`, `klassic/klassic-model-api:0.1.1` |
 | 이미지 배포 상태 | `api/`에서 로컬 빌드한 이미지 사용. Docker Hub 게시 여부와 구분 |
 | 검사 실행 | `engine-selftest`, `tools` 프로필의 일회성 도구. uid/gid 1000, 네트워크 차단, 호스트 포트 없음 |
@@ -501,7 +501,7 @@ $env:ENGINE_CHECK_IMAGE = 'klassic/model-api:issue142-check'
 |---|---|---|
 | `ENGINES_VOLUME_NAME` | `klassic_engines` | Docker에서 확인한 실제 설치 완료 볼륨명. 없는 볼륨은 자동 생성하지 않음 |
 | `ENGINES_DIR` | `/opt/gugak-engines` | 엔진 가상환경의 절대 경로와 Python 심볼릭 링크 때문에 기존 볼륨 재사용 시 유지 |
-| `ENGINE_CHECK_IMAGE` | 비어 있으면 `MODEL_API_IMAGE`, 그마저 없으면 `klassic/model-api:0.2.2` | 로컬에 빌드한 재구성 Linux/amd64 이미지. 명시한 검사 이미지가 있으면 우선 사용 |
+| `ENGINE_CHECK_IMAGE` | 비어 있으면 `MODEL_API_IMAGE`, 그마저 없으면 `klassic/model-api:0.2.3` | 로컬에 빌드한 재구성 Linux/amd64 이미지. 명시한 검사 이미지가 있으면 우선 사용 |
 
 homr의 Python은 이미지 내부 `/usr/local/bin/python3.11`을 사용한다. 정간보의 Python 3.8.20은 볼륨 안 `.uv-python/cpython-3.8.20-linux-x86_64-gnu/`를 가리킨다. 엔진 폴더만 떼어 다른 위치에 마운트하거나 다른 Python·OS 이미지에 붙이면 실행 파일이 있어도 불러오지 못할 수 있다. Debian bookworm 계열의 기존 model-api 이미지로 검증했으며, 다른 런타임은 다시 selftest해야 한다.
 

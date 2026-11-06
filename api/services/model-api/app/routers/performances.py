@@ -13,7 +13,7 @@ API 채널의 요청·파일 위치를 저장하며 생성 키 소유권과 보�
 성부별 음원(T150): instruments.tracks[].sf2_ref 는 기본 음원 이름만 받고, MP3 는 성부마다 그 음원으로 만든다.
 받는 파일(2026-09-29 황송해 결정): 사진(PNG·JPG·WEBP)·PDF 한 개. MIDI·MusicXML 은 G1 형식 반려(직행 없음).
 (2026-09-29 여러 쪽 — 황송해 결정) 한 요청 = 악보 한 곡: PDF 한 개(모든 쪽을 300dpi PNG 로) 또는 사진 여러 장(score 를
-올린 순서대로 여러 번), 최대 10쪽. 쪽마다 처리하고 성공한 쪽을 이어 붙여 연주한다. 상태·결과 응답에 page_count ·
+올린 순서대로 여러 번), 최대 30쪽. 쪽마다 처리하고 성공한 쪽을 이어 붙여 연주한다. 상태·결과 응답에 page_count ·
 pages(쪽별 상태: 쪽 번호 · 변환/실패 · 사유)와, 일부 쪽을 못 읽었으면 notice(PAGES_PARTIAL)를 담는다.
 """
 
@@ -113,7 +113,7 @@ def _status_body(row: dict) -> dict:
 @router.post("/performances", status_code=202, summary="연주 요청 (UC13)", response_model=PerformanceStatus)
 async def create_performance(
     request: Request,
-    score: list[UploadFile] = File(..., description="악보 한 곡: PDF 한 개(모든 쪽 변환) 또는 사진(PNG·JPG·WEBP) 여러 장(올린 순서) — 최대 10쪽"),
+    score: list[UploadFile] = File(..., description="악보 한 곡: PDF 한 개(모든 쪽 변환) 또는 사진(PNG·JPG·WEBP) 여러 장(올린 순서) — 최대 30쪽"),
     score_type: str | None = Form(None, description="필수: staff | jeongganbo"),
     instruments: str | None = Form(None, description='InstrumentAssignment JSON {"mode":"default|recommend|original|custom","tracks":[{"part":0,"instrument":"gayageum"}]}'),
     transpose_semitones: int = Form(0, ge=-12, le=12),
@@ -126,7 +126,7 @@ async def create_performance(
     rec = call_record(request)
     check_start = utcnow()
     try:
-        files = await uploads.read_files(score)
+        files = await uploads.read_files(score, max_files=uploads.max_files_for(state.upload_rules))
         checked = await asyncio.to_thread(uploads.check, files, settings=settings, score_type=score_type,
                                           require_score_type=True, allowed_kinds=uploads.USER_UPLOAD,
                                           rules=state.upload_rules)

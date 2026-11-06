@@ -39,7 +39,7 @@ async def recognize_endpoint(request: Request, score_type: str, image: list[Uplo
     rec = call_record(request)
     is_web = caller.is_service and bool(identifier)
     try:
-        files = await uploads.read_files(image)
+        files = await uploads.read_files(image, max_files=uploads.max_files_for(state.upload_rules))
         checked = await asyncio.to_thread(
             uploads.check, files, settings=settings, score_type=score_type, require_score_type=True,
             allowed_kinds=uploads.USER_UPLOAD, rules=state.upload_rules,

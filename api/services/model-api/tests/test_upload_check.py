@@ -64,7 +64,7 @@ def test_shared_expected_files(name, code):
 
 def test_order_count_type_corruption_size_resolution_score_type():
     valid = png(700)
-    assert check([("x.txt", b"text")] * 11).code == "UPLOAD_TOO_MANY_PAGES"
+    assert check([("x.txt", b"text")] * 31).code == "UPLOAD_TOO_MANY_PAGES"
     assert check([("x.png", b"bad"), ("x.txt", b"text")]).code == "UPLOAD_UNSUPPORTED_TYPE"
     broken = bytes.fromhex("89504e470d0a1a0a") + b"broken"
     assert check([("x.png", broken)], image_max_bytes=1, score_type=None).code == "UPLOAD_CORRUPTED"
@@ -96,15 +96,15 @@ def test_many_photos_keep_input_order_and_report_failed_page():
     assert [(p.page_no, p.file_no, p.short_edge_px) for p in verdict.pages] == [(1, 1, 700), (2, 2, 800)]
     failed = check([files[0], ("small.png", png(250))])
     assert failed.code == "UPLOAD_RESOLUTION_TOO_LOW" and failed.details["page"] == 2
-    assert check([files[0]] * 10).ok
-    assert check([files[0]] * 11).code == "UPLOAD_TOO_MANY_PAGES"
+    assert check([files[0]] * 30).ok
+    assert check([files[0]] * 31).code == "UPLOAD_TOO_MANY_PAGES"
 
 
 def test_pdf_page_count_and_mixed_input():
-    ten, eleven = pdf(10), pdf(11)
-    assert check([("ten.pdf", ten)]).ok
-    too_many = check([("eleven.pdf", eleven)])
-    assert too_many.code == "UPLOAD_TOO_MANY_PAGES" and too_many.details["pdf_page_count"] == 11
+    ten, thirty, over = pdf(10), pdf(30), pdf(31)
+    assert check([("ten.pdf", ten)]).ok and check([("thirty.pdf", thirty)]).ok
+    too_many = check([("over.pdf", over)])
+    assert too_many.code == "UPLOAD_TOO_MANY_PAGES" and too_many.details["pdf_page_count"] == 31
     assert check([("a.pdf", ten), ("b.pdf", ten)]).code == "UPLOAD_TOO_MANY_FILES"
     assert check([("a.pdf", ten), ("a.png", png(700))]).code == "UPLOAD_TOO_MANY_FILES"
 
@@ -214,7 +214,7 @@ def test_api_rejects_bad_input(api, variant):
 
 def test_api_pdf_metadata_and_order(api):
     client, _ = api
-    response = client.post("/v1/internal/upload-check", files={"file": ("eleven.pdf", pdf(11))},
+    response = client.post("/v1/internal/upload-check", files={"file": ("over.pdf", pdf(31))},
                            data={"score_type": "staff"}, headers={"X-API-Key": "service-secret"})
     assert response.status_code == 422 and response.json()["error"]["code"] == "UPLOAD_TOO_MANY_PAGES"
     photos = [("file", ("b.png", png(700))), ("file", ("a.png", png(800)))]

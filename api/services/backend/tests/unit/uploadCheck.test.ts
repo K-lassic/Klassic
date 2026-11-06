@@ -15,9 +15,10 @@ describe('업로드 검사 (G1)', () => {
     expect(v).toMatchObject({ ok: true, shortEdgePx: 800, details: { page_count: 2 } });
   });
 
-  it('파일이 없으면 BAD_REQUEST, 11장이면 UPLOAD_TOO_MANY_PAGES', () => {
+  it('파일이 없으면 BAD_REQUEST, 30장은 받고 31장이면 UPLOAD_TOO_MANY_PAGES', () => {
     expect(checkUpload([], 'staff').code).toBe('BAD_REQUEST');
-    expect(checkUpload(Array.from({ length: 11 }, () => png()), 'staff').code).toBe('UPLOAD_TOO_MANY_PAGES');
+    expect(checkUpload(Array.from({ length: 30 }, () => png()), 'staff').ok).toBe(true);
+    expect(checkUpload(Array.from({ length: 31 }, () => png()), 'staff').code).toBe('UPLOAD_TOO_MANY_PAGES');
   });
 
   it('받지 않는 형식 — 확장자와 파일 머리가 모두 맞아야 한다', () => {

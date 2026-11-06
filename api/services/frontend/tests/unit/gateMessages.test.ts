@@ -40,7 +40,7 @@ describe('gateMessages — api/shared/errors 세 파일에서 만든 C2 문구',
   it('여러 쪽(2026-09-29): UPLOAD_TOO_MANY_FILES 는 공유 원본 뜻(PDF 여러 개 · 섞음) · 쪽 반려는 어느 쪽인지 붙인다', () => {
     expect(gateMessage('UPLOAD_TOO_MANY_FILES').reason).toBe('PDF 한 개 또는 사진 여러 장으로 올려 주십시오.');
     expect(gateMessage('UPLOAD_TOO_MANY_FILES').reason).not.toContain('한 장만');
-    expect(gateMessage('UPLOAD_TOO_MANY_PAGES').reason).toBe('한 번에 10쪽까지 올릴 수 있습니다.');
+    expect(gateMessage('UPLOAD_TOO_MANY_PAGES').reason).toBe('한 번에 30쪽까지 올릴 수 있습니다.');
     const e = new GateError(422, { code: 'UPLOAD_CORRUPTED', message: '파일이 손상되었습니다.', gate: 'G1', retry_after: null, details: { page: 3 } });
     expect(gateFromError(e, ['a.png', 'b.png', 'c.png']).reason).toBe('3쪽(c.png) 파일이 손상되었습니다.');
     expect(gateFromError(e).reason).toBe('3쪽 파일이 손상되었습니다.');

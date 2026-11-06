@@ -84,8 +84,8 @@ const STEPS = computed<Step[]>(() => [
   {
     id: 'pages', title: '5. 여러 쪽 악보 보내기',
     body: [
-      '한 요청은 악보 한 곡입니다. PDF 한 개(모든 쪽) 또는 사진 여러 장(올린 순서대로)을 보내면 쪽을 이어 붙인 악보 하나가 옵니다. 최대 10쪽입니다.',
-      'PDF 와 사진을 섞거나 10쪽을 넘기면 422 입니다. 일부 쪽을 못 읽으면 notice 에 못 읽은 쪽이 적혀 옵니다.',
+      '한 요청은 악보 한 곡입니다. PDF 한 개(모든 쪽) 또는 사진 여러 장(올린 순서대로)을 보내면 쪽을 이어 붙인 악보 하나가 옵니다. 최대 30쪽입니다.',
+      'PDF 와 사진을 섞거나 30쪽을 넘기면 422 입니다. 일부 쪽을 못 읽으면 notice 에 못 읽은 쪽이 적혀 옵니다.',
     ],
     code: {
       curl: `curl -X POST -H "X-API-Key: $GUGAK_API_KEY" \\\n  -F "image=@page1.png" -F "image=@page2.png" -F "image=@page3.png" \\\n  ${API}/omr/staff -o result.json`,
@@ -130,7 +130,7 @@ const ERRORS: { http: string; code: string; what: string; next: string }[] = [
   { http: '403', code: 'AUTH_KEY_REVOKED', what: '폐기된 키', next: '새 키를 신청합니다' },
   { http: '413 · 415', code: 'UPLOAD_TOO_LARGE · UPLOAD_UNSUPPORTED_TYPE', what: '너무 큰 파일 · 받지 않는 형식', next: '20MB 이하 사진(PNG·JPG·WEBP)이나 PDF 로 보냅니다' },
   { http: '422', code: 'VALIDATION_ERROR', what: '입력이 약속과 다름(필수 누락 · 모르는 필드 · 형식 · 범위 · 빈 파일)', next: 'details.errors 의 loc(어느 칸)·msg(왜)를 보고 고칩니다' },
-  { http: '422', code: 'UPLOAD_TOO_MANY_PAGES · UPLOAD_RESOLUTION_TOO_LOW · UPLOAD_CORRUPTED', what: '10쪽 초과 · 사진이 작음 · 파일이 깨짐', next: '쪽 수를 줄이거나 더 선명한 사진으로 다시 보냅니다' },
+  { http: '422', code: 'UPLOAD_TOO_MANY_PAGES · UPLOAD_RESOLUTION_TOO_LOW · UPLOAD_CORRUPTED', what: '30쪽 초과 · 사진이 작음 · 파일이 깨짐', next: '쪽 수를 줄이거나 더 선명한 사진으로 다시 보냅니다' },
   { http: '429', code: 'RATE_LIMIT_EXCEEDED · SERVER_BUSY', what: '호출 한도 초과 · 동시 처리 가득', next: 'Retry-After 초만큼 기다린 뒤 다시 부릅니다' },
   { http: '503', code: 'SERVICE_NOT_READY', what: '서버가 모델을 올리는 중', next: '잠시 뒤 /health 가 ok 인지 보고 다시 부릅니다' },
   { http: '200', code: 'fallback = true', what: '오류가 아님. 인식 대신 대체 선율', next: 'fallback_reason 을 보고, 더 선명한 사진으로 다시 시도할 수 있습니다' },
