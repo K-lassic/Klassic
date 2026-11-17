@@ -78,6 +78,27 @@ describe('붙임줄과 성부', () => {
     expect(shape(parseMusicXml(toMusicXml(doc)))).toEqual(['1440:480:60', '1920:480:60']);
   });
 
+  it('다음 마디에서 앞 성부가 같은 음을 나중에 쳐도, 뒤 성부의 이어지는 조각은 짝을 찾는다', () => {
+    // 2마디: 1성부가 셋째 박에 도를 친다(파일에서는 먼저 읽힌다). 2성부의 도는 1마디에서 넘어와 첫 박에 이어진다
+    const doc = docOf([
+      { startTick: 0, durationTicks: 1920, pitch: 72, velocity: 80 },      // 1마디 1성부
+      { startTick: 1440, durationTicks: 960, pitch: 60, velocity: 80 },    // 1마디 2성부 → 2마디로 넘어간다
+      { startTick: 1920, durationTicks: 960, pitch: 76, velocity: 80 },    // 2마디 1성부 앞 절반
+      { startTick: 2880, durationTicks: 480, pitch: 60, velocity: 80 },    // 2마디 1성부: 도 (2성부의 도가 끝난 뒤)
+    ]);
+    expect(shape(parseMusicXml(toMusicXml(doc)))).toEqual(shape(doc));
+  });
+
+  it('두 성부가 같은 음을 함께 마디 너머로 끌면, 성부 번호로 각자의 뒷부분을 찾는다', () => {
+    const doc = docOf([
+      { startTick: 0, durationTicks: 2880, pitch: 58, velocity: 80 },      // 길게 — 마디선(1920) 뒤 960 더
+      { startTick: 1200, durationTicks: 1200, pitch: 58, velocity: 80 },   // 같은 음, 마디선 뒤 480 더
+    ]);
+    const back = parseMusicXml(toMusicXml(doc));
+    // 뒷부분이 서로 바뀌면 0:2400 · 1200:1680 이 된다
+    expect(shape(back)).toEqual(['0:2880:58', '1200:1200:58']);
+  });
+
   it('세 마디에 걸친 음 — 가운데 마디의 다른 성부에 같은 음이 있어도 끝까지 한 음이다', () => {
     const doc = docOf([
       { startTick: 1440, durationTicks: 4320, pitch: 67, velocity: 80 },   // 1마디 끝 ~ 3마디 끝
