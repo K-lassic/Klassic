@@ -58,9 +58,9 @@ jobs:
       # 키 자체가 예시에 없으면 채워지지 않으므로, compose 가 요구하는 키가 예시에서 빠진 경우는 그대로 걸린다.
       - name: .env 준비 (예시 파일 + 빈 칸은 자리 표시 값)
         run: |
-          sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)=[[:space:]]*(#.*)?$/=ci-placeholder-not-a-secret/' .env.example > .env
-          echo "자리 표시 값으로 채운 키 $(grep -c 'ci-placeholder-not-a-secret' .env)개: $(grep 'ci-placeholder-not-a-secret' .env | cut -d= -f1 | tr '
-' ' ')"
+          sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)=[[:space:]]*(#.*)?$/\1=ci-placeholder-not-a-secret/' .env.example > .env
+          echo "자리 표시 값으로 채운 키: $(grep -c 'ci-placeholder-not-a-secret' .env)개"
+          grep 'ci-placeholder-not-a-secret' .env | cut -d= -f1
 
       - name: 기본 구성
         run: docker compose -f compose.yaml config --quiet
