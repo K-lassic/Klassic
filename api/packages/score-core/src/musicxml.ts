@@ -211,7 +211,11 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
     let sawUnpitched = false;
     let percClef = false;
     const notes: Note[] = [];
-    const openTies = new Map<number, Note>();
+    // 열려 있는 붙임줄: 음높이 → 아직 이어질 수 있는 음표들.
+    //   음높이마다 하나만 기억하면 안 된다. 성부는 파일에 차례로 적히므로(1성부 전부 → backup → 2성부),
+    //   1성부의 붙임줄이 열린 뒤에 2성부의 같은 음높이 음(붙임줄 없음)이 나온다. 그 음이 기억을 지우면
+    //   다음 마디의 이어지는 조각이 짝을 못 찾아 음이 둘로 쪼개진다. 짝은 음높이 + "끝나는 자리 = 시작하는 자리" 로 찾는다.
+    const openTies = new Map<number, Note[]>();
 
     for (const m of children(pe, 'measure')) {
       let pos = 0;                               // 마디 안 위치(틱)
@@ -292,15 +296,19 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
             const tieStop = ties.includes('stop');
             const tieStart = ties.includes('start');
 
-            const open = openTies.get(pitch);
-            if (tieStop && open && Math.abs(open.startTick + open.durationTicks - absStart) <= 1) {
+            // 이미 지나간 붙임줄(끝난 자리가 지금보다 앞)은 더 이어질 수 없다 — 치워 둔다
+            const opens = (openTies.get(pitch) ?? []).filter((o) => o.startTick + o.durationTicks >= absStart - 1);
+            const open = tieStop ? opens.find((o) => Math.abs(o.startTick + o.durationTicks - absStart) <= 1) : undefined;
+            if (open) {
               open.durationTicks = absStart + dur - open.startTick;
-              if (!tieStart) openTies.delete(pitch);
+              if (!tieStart) opens.splice(opens.indexOf(open), 1);
+              openTies.set(pitch, opens);
               break;
             }
             const n: Note = { id: '', startTick: absStart, durationTicks: dur, pitch, velocity };
             notes.push(n);
-            if (tieStart) openTies.set(pitch, n); else openTies.delete(pitch);
+            if (tieStart) opens.push(n);
+            openTies.set(pitch, opens);
             break;
           }
           default: break;
