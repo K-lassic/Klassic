@@ -71,6 +71,19 @@ jobs:
       - name: ruff
         run: uv run --frozen ruff check .
 
+      # 이미지(Dockerfile)가 정해 두는 경로를 러너에서 쓸 수 있는 곳으로 옮긴다.
+      #   기본값 /storage · /app/shared 는 컨테이너 안의 경로다. 러너에는 없고 만들 권한도 없어서
+      #   그대로 두면 업로드 검사 시험 24개가 PermissionError(500)로 실패한다 (첫 실행에서 확인).
+      - name: 저장 폴더 준비
+        run: |
+          mkdir -p "$RUNNER_TEMP/storage/tmp"
+          {
+            echo "STORAGE_DIR=$RUNNER_TEMP/storage"
+            echo "TMPDIR=$RUNNER_TEMP/storage/tmp"
+            echo "SHARED_DIR=$GITHUB_WORKSPACE/api/shared"
+            echo "ASSETS_DIR=$GITHUB_WORKSPACE/api/services/model-api/assets"
+          } >> "$GITHUB_ENV"
+
       # -rs: 건너뛴 시험이 있으면 이유를 함께 찍는다. 아래 단계가 개수를 센다
       - name: pytest
         run: uv run --frozen pytest -q -rs --junitxml=pytest-model-api.xml
