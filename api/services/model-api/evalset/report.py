@@ -181,6 +181,16 @@ def to_markdown(rows: list[dict], s: dict, diff: list[dict] | None = None, lost:
         L.append(f"| 전체가 통째로 밀린 악보 | {real['shifted']} | 0 — 음자리표 · 조표를 잘못 읽은 것 |")
     L.append("")
 
+    if len(real["by_variant"]) > 1:
+        # 변형(깨끗함 · 기울임 · 흐림 … / augment.py 의 종류+세기)마다 몇 장이 정상인가 — 어디서부터 못 읽는지가 보인다
+        L.append("### 변형별 정상 변환\n")
+        L.append("| 변형 | 정상 / 장수 | |")
+        L.append("|---|---:|---|")
+        for name, v in sorted(real["by_variant"].items(), key=lambda kv: (kv[0] != "clean", kv[0])):
+            bar = "█" * v["normal"] + "░" * (v["n"] - v["normal"])
+            L.append(f"| {name} | {v['normal']} / {v['n']} | {bar} |")
+        L.append("")
+
     if diff:
         L.append("### 예전 결과와 견줌\n")
         L.append("| 지표 | 예전 | 지금 | |")

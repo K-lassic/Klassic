@@ -61,6 +61,33 @@ uv run python -m evalset.calibrate evalset/results/2026-11-18
 - 정간보 엔진은 전혀 재지 못한다.
 - 오선보 14장은 v0.1.1 에서 전부 100% 였다. 엔진이 조금 나빠져도 여기서는 안 보일 수 있다 — **어려운 악보를 더 모아야 회귀를 잡는 도구가 된다.**
 
+## 어려운 평가셋 만들기 (`augment.py`)
+
+지금 오선보는 다 맞는 시험지라 엔진이 조금 나빠져도 안 보인다. 정답이 있는 깨끗한 악보 6장(S01~S05 · S14)을
+**세기를 올려 가며** 망가뜨려, 정답은 그대로 쓰면서 "어디서부터 못 읽는가"를 잰다.
+
+```bash
+uv run python -m evalset.augment --out evalset/results/aug            # 6장 → 132장 (7종류 × 세기 3 + 원본)
+EVAL_API_KEY=… uv run python -m evalset.run --base-url …     --images evalset/results/aug --manifest evalset/results/aug/manifest.json --out evalset/results/aug-run
+uv run python -m evalset.report evalset/results/aug-run --answers evalset/results/aug/answers.json
+```
+
+| 종류 | 세기 1 · 2 · 3 |
+|---|---|
+| `rotate` 기울임 | 1.5° · 3° · 6° |
+| `persp` 원근 | 위쪽 모서리를 2% · 4% · 8% 안으로 |
+| `blur` 흐림 | 반지름 1 · 2 · 3.5px |
+| `noise` 잡음 | 표준편차 8 · 16 · 30 |
+| `shadow` 그림자 | 한쪽이 25% · 45% · 65% 어두워짐 |
+| `lowres` 저해상도 | 짧은 변 1000 · 800 · 600px |
+| `jpeg` JPEG 압축 | 품질 50 · 30 · 15 |
+
+`report.py` 가 「변형별 정상 변환」 표를 낸다 (`rotate1 6/6 · rotate2 5/6 · rotate3 1/6` 처럼).
+같은 `--seed` 면 같은 그림이 나오므로 만든 그림은 저장소에 올리지 않는다. 132장을 다 돌리면 십몇 분 걸린다 —
+`--kinds rotate lowres --levels 2 3` 처럼 줄여 돌릴 수 있다.
+
+합성한 망가짐이라 실제 휴대폰 사진(구겨짐 · 반사 · 손가락)을 대신하지는 못한다.
+
 ## 보정 도구(`calibrate.py`)를 믿어도 되는가
 
 지금 평가셋으로는 **아니다.** 타당성 판정까지 간 항목 중 '나쁜 결과'가 몇 건 안 된다 (가짜는 대부분 인식 전에 걸러진다).
@@ -72,7 +99,7 @@ uv run python -m evalset.calibrate evalset/results/2026-11-18
 
 ## 확인된 것 / 안 된 것 (2026-11-18)
 
-- `tests/test_evalset.py` 30개 통과 — 채점 · 일괄 실행(가짜 model-api) · 보고 · 보정.
+- `tests/test_evalset.py` · `tests/test_evalset_augment.py` 48개 통과 — 채점 · 일괄 실행(가짜 model-api) · 보고 · 보정 · 평가셋 만들기.
 - **실제 model-api · 엔진으로는 한 번도 돌려 보지 못했다.** 작성한 PC 에 Docker · 엔진 볼륨이 없었다.
   `run.py` 의 요청 모양(`image` 파일 필드, `X-API-Key`)과 응답 필드는 `app/routers/omr_staff.py` · `app/schemas.py` 를 보고 맞췄다.
   처음 돌릴 때 확인할 것: 가짜 악보가 200 + `fallback` 으로 오는지 4xx 로 거절되는지 (둘 다 '걸러짐' 으로 세도록 해 두었다).
