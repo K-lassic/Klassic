@@ -1,0 +1,91 @@
+# model-api 를 PR 마다 시험한다 — lock 확인 · Ruff · pytest (#95 CI 자동화 · 담당: 예은)
+#
+#   구조에서의 위치: GitHub 가 PR 을 열거나 고칠 때 · main 에 병합될 때 실행. 서비스 · 이미지 · DB · 엔진 볼륨과는 관계없다.
+#   무엇을 보나:
+#     1) uv lock --check   pyproject.toml 과 uv.lock 이 어긋나지 않았는가
+#     2) uv sync --frozen  이미지(Dockerfile)와 같은 방식으로 의존성 설치. Python 3.11 · uv 판도 Dockerfile 과 같게 맞춘다
+#     3) ruff check        pyproject 의 [tool.ruff] 규칙
+#     4) pytest            tests/test_*.py. 인식 엔진(homr · 정간보) · DB 는 시험 대역으로 돈다
+#   여기서 돌지 않는 것: tests/container_*_smoke.py — 실제 엔진 볼륨 · DB · 음원이 필요한 컨테이너 시험이다.
+#     이름이 test_ 로 시작하지 않아 pytest 가 모으지 않는다. 지금처럼 서버 PC 에서 손으로 돌린다.
+#   시스템 패키지: Dockerfile 의 runtime 단계와 같은 것(fluidsynth · lame · libgl1 …)을 깐다.
+#     렌더링 시험이 실제 도구를 부르는지 대역을 쓰는지와 관계없이 이미지와 같은 조건으로 맞춘다.
+#   pull_request 를 쓴다 (pull_request_target 아님): PR 의 코드를 실행하므로 쓰기 권한 · 비밀값을 주지 않는다.
+name: model-api 시험
+
+on:
+  pull_request:
+    paths:
+      - 'api/services/model-api/**'
+      - 'api/shared/**'
+      - 'api/contracts/model-api.yaml'
+      - '.github/workflows/model-api.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/services/model-api/**'
+      - 'api/shared/**'
+      - 'api/contracts/model-api.yaml'
+      - '.github/workflows/model-api.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-api-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: model-api (lock · ruff · pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: api/services/model-api
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      # astral-sh/setup-uv v6.8.0 — uv 판은 Dockerfile 의 UV_VERSION 과 같게
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: '0.11.1'
+          python-version: '3.11'
+          enable-cache: true
+          cache-dependency-glob: api/services/model-api/uv.lock
+
+      - name: 시스템 패키지 (Dockerfile runtime 단계와 같게)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libfluidsynth3 fluidsynth lame libgl1 libglib2.0-0
+
+      - name: lock 확인
+        run: uv lock --check
+
+      - name: 의존성 설치
+        run: uv sync --frozen
+
+      - name: ruff
+        run: uv run --frozen ruff check .
+
+      # -rs: 건너뛴 시험이 있으면 이유를 함께 찍는다. 아래 단계가 개수를 센다
+      - name: pytest
+        run: uv run --frozen pytest -q -rs --junitxml=pytest-model-api.xml
+
+      - name: 건너뛴 시험이 없는지 확인
+        run: |
+          python3 - <<'EOF'
+          import sys
+          import xml.etree.ElementTree as ET
+          root = ET.parse("pytest-model-api.xml").getroot()
+          suite = root if root.tag == "testsuite" else root.find("testsuite")
+          total, skipped = int(suite.get("tests")), int(suite.get("skipped"))
+          failed = int(suite.get("failures")) + int(suite.get("errors"))
+          print(f"전체 {total} · 실패 {failed} · 건너뜀 {skipped}")
+          if skipped:
+              print("::error::건너뛴 시험이 있습니다 — 위 pytest 출력의 SKIPPED 줄에 이유가 있습니다")
+              sys.exit(1)
+          EOF

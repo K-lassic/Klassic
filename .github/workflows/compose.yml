@@ -1,0 +1,75 @@
+# Compose 설정이 병합되는지 PR 마다 확인한다 — 기본 · 대역 구성 (#95 CI 자동화 · 담당: 팀장)
+#
+#   구조에서의 위치: GitHub 가 PR 을 열거나 고칠 때 · main 에 병합될 때 실행. 컨테이너를 띄우지 않는다 — 설정만 읽는다.
+#   무엇을 보나: `docker compose config` 가 오류 없이 끝나는가.
+#     api/compose.yaml 은 서비스 폴더의 compose.yaml 을 include 만 한다 (CLAUDE.md 「이 저장소에서 정한 것」).
+#     각자 자기 폴더의 compose.yaml 을 고치므로, 합쳤을 때 서비스 이름 · 볼륨 · 네트워크가 부딪히는지는 합쳐 봐야 안다.
+#       기본  api/compose.yaml
+#       대역  api/compose.yaml + api/deploy/compose.standin.yaml   (model-api 자리에 v0.1.1 대역)
+#       demo  기본 + --profile demo
+#   .env 는 저장소의 api/.env.example 을 그대로 복사해 쓴다. 필수 키가 예시에서 빠지면 여기서 걸린다
+#     (compose 가 `${KEY:?…}` 로 요구하는 키인데 .env.example 에 없는 경우 — 구축 문서대로 따라 하면 막히는 상황).
+#     예시 파일의 값은 자리 표시용이다 — 비밀값이 아니다.
+#   여기서 하지 않는 것: 이미지 빌드 · 컨테이너 기동 · healthcheck. 엔진 볼륨과 음원(LFS)이 필요해 러너에서는 못 한다.
+name: compose 설정 확인
+
+on:
+  pull_request:
+    paths:
+      - 'api/compose.yaml'
+      - 'api/**/compose*.yaml'
+      - 'api/.env.example'
+      - 'api/deploy/*.env'
+      - '.github/workflows/compose.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/compose.yaml'
+      - 'api/**/compose*.yaml'
+      - 'api/.env.example'
+      - 'api/deploy/*.env'
+      - '.github/workflows/compose.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  config:
+    name: docker compose config (기본 · 대역 · demo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Compose 판 확인
+        run: docker compose version
+
+      - name: .env 준비 (예시 파일 그대로)
+        run: cp .env.example .env
+
+      - name: 기본 구성
+        run: docker compose -f compose.yaml config --quiet
+
+      - name: 대역 구성 (model-api 대역)
+        run: docker compose -f compose.yaml -f deploy/compose.standin.yaml config --quiet
+
+      - name: demo 프로필
+        run: docker compose -f compose.yaml --profile demo config --quiet
+
+      # 사람이 읽을 요약 — 어떤 서비스가 어떤 이미지로 합쳐졌는지
+      - name: 병합 결과 요약
+        run: |
+          echo "### 기본 구성의 서비스" >> "$GITHUB_STEP_SUMMARY"
+          docker compose -f compose.yaml --profile demo config --format json \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(f"- `{n}` — {s.get(\"image\",\"(build)\")}" for n,s in sorted(d["services"].items())))' \
+            >> "$GITHUB_STEP_SUMMARY"
