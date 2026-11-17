@@ -71,10 +71,10 @@ jobs:
       - name: demo 프로필
         run: docker compose -f compose.yaml --profile demo config --quiet
 
-      # 사람이 읽을 요약 — 어떤 서비스가 어떤 이미지로 합쳐졌는지
+      # 사람이 읽을 요약 — 합쳐진 서비스 이름 (실행 화면의 Summary 에 보인다)
       - name: 병합 결과 요약
         run: |
-          echo "### 기본 구성의 서비스" >> "$GITHUB_STEP_SUMMARY"
-          docker compose -f compose.yaml --profile demo config --format json \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(f"- `{n}` — {s.get(\"image\",\"(build)\")}" for n,s in sorted(d["services"].items())))' \
-            >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### 합쳐진 서비스 (기본 + demo 프로필)"
+            docker compose -f compose.yaml --profile demo config --services | sort | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
