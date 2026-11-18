@@ -211,7 +211,12 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
     let sawUnpitched = false;
     let percClef = false;
     const notes: Note[] = [];
-    const openTies = new Map<number, Note>();
+    // 열려 있는 붙임줄: 음높이 → 아직 이어질 수 있는 음표들.
+    //   음높이마다 하나만 기억하면 안 된다. 성부는 파일에 차례로 적히므로(1성부 전부 → backup → 2성부),
+    //   1성부의 붙임줄이 열린 뒤에 2성부의 같은 음높이 음(붙임줄 없음)이 나온다. 그 음이 기억을 지우면
+    //   다음 마디의 이어지는 조각이 짝을 못 찾아 음이 둘로 쪼개진다. 짝은 음높이 + "끝나는 자리 = 시작하는 자리" 로 찾는다.
+    //   같은 음높이의 붙임줄 둘이 같은 자리에서 끝나면(두 성부가 같은 음을 함께 마디 너머로 끄는 경우) 성부 번호가 같은 쪽을 고른다.
+    const openTies = new Map<number, { note: Note; voice: string }[]>();
 
     for (const m of children(pe, 'measure')) {
       let pos = 0;                               // 마디 안 위치(틱)
@@ -292,15 +297,24 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
             const tieStop = ties.includes('stop');
             const tieStart = ties.includes('start');
 
-            const open = openTies.get(pitch);
-            if (tieStop && open && Math.abs(open.startTick + open.durationTicks - absStart) <= 1) {
-              open.durationTicks = absStart + dur - open.startTick;
-              if (!tieStart) openTies.delete(pitch);
+            // 이 마디가 시작하기 전에 끝난 붙임줄은 더 이어질 수 없다 — 치워 둔다.
+            //   '지금 음보다 앞에서 끝났는가' 로 치우면 안 된다: 앞 성부의 뒤쪽 음이 먼저 읽히므로,
+            //   마디 첫머리에서 이어질 뒤 성부의 붙임줄까지 지워진다.
+            const endOf = (o: { note: Note }) => o.note.startTick + o.note.durationTicks;
+            const opens = (openTies.get(pitch) ?? []).filter((o) => endOf(o) >= measureStart - 1);
+            const voice = childText(el, 'voice') ?? '';
+            const joins = tieStop ? opens.filter((o) => Math.abs(endOf(o) - absStart) <= 1) : [];
+            const open = joins.find((o) => o.voice === voice) ?? joins[0];
+            if (open) {
+              open.note.durationTicks = absStart + dur - open.note.startTick;
+              if (!tieStart) opens.splice(opens.indexOf(open), 1);
+              openTies.set(pitch, opens);
               break;
             }
             const n: Note = { id: '', startTick: absStart, durationTicks: dur, pitch, velocity };
             notes.push(n);
-            if (tieStart) openTies.set(pitch, n); else openTies.delete(pitch);
+            if (tieStart) opens.push({ note: n, voice });
+            openTies.set(pitch, opens);
             break;
           }
           default: break;
