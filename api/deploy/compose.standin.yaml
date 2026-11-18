@@ -54,4 +54,6 @@ services:
     tmpfs: !override
       - /tmp:rw,nosuid,nodev,mode=1777
     cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
+    # !override — 재구성판(services/model-api/compose.yaml)에도 같은 값이 있다. 그냥 두면 목록이 이어 붙어
+    #   같은 항목이 두 번 들어가고, Compose 가 "security_opt items at 0 and 1 are equal" 로 config 를 거부한다 (#95 CI 에서 확인)
+    security_opt: !override [no-new-privileges:true]

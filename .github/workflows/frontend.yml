@@ -1,0 +1,101 @@
+# frontend · score-core 를 PR 마다 시험한다 (#95 CI 자동화 · 담당: 황송해)
+#
+#   구조에서의 위치: GitHub 가 PR 을 열거나 고칠 때 · main 에 병합될 때 실행. 서비스 · 이미지 · DB 와는 관계없다 (읽기만 한다).
+#   무엇을 보나:
+#     score-core  lint → build → test.  backend · frontend 가 `file:../../packages/score-core` 로 가져다 쓰는 공용 패키지다.
+#     frontend    score-core 빌드 → lint → `npm run build`(vue-tsc 타입 검사 + vite 빌드) → test.
+#   바뀐 폴더만: 아래 paths 에 걸리는 파일이 바뀐 PR 에서만 돈다.
+#     api/shared 를 넣은 이유 — frontend 가 오류 코드 · 업로드 규칙 · 악기 목록을 `../../../../shared/…` 로 읽는다 (#19).
+#   Dockerfile 과 같은 순서로 돈다 (services/frontend/Dockerfile: score-core 빌드 → npm ci → npm run build).
+#     Node 판도 이미지와 같은 22.21.1 로 맞춘다. 이미지 빌드 자체는 여기서 하지 않는다.
+#   pull_request 를 쓴다 (pull_request_target 아님): PR 의 코드를 받아 실행하므로 쓰기 권한 · 비밀값을 주지 않는다.
+name: frontend 시험
+
+on:
+  pull_request:
+    paths:
+      - 'api/services/frontend/**'
+      - 'api/packages/score-core/**'
+      - 'api/shared/**'
+      - '.github/workflows/frontend.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/services/frontend/**'
+      - 'api/packages/score-core/**'
+      - 'api/shared/**'
+      - '.github/workflows/frontend.yml'
+
+# 읽기만 한다
+permissions:
+  contents: read
+
+# 같은 PR 에 연달아 푸시하면 앞 실행은 멈춘다. main 은 커밋마다 끝까지 돌린다
+concurrency:
+  group: frontend-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '22.21.1'
+
+jobs:
+  score-core:
+    name: score-core (lint · build · test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: api/packages/score-core
+    steps:
+      # actions/checkout v4.2.2 — auto-label-pr.yml 과 같은 커밋으로 고정
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: api/packages/score-core/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+  frontend:
+    name: frontend (lint · 타입 검사 · build · test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            api/packages/score-core/package-lock.json
+            api/services/frontend/package-lock.json
+
+      # score-core 를 먼저 빌드해야 `file:` 의존성이 dist/ 를 찾는다
+      - name: score-core 빌드
+        working-directory: api/packages/score-core
+        run: npm ci --no-audit --no-fund && npm run build
+
+      - name: 의존성 설치
+        working-directory: api/services/frontend
+        run: npm ci --no-audit --no-fund
+
+      # 경고는 통과시키고 오류만 막는다 (eslint 기본 동작)
+      - name: lint
+        working-directory: api/services/frontend
+        run: npm run lint
+
+      - name: 타입 검사 · 빌드 (vue-tsc --noEmit && vite build)
+        working-directory: api/services/frontend
+        run: npm run build
+
+      - name: 시험
+        working-directory: api/services/frontend
+        run: npm test
