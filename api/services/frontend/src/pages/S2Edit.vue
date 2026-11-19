@@ -8,6 +8,7 @@ import { RouterLink, onBeforeRouteLeave, useRouter } from 'vue-router';
 import C2GateBlock from '@/components/C2GateBlock.vue';
 import C9StepBar from '@/components/C9StepBar.vue';
 import C3ResultBand from '@/components/C3ResultBand.vue';
+import C4InstrumentPicker from '@/components/C4InstrumentPicker.vue';
 import C5PlayerBar from '@/components/C5PlayerBar.vue';
 import GuardedButton from '@/components/GuardedButton.vue';
 import LeaveConfirm from '@/components/LeaveConfirm.vue';
@@ -20,8 +21,8 @@ import ScoreView from '@/components/ScoreView.vue';
 import { useRequestStore } from '@/stores/request';
 import { useEditorStore } from '@/stores/editor';
 import { useInstrumentStore } from '@/stores/instruments';
-import { applyDefaultEnsemble, ensembleLabel } from '@/lib/ensemble';
-import { instrumentName } from '@/lib/instruments';
+import { applyDefaultEnsemble, ensembleLabel, type InstrumentChoice } from '@/lib/ensemble';
+import { DEFAULT_MELODY, DEFAULT_PERCUSSION, instrumentName } from '@/lib/instruments';
 import { applyOps, fitToRangeOps, rangeWarnings, summarizeOps, toMusicXml, withOriginalInstruments } from '@/lib/scoreCore';
 import { formatClock } from '@/lib/time';
 import { api } from '@/api/client';
@@ -128,7 +129,21 @@ async function onRateChange(r: number) {
   if (expired.value || ed.requestNo !== props.requestNo) return;
   await ed.setTempo(Math.abs(r - 1) < 0.001 ? null : Math.round(r * 100));
 }
-// (2026-09-30 115번) 악기 바꾸기는 2단계로 옮겼다 — 3단계 악기 표는 현재 악기 · 음량만
+const trackPicker = ref<number | null>(null);
+const pickedTrack = computed(() => trackPicker.value === null ? null : edited.value?.parts[trackPicker.value]);
+const trackChoice = computed<InstrumentChoice>(() => pickedTrack.value
+  ? { kind: 'instrument', code: pickedTrack.value.instrument }
+  : { kind: 'default' });
+async function onTrackChoice(choice: InstrumentChoice) {
+  const part = trackPicker.value;
+  const track = pickedTrack.value;
+  if (part === null || !track || expired.value) return;
+  const instrument = choice.kind === 'instrument' ? choice.code : track.isPercussion ? DEFAULT_PERCUSSION : DEFAULT_MELODY;
+  trackPicker.value = null;
+  if (track.instrument === instrument) return;
+  await push({ op: 'change_instrument', part, instrument });
+  if (ed.listenMode === 'original') await ed.setListenMode('edit');
+}
 // (2026-09-30 SD_02 ㊶) 악기 추가 · [빼기]는 화면에서 뺐다 — 편집 연산 add_instrument · remove_track 은 score-core 에 호환용으로 남는다
 
 
@@ -263,7 +278,7 @@ const trackInstrumentName = (i: number) => {
               <h2 id="tracks-h" class="h3 center-h">악기 음량 조절하기</h2>
               <div class="table-scroll">
                 <table class="spec plain">
-                  <thead><tr><th scope="col">악기</th><th scope="col">음량</th></tr></thead>
+                  <thead><tr><th scope="col">악기</th><th scope="col">음량</th><th scope="col">변경할 악기</th></tr></thead>
                   <tbody>
                     <tr v-for="(p, i) in edited.parts" :key="p.id">
                       <th scope="row" class="inst-name">{{ partLabel(i) }}</th>
@@ -277,10 +292,28 @@ const trackInstrumentName = (i: number) => {
                           />
                         </label>
                       </td>
+                      <td>
+                        <button type="button" class="btn btn-secondary btn-sm" :disabled="expired"
+                          :aria-expanded="trackPicker === i" :aria-label="`${partLabel(i)} 악기 선택`"
+                          data-test="pick-instrument" @click="trackPicker = trackPicker === i ? null : i">
+                          {{ trackPicker === i ? '닫기' : '악기 선택' }}
+                        </button>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+              <C4InstrumentPicker
+                v-if="trackPicker !== null && pickedTrack"
+                class="track-panel"
+                scope="track"
+                :legend="`${partLabel(trackPicker)} 악기 선택`"
+                :model-value="trackChoice"
+                :catalog="inst.catalog"
+                :percussion-track="pickedTrack.isPercussion"
+                :disabled-reason="lockReason"
+                @update:model-value="onTrackChoice"
+              />
             </section>
 
             <!-- (2026-09-30 93번) 전체 구성 고르기(C4 "연주 악기 고르기" — 기본 · 추천 조합 · 원래 악기)는 뺐다. 악기 표의 [악기 선택](그 악기 하나)만 남는다 -->
@@ -335,6 +368,7 @@ const trackInstrumentName = (i: number) => {
 .track-card { padding: var(--spacing-24); border-radius: var(--rounded-stadium); background: var(--color-white); }
 .track-card table.spec th, .track-card table.spec td { text-align: center; }
 .track-card .vol { justify-content: center; }
+.track-panel { margin-top: var(--spacing-16); }
 .track-card .acts-in { justify-content: center; }
 .transpose-card { display: grid; gap: var(--spacing-16); padding: var(--spacing-24); border-radius: var(--rounded-stadium); background: var(--color-white); }
 .transpose-card > h2 { margin: 0; }
