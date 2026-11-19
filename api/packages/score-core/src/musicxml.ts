@@ -202,7 +202,10 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
   let time: ScoreDoc['timeSignature'] | undefined;
   let fifths: number | undefined;
 
-  for (const pe of children(root, 'part')) {
+  const xmlParts = children(root, 'part');
+  const partIds = new Set(xmlParts.map((part) => part.attrs.id));
+  const additionalStaves: Part[] = [];
+  for (const pe of xmlParts) {
     const id = pe.attrs.id;
     const meta = metas.get(id) ?? { name: id, program: null, unpitched: new Map(), percussion: false };
     let divisions = 1;
@@ -215,8 +218,10 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
     //   음높이마다 하나만 기억하면 안 된다. 성부는 파일에 차례로 적히므로(1성부 전부 → backup → 2성부),
     //   1성부의 붙임줄이 열린 뒤에 2성부의 같은 음높이 음(붙임줄 없음)이 나온다. 그 음이 기억을 지우면
     //   다음 마디의 이어지는 조각이 짝을 못 찾아 음이 둘로 쪼개진다. 짝은 음높이 + "끝나는 자리 = 시작하는 자리" 로 찾는다.
-    //   같은 음높이의 붙임줄 둘이 같은 자리에서 끝나면(두 성부가 같은 음을 함께 마디 너머로 끄는 경우) 성부 번호가 같은 쪽을 고른다.
-    const openTies = new Map<number, { note: Note; voice: string }[]>();
+    //   같은 음높이의 붙임줄 둘이 같은 자리에서 끝나면(두 성부 · 두 보표가 같은 음을 함께 마디 너머로 끄는 경우)
+    //   성부 번호와 보표가 모두 같은 쪽 → 성부 번호가 같은 쪽 순으로 고른다.
+    const openTies = new Map<number, { note: Note; voice: string; staff: number }[]>();
+    const noteStaves = new Map<Note, number>();   // 음표 → 보표 번호 (보표마다 파트를 나눌 때 쓴다)
 
     for (const m of children(pe, 'measure')) {
       let pos = 0;                               // 마디 안 위치(틱)
@@ -303,8 +308,11 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
             const endOf = (o: { note: Note }) => o.note.startTick + o.note.durationTicks;
             const opens = (openTies.get(pitch) ?? []).filter((o) => endOf(o) >= measureStart - 1);
             const voice = childText(el, 'voice') ?? '';
+            const staff = num(childText(el, 'staff')) ?? 1;
             const joins = tieStop ? opens.filter((o) => Math.abs(endOf(o) - absStart) <= 1) : [];
-            const open = joins.find((o) => o.voice === voice) ?? joins[0];
+            const open = joins.find((o) => o.voice === voice && o.staff === staff)
+              ?? joins.find((o) => o.voice === voice)
+              ?? joins[0];
             if (open) {
               open.note.durationTicks = absStart + dur - open.note.startTick;
               if (!tieStart) opens.splice(opens.indexOf(open), 1);
@@ -313,7 +321,8 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
             }
             const n: Note = { id: '', startTick: absStart, durationTicks: dur, pitch, velocity };
             notes.push(n);
-            if (tieStart) opens.push({ note: n, voice });
+            noteStaves.set(n, staff);
+            if (tieStart) opens.push({ note: n, voice, staff });
             openTies.set(pitch, opens);
             break;
           }
@@ -326,8 +335,25 @@ export function parseMusicXml(input: string | Uint8Array, catalog: InstrumentCat
     }
 
     sortNotes(notes).forEach((n, i) => { n.id = noteId(id, i); });
-    doc.parts.push(buildPart(id, meta, notes, meta.percussion || sawUnpitched || percClef, catalog));
+    const percussion = meta.percussion || sawUnpitched || percClef;
+    const byStaff = new Map<number, Note[]>();
+    for (const note of notes) {
+      const staff = noteStaves.get(note) ?? 1;
+      const staffNotes = byStaff.get(staff) ?? [];
+      staffNotes.push(note);
+      byStaff.set(staff, staffNotes);
+    }
+    const [firstStaff, ...otherStaves] = [...byStaff.keys()].sort((a, b) => a - b);
+    doc.parts.push(buildPart(id, meta, firstStaff === undefined ? notes : byStaff.get(firstStaff)!, percussion, catalog));
+    // 기존 MusicXML 파트 번호와 음표 ID를 유지하고 새 보표만 뒤에 추가한다.
+    for (const staff of otherStaves) {
+      let staffId = `${id}-staff-${staff}`;
+      while (partIds.has(staffId)) staffId += '-';
+      partIds.add(staffId);
+      additionalStaves.push(buildPart(staffId, meta, byStaff.get(staff)!, percussion, catalog));
+    }
   }
+  doc.parts.push(...additionalStaves);
 
   doc.tempoBpm = Math.round((tempo ?? 120) * 100) / 100;
   doc.timeSignature = time ?? { beats: 4, beatType: 4 };

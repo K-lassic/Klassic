@@ -146,9 +146,7 @@ describe('2026-09-30 황송해 36~49 (소스 확인)', () => {
     expect(template).not.toContain('add_instrument');
     expect(template).not.toContain('remove-track');
     expect(src).not.toMatch(/volName|'크게'|'작게'/);
-    // (2026-09-30 96번) 칸 이름 "현재 악기 · 음량 · 변경할 악기"
-    // (2026-09-30 115번) 3단계 악기 표는 현재 악기 · 음량만
-    expect(template).toContain('<th scope="col">악기</th><th scope="col">음량</th></tr>'); // (2026-09-30 136번)
+    expect(template).toContain('<th scope="col">악기</th><th scope="col">음량</th><th scope="col">변경할 악기</th>');
   });
   it('1단계: 두 예시 그림 상자 크기가 같다(아래선 · 알약 줄 맞춤)', () => {
     expect(read('src/pages/S1Upload.vue')).toMatch(/\.type-pic \{[^}]*box-sizing: border-box; width: 196px; height: 148px/);

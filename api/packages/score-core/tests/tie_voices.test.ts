@@ -99,6 +99,34 @@ describe('붙임줄과 성부', () => {
     expect(shape(back)).toEqual(['0:2880:58', '1200:1200:58']);
   });
 
+  it('두 보표가 같은 음을 함께 마디 너머로 끌면, 보표 번호로 각자의 뒷부분을 찾는다 (성부 번호가 없는 파일)', () => {
+    // 한 파트에 보표 둘(#180: 보표마다 파트로 나뉜다). 2마디에서는 2보표를 먼저 적어, 먼저 열린 붙임줄을 고르면 틀리게 한다
+    const c = (dur: number, staff: number, tie: string) =>
+      `<note><pitch><step>C</step><octave>4</octave></pitch><duration>${dur}</duration><tie type="${tie}"/><staff>${staff}</staff></note>`;
+    const rest = (dur: number, staff: number) => `<note><rest/><duration>${dur}</duration><staff>${staff}</staff></note>`;
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves></attributes>
+      ${rest(2, 1)}${c(2, 1, 'start')}
+      <backup><duration>4</duration></backup>
+      ${rest(2, 2)}${c(2, 2, 'start')}
+    </measure>
+    <measure number="2">
+      ${c(1, 2, 'stop')}${rest(3, 2)}
+      <backup><duration>4</duration></backup>
+      ${c(3, 1, 'stop')}${rest(1, 1)}
+    </measure>
+  </part>
+</score-partwise>`;
+    const doc = parseMusicXml(xml);
+    // 뒷부분이 서로 바뀌면 1보표 960:1440 · 2보표 960:2400 이 된다
+    expect(doc.parts.map((p) => p.notes.map((n) => `${n.startTick}:${n.durationTicks}:${n.pitch}`)))
+      .toEqual([['960:2400:60'], ['960:1440:60']]);
+  });
+
   it('세 마디에 걸친 음 — 가운데 마디의 다른 성부에 같은 음이 있어도 끝까지 한 음이다', () => {
     const doc = docOf([
       { startTick: 1440, durationTicks: 4320, pitch: 67, velocity: 80 },   // 1마디 끝 ~ 3마디 끝
