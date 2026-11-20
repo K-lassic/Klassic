@@ -110,7 +110,7 @@ const validScoreType = (t: string | undefined): boolean => shared().uploadRules.
 /** 한 요청 = 악보 한 곡 — PDF 한 개 또는 사진 여러 장(올린 순서), 최대 max_pages 쪽. 여러 장이면 반려에 details.page 를 붙인다 */
 export function checkUpload(files: UploadInput[], scoreType: string | undefined): UploadVerdict {
   const rules = shared().uploadRules;
-  const maxPages = rules.max_pages ?? 10;
+  const maxPages = rules.max_pages ?? 30;
   if (files.length === 0) return reject('BAD_REQUEST', null, { count: 0 });
   if (files.length > maxPages) return reject('UPLOAD_TOO_MANY_PAGES', null, { count: files.length, max_pages: maxPages });
   const many = files.length > 1;

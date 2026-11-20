@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from app.auth.keys import require_service_key
 from app.checks.upload import check_upload
 from app.errors import ApiError
-from app.services.uploads import read_files
+from app.services.uploads import max_files_for, read_files
 
 router = APIRouter(prefix="/v1/internal", tags=["내부"])
 
@@ -42,7 +42,7 @@ def inspect_files(files, rules, settings):
 @router.post("/upload-check", dependencies=[Depends(require_service_key)], summary="웹 업로드 검사 위임")
 async def upload_check(request: Request, file: list[UploadFile] = File(...), score_type: str | None = Form(None)):
     try:
-        files = await read_files(file)
+        files = await read_files(file, max_files=max_files_for(request.app.state.upload_rules))
         settings = {"score_type": score_type,
                     "score_file_max_bytes": request.app.state.settings.current.score_file_max_bytes}
         # PDFium 내부는 lock으로 직렬화한다. 무거운 검사는 이벤트 루프에서 실행하지 않는다.
