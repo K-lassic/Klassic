@@ -32,8 +32,8 @@ from pathlib import Path
 import httpx
 
 HERE = Path(__file__).resolve().parent
-# 평가 이미지는 아직 v0.1.1 폴더에 있다 (합성 오선보 14장 + 가짜 40장, 55MB). api/ 로 복사하지 않고 그대로 읽는다.
-DEFAULT_IMAGES = HERE.parents[3] / "proto_type" / "src" / "app" / "evalset"
+# 평가 이미지(합성 오선보 14장 + 가짜 40장)는 data/real · data/fake 에 있다 — proto_type 을 치우면서 옮겼다 (#145)
+DEFAULT_IMAGES = HERE / "data"
 DEFAULT_MANIFEST = HERE / "data" / "manifest.json"
 
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".pdf": "application/pdf"}

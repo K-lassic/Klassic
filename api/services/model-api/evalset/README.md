@@ -53,8 +53,8 @@ uv run python -m evalset.calibrate evalset/results/2026-11-18
 | 가짜 (`fake`) | 40 | 합성 20(백지 · 공책 · 원고지 · 표 · 문서 …) + 실제 사진 20 |
 
 목록은 `data/manifest.json`, 정답 음높이는 `data/answers.json`.
-**이미지는 복사하지 않았다** (55MB). `run.py --images` 의 기본값이 `proto_type/src/app/evalset` 을 가리킨다.
-`proto_type` 을 치우게 되면(#145) 이미지를 옮기고 `--images` 기본값을 고쳐야 한다.
+이미지는 `data/real` · `data/fake` 에 있다 (약 29MB). `proto_type` 을 치우면서 v0.1.1 의 `proto_type/src/app/evalset` 에서 그대로 옮겼다 (#145, 2026-11-20).
+`run.py --images` 와 `augment.py --source` 의 기본값이 `data/` 다. 이미지는 model-api 이미지에 들어가지 않는다 (Dockerfile 은 `app` · `assets` 만 복사).
 
 **이 평가셋은 임시다.** 정간보 · 손으로 쓴 악보 · 실제 휴대폰 촬영본이 없다. 그래서
 

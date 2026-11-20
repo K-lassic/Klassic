@@ -1,11 +1,10 @@
-# Compose 설정이 병합되는지 PR 마다 확인한다 — 기본 · 대역 구성 (#95 CI 자동화 · 담당: 팀장)
+# Compose 설정이 병합되는지 PR 마다 확인한다 — 기본 · demo 구성 (#95 CI 자동화 · 담당: 팀장)
 #
 #   구조에서의 위치: GitHub 가 PR 을 열거나 고칠 때 · main 에 병합될 때 실행. 컨테이너를 띄우지 않는다 — 설정만 읽는다.
 #   무엇을 보나: `docker compose config` 가 오류 없이 끝나는가.
 #     api/compose.yaml 은 서비스 폴더의 compose.yaml 을 include 만 한다 (CLAUDE.md 「이 저장소에서 정한 것」).
 #     각자 자기 폴더의 compose.yaml 을 고치므로, 합쳤을 때 서비스 이름 · 볼륨 · 네트워크가 부딪히는지는 합쳐 봐야 안다.
 #       기본  api/compose.yaml
-#       대역  api/compose.yaml + api/deploy/compose.standin.yaml   (model-api 자리에 v0.1.1 대역)
 #       demo  기본 + --profile demo
 #   .env 는 저장소의 api/.env.example 로 만든다. 값이 빈 칸(비밀값 자리)만 자리 표시 값으로 채운다.
 #     필수 키가 예시에서 아예 빠지면 여기서 걸린다 (compose 가 `${KEY:?…}` 로 요구하는 키인데 .env.example 에 없는 경우
@@ -64,9 +63,6 @@ jobs:
 
       - name: 기본 구성
         run: docker compose -f compose.yaml config --quiet
-
-      - name: 대역 구성 (model-api 대역)
-        run: docker compose -f compose.yaml -f deploy/compose.standin.yaml config --quiet
 
       - name: demo 프로필
         run: docker compose -f compose.yaml --profile demo config --quiet

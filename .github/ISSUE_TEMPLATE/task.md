@@ -17,7 +17,7 @@ assignees: []
 관련 파일 또는 디렉터리 (`api/...`)
 
 ## 참고 (v0.1.1)
-`proto_type/src/app/...`
+태그 `v0.1.1` 의 `proto_type/src/app/...` (`git show v0.1.1:<경로>`)
 
 ## 선행 이슈
 #이슈번호
