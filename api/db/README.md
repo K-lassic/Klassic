@@ -2,7 +2,8 @@
 
 MariaDB 스키마 마이그레이션과 초기 데이터. 백엔드와 model-api 가 같은 DB 를 쓴다.
 
-- 참고: `proto_type/src/app/db/migrations` (001~020) · `db/seeds/001_initial.sql`
+- 참고: Git 태그 `v0.1.1` 의 `proto_type/src/app/db/migrations` (001~020) · `db/seeds/001_initial.sql`
+  - 기준 파일 두 개의 머리 주석에 적힌 `proto_type/...` 원본 경로도 태그 `v0.1.1` 기준이다. 병합된 마이그레이션은 고치지 않는다는 규칙(아래)에 따라 머리 주석은 그대로 두고 여기에 적는다 (#140)
 - DB 컨테이너 · 실행 구성은 [../deploy/compose.yaml](../deploy/compose.yaml) (#20)
 
 ## 들어 있는 파일 (#17)
