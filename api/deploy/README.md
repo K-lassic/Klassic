@@ -52,7 +52,7 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 - 도메인 없이 `*.ts.net` 주소와 HTTPS 인증서를 받는다. 공유기 포트를 열지 않는다.
 - **Tailscale 은 Windows 앱(서비스)으로 돌린다** (#9 결정). 컨테이너로 돌리지 않으므로 인증 키(`TS_AUTHKEY`)가 필요 없다 — 로그인은 앱에서 사람이 한다.
-- 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(proto_type 9503 또는 api/ 9603)이고, 관리자 · 내부 포트(26101 · 26201 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
+- 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(api/ 9603)이고, 관리자 · 내부 포트(26101 · 26201 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
 - Funnel 은 대역폭 제한이 있으므로 시연 · 소규모 사용 기준으로 본다.
 
 ### 켜기 · 끄기 (#9)
@@ -60,13 +60,14 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 ```powershell
 pwsh api/deploy/funnel.ps1 status             # 로그인 상태 · 공개 주소
 pwsh api/deploy/funnel.ps1 start              # 재구성: api/ 입구(9603) 공개 — 기본값 (#139)
-pwsh api/deploy/funnel.ps1 start -Port 9503   # 예비 시연: proto_type gateway(9503) 공개 (proto_type 이 있을 때만)
 pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 ```
 
 ### api/ 로 전환 · 되돌리기 (#48)
 
 전환은 **사람이 실행한다.** 외부 공개를 바꾸는 명령이라 Claude 는 실행하지 않는다.
+
+> 2026-11-01 전환 때의 기록이다. 되돌릴 곳이던 예비 시연(9503)은 #145 로 없앴다 (「v0.1.1 대역 · 예비 시연 폐지」). 지금 되돌리기는 이전 이미지 태그로 한다.
 
 ```powershell
 # 0. 되돌릴 곳 살리기 — 9503 이 응답하지 않으면 (재부팅 뒤 네트워크 분리)
@@ -141,10 +142,9 @@ pwsh api/deploy/funnel.ps1 stop
 - Tailscale 서비스는 자동 시작(Automatic)이지만 **"Run unattended"** 가 꺼져 있으면 Windows 사용자가 로그아웃할 때 연결이 끊긴다.
 - 조치: 작업 표시줄 Tailscale 아이콘 → Preferences → **Run unattended** 켜기 (#47). 재부팅 시험은 하지 않았다 — 발표는 켜 둔 채 진행한다.
 
-### 예비 시연 ↔ 재구성 전환
+### 예비 시연 ↔ 재구성 전환 (폐지)
 
-- proto_type(v0.1.1)은 9503 · 26101 을 쓴다. `api/` 는 **9603 · 26201**(`API_PUBLIC_PORT` · `API_ADMIN_PORT`)로 띄워서 둘이 같이 떠 있게 한다 (#20).
-- 발표에 쓸 쪽을 정하면 `start -Port <포트>` 로 Funnel 이 가리키는 곳만 바꾼다. 컨테이너는 끄지 않는다.
+- 예전에는 proto_type(v0.1.1)을 9503 · 26101 에, `api/` 를 **9603 · 26201** 에 같이 띄우고 Funnel 이 가리키는 포트만 바꿨다 (#20). 예비 시연은 #145(2026-11-20)로 없앴다.
 
 ## 엔진 자가 검사 — 재구성 이미지 사용 (#142)
 
@@ -177,69 +177,16 @@ Compose 전체를 해석하기 위한 로컬 `.env`는 필요하지만, 검사 �
 전체 Compose를 `up -d --build --wait`로 실행해 상시 서비스 healthy와 브라우저 API활용 화면 표시를
 확인한 뒤 같은 프로젝트·환경 파일로 `down`했다. 잔여 컨테이너는 없고 엔진·DB 볼륨과 롤백 이미지는 보존했다.
 
-## model-api 대역 (#49)
+## v0.1.1 대역 · 예비 시연 폐지 (#145, 2026-11-20)
 
-재구성 model-api(#24 · #28~#31)가 발표까지 갖춰지지 않을 때를 대비해, **v0.1.1 이미지를 `model-api` 이름으로 `api/` 에 붙인다.** 코드는 고치지 않는다. 파일은 [compose.standin.yaml](compose.standin.yaml) · [model-standin.env](model-standin.env)(키 이름만) 두 개다.
+재구성 model-api 가 2026-11-03 부터 실제 서버 기본이고(#87), 대역(v0.1.1 model-api 를 `api/` 에 붙이는 구성)과 예비 시연(proto_type 9503)은 쓰지 않는다. 사용자 결정(2026-11-20)으로 둘 다 없앴다.
 
-```
-web ──┐
-      ├─▶ model-api:9543 (klassic/klassic-model-api:0.1.1) ─▶ db · 엔진 볼륨 klassic_engines(읽기 전용)
-Nginx ┘
-```
-
-대역을 선택할 때만 필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`.
-위 #142의 재구성 엔진 자가 검사에는 이 이미지가 필요하지 않다. proto_type 컨테이너는 떠 있지 않아도 된다.
-
-**처음 한 번 — 서비스 키 만들기** (서버 PC · Git Bash · `api/` 폴더)
-
-```bash
-cd /c/project/Klassic/api
-# 1) 운영자 만들기 — 비밀번호를 두 번 묻는다 (12자 이상, 화면에 안 보임)
-docker compose run --rm -it web node dist/tools/createOperator.js --login <아이디> --name <이름>
-# 2) 서비스 키를 발급해 .env 에 넣는다 — 화면에 키가 나오지 않는다
-KEY=$(docker compose run --rm -T web node dist/tools/issueServiceKey.js --operator <아이디> 2>/dev/null | tail -1)
-sed -i '/^SERVICE_API_KEY=/d' .env; printf '\nSERVICE_API_KEY=%s\n' "$KEY" >> .env; unset KEY
-grep -c '^SERVICE_API_KEY=gk_' .env   # 1 이 나오면 정상
-```
-
-**대역을 기본으로 되돌릴 때만 (서버 PC, #86)** — 2026-11-03 부터 기본은 재구성판이고 이 두 줄은 지웠다. `api/.env` 에 두 줄을 더하면 `api/` 폴더에서 `-f` 없이 써도 대역이 유지된다. 비밀값이 아니다.
-
-```bash
-cd /c/project/Klassic/api
-printf '\nCOMPOSE_PATH_SEPARATOR=:\nCOMPOSE_FILE=compose.yaml:deploy/compose.standin.yaml\n' >> .env
-docker compose config --services    # 목록에 model-api 가 있고
-docker compose config | grep 'image: klassic/klassic-model-api'    # 이 줄이 나오면 정상
-```
-
-**켜기 · 확인 · 끄기**
-
-```bash
-cd /c/project/Klassic/api
-docker compose up -d --wait                                     # model-api 가 Healthy
-pwsh deploy/check-public.ps1 -Url http://127.0.0.1:9603 -Local  # 모두 통과 (PowerShell 7 필요)
-docker compose stop model-api                                   # 끄기
-```
-
-- `web` 까지 다시 만들어야 새 서비스 키를 읽는다 — 위 `up -d` 가 함께 처리한다.
-- **대역을 쓰려면 `-f compose.yaml -f deploy/compose.standin.yaml` 을 붙인다.** 안 붙이면 재구성판이 뜬다. `COMPOSE_FILE` 은 `api/` 폴더에서만 읽힌다.
-- 이 실수는 `check-public.ps1` 의 「인식 · 렌더링 경로」 줄이 잡는다. 재구성판도 `/api/v1/health` 200 · 엔진 `ready` 라서 상태만으로는 알 수 없다.
-- 대역은 재구성판 서비스 정의 위에 합쳐진다. 재구성판 값이 섞이지 않게 `!reset` · `!override` 를 쓴다 (Docker Compose 2.24 이상).
-- **재구성 model-api 로 교체:** #29 · #30 · #31 이 끝난 뒤 `api/.env` 의 두 줄을 지우고 `docker compose up -d --build model-api`. 서비스 이름 · 포트가 같아 backend · Nginx 는 고칠 것이 없다.
-
-**시험 결과 (2026-11-02, 임시 프로젝트)**
-
-| 확인 | 결과 |
-|---|---|
-| non-root · 뿌리 읽기 전용 · 엔진 볼륨 읽기 전용 | ✅ |
-| 기동 | ✅ 약 20초 뒤 healthy |
-| 미뉴에트 오선보 | ✅ homr 31초 · 신뢰 등급 |
-| 타령 정간보 PDF 2쪽 | ✅ PDF 검사 통과 · jeongganbo-omr 23초 · 신뢰 등급 |
-| 편집 후 MIDI · PDF · MP3 | ✅ MP3 최대 7.3초 · PDF 3.2초 |
-| `/api/v1/health` (Nginx 경유) · 공개 점검 | ✅ 모두 통과 |
-| 메모리 | 최대 2.24GiB (`mem_limit` 4g) |
-
-추천(LLM) 모델과 audiveris 는 이 구성에서 `unavailable` 이다 — 발표 흐름에는 쓰지 않는다.
-
+- **이미지를 남기지 않는다.** `klassic/klassic-app:0.1.1` · `klassic/klassic-model-api:0.1.1` · `klassic/klassic-engines-installer:*` 은 다시 빌드할 코드와 절차가 있으므로 지운다.
+- **v0.1.1 코드는 Git 태그 `v0.1.1` 에 있다** (`git ls-tree -r v0.1.1 --name-only | grep -c '^proto_type/'` = 567). 빌드 절차는 그 태그의 `proto_type/README.md` 다.
+- **보관본:** 이 PC 의 백업 드라이브(`D:\[Back-up]\[Mini_Project]\Klassic`)에 `proto_type` 빌드용 압축본을 둔다. 공개 배포처에서 다시 받을 수 있는 `FluidR3_GM.sf2` 와 비밀값(`.env`)은 넣지 않았다 — 압축본 안의 `복원방법.md` 에 받는 주소 · 해시가 있다.
+- 지운 구성: `deploy/compose.standin.yaml` · `deploy/model-standin.env`, CI 의 대역 구성 검사, `.env.example` 의 대역 주석. 엔진 볼륨 `klassic_engines` 는 재구성판이 쓰므로 **지우지 않는다**.
+- 대역으로 시험한 기록(2026-11-02)은 아래 「재구성 model-api 전환 시험」에 남긴다.
+- 조사 · 바꾼 것 · 압축본 재빌드 확인: [../docs/proto_type_정리_20261120.md](../docs/proto_type_정리_20261120.md)
 
 ## 재구성 model-api 전환 시험 (#87, 2026-11-02)
 
@@ -802,14 +749,11 @@ docker compose up -d admin
 
 ```bash
 # api/ — 시연 서비스 (Docker Desktop 이 뜨면 restart 정책으로 돌아온다. 안 돌아온 것만 띄운다)
-# 재구성 model-api 가 함께 뜬다 (#87). 대역은 「model-api 대역」 참고
+# 재구성 model-api 가 함께 뜬다 (#87)
 cd api && docker compose up -d
-
-# proto_type — 예비 시연 · 코드 작업 중 필요할 때만
-cd proto_type && docker compose up -d --force-recreate web gateway admin model-api
 ```
 
-proto_type 은 `network_mode: service:web` 구조라 재부팅 뒤 web 과 gateway · model-api 의 네트워크가 갈라져 9503 이 응답하지 않는다 (2026-11-01 확인). `docker compose restart` 로는 풀리지 않고 위 명령이 필요하다. 볼륨은 건드리지 않는다.
+예전 proto_type 은 재부팅 뒤 네트워크가 갈라져 `--force-recreate` 가 필요했다 (2026-11-01). 예비 시연은 #145 로 없앴다.
 
 ### 자원 측정
 
@@ -817,5 +761,5 @@ proto_type 은 `network_mode: service:web` 구조라 재부팅 뒤 web 과 gatew
 
 ## 참고
 
-- `proto_type/src/app/ops/gateway.mjs` — 경로 규칙 · 내부 API 차단 · 대기 시간을 Nginx `proxy.conf` 로 옮긴다 (127.0.0.1 고정 호출 → 서비스 이름)
-- `proto_type/docker-compose.yml` 의 `db`
+- 태그 `v0.1.1` 의 `proto_type/src/app/ops/gateway.mjs` — 경로 규칙 · 내부 API 차단 · 대기 시간을 Nginx `proxy.conf` 로 옮긴다 (127.0.0.1 고정 호출 → 서비스 이름)
+- 태그 `v0.1.1` 의 `proto_type/docker-compose.yml` 의 `db`

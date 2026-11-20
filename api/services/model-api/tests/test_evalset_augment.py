@@ -152,7 +152,7 @@ def test_generate_fails_clearly_without_clean_sources(tmp_path, capsys):
 def test_augment_on_the_real_clean_scores_if_present(tmp_path):
     """저장소의 진짜 깨끗한 악보로 한 번 만들어 본다 (그림이 없으면 건너뛴다)."""
     if not (augment.DEFAULT_SOURCE / "real").is_dir():
-        pytest.skip("평가 이미지 폴더(proto_type)가 없다")
+        pytest.skip("평가 이미지 폴더(evalset/data)가 없다")
     answers = json.loads(augment.DEFAULT_ANSWERS.read_text(encoding="utf-8"))["staff"]
     made = augment.generate(augment.DEFAULT_SOURCE, tmp_path / "aug", answers, kinds=["rotate", "lowres"], levels=[2],
                             log=lambda s: None)

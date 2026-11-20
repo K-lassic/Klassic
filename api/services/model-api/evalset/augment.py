@@ -33,7 +33,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_SOURCE = HERE.parents[3] / "proto_type" / "src" / "app" / "evalset"
+DEFAULT_SOURCE = HERE / "data"  # data/real 의 깨끗한 악보를 원본으로 쓴다 (#145 에서 proto_type 밖으로 옮김)
 DEFAULT_ANSWERS = HERE / "data" / "answers.json"
 
 # 종류 → 세기 1 · 2 · 3 의 값. 1 은 "조금 신경 쓰이는 정도", 3 은 "사람이 봐도 불편한 정도".

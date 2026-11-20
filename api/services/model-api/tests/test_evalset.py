@@ -105,7 +105,7 @@ def test_every_real_item_has_an_answer():
 
 def test_manifest_images_exist_where_run_looks_for_them():
     if not run.DEFAULT_IMAGES.is_dir():
-        pytest.skip("평가 이미지 폴더(proto_type)가 없다")
+        pytest.skip("평가 이미지 폴더(evalset/data)가 없다")
     missing = [i["file"] for i in run.load_items(DATA / "manifest.json") if not (run.DEFAULT_IMAGES / i["file"]).is_file()]
     assert missing == []
 
