@@ -1,7 +1,7 @@
 # proto_type · v0.1.1 대역 정리 (#145, 2026-11-20)
 
 > 사용자의 결정과 지시에 따라 Claude 가 조사 · 수정 · 시험하고 이 문서를 정리했다.
-> 이 PR 은 1단계(막는 것 정리)다. `proto_type/` 폴더 삭제와 이미지 삭제는 이 PR 이 병합된 뒤에 한다 (5절).
+> 1단계(막는 것 정리) 뒤, 사용자 지시로 서비스에 필요 없는지 다시 확인하고 같은 브랜치에서 `proto_type/` 을 지웠다 (5절).
 
 ## 1. 결정 (사용자, 2026-11-20)
 
@@ -55,11 +55,28 @@
 - 압축본 SHA-256: `79df0304e2d103f010a3b92d3607c8b8f15a5f0ea59531a1ee29ad45fe02300f` (84,579,642 바이트). 같은 폴더에 `Klassic_proto_type_v0.1.1_복원방법.md` 도 따로 두었다.
 - 시험용 이미지(`protoverify/*`)와 임시 폴더는 확인 뒤 지웠다.
 
-## 5. 다음 단계 (이 PR 병합 뒤)
+## 5. 삭제 (2026-11-20, 사용자 지시)
 
-1. `proto_type/` 삭제 PR — `git rm -r proto_type`, 프로젝트 `CLAUDE.md` · 루트 `README.md` · `api/README.md` 의 「기준판 proto_type/」 표기를 태그 `v0.1.1` · 보관본 기준으로 고친다. 로컬의 비밀값 파일(`proto_type/.env` · `.env.bak-20261030`)은 압축본에 넣지 않았고 폴더와 함께 지운다.
-2. 이미지 삭제 (로컬, 약 5GB): `klassic/klassic-app:0.1.1` · `klassic/klassic-model-api:0.1.1` · `klassic/klassic-engines-installer:0.1.0` · `:local`. 엔진 볼륨 `klassic_engines` 는 재구성판이 쓰므로 지우지 않는다.
-3. #139 · #140 은 이미 반영된 상태라 닫을지 담당자(팀장)가 정한다.
+**다시 확인한 것 (지우기 전)**
+- 0.1.1 계열 이미지 4개를 쓰는 컨테이너가 없다 (멈춘 것 포함, `docker ps -a --filter ancestor=<ID>`).
+- 재구성판 compose 의 `image` · `build` 에 0.1.1 이미지 · `proto_type` 경로가 없다. 엔진 설치기는 `api/` 에서 빌드하는 `klassic/engines-installer:0.2.2` 를 쓴다.
+- 실행 코드 · 워크플로에서 `proto_type` 을 읽는 곳이 없다 (남은 것은 설명문 · 주석).
+
+**지운 것**
+| 대상 | 방법 |
+|---|---|
+| `proto_type/` (추적 파일 573개) | `git rm -r proto_type` |
+| `proto_type/.env` · `.env.bak-20261030` (Git 밖, 비밀값) | 폴더째 삭제 — 압축본에는 넣지 않았다 |
+| 로컬 이미지 `klassic/klassic-app:0.1.1` · `klassic/klassic-model-api:0.1.1` · `klassic/klassic-engines-installer:0.1.0` · `:local` (약 5GB) | `docker rmi` |
+
+**남긴 것:** 엔진 볼륨 `klassic_engines` (재구성 model-api 가 읽기 전용으로 쓴다).
+
+**표기 변경:** `CLAUDE.md` · 루트 `README.md` · `api/README.md` · `.gitignore` 주석 · 이슈 양식의 「참고 (v0.1.1)」 예시를 태그 `v0.1.1` 기준으로 고쳤다.
+
+**남은 것**
+- #139 · #140 은 이미 반영된 상태라 닫을지 담당자(팀장)가 정한다.
+- 이 PC 의 옛 proto_type 볼륨(`klassic_db-data` · `klassic_storage`)은 이번 지시 범위가 아니라 그대로 두었다. `.env` 를 지워서 그 DB 의 비밀번호는 더 이상 이 PC 에 없다.
+- 실제 서버 PC 에 같은 이미지 · 폴더가 있다면 그쪽은 따로 지워야 한다 (이 PC 만 정리했다).
 
 ## 6. 확인하지 못한 것
 
