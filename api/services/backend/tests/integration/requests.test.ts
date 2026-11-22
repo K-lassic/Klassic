@@ -363,3 +363,44 @@ describe.skipIf(!HAS_DB)('model-api 가 없을 때', () => {
     expect((await uploadPng(u)).status).toBe(202);
   });
 });
+
+// 앞선 시험이 남긴 처리 중 요청(같은 주소 127.0.0.1)을 끝난 것으로 바꿔 이 시험의 시작점을 0 건으로 맞춘다
+const finishAllActive = () => db.exec(
+  "UPDATE score_request SET status = 'completed', completed_at = CURRENT_TIMESTAMP(3) WHERE status IN ('received', 'queued', 'converting', 'awaiting_type_answer')");
+
+describe.skipIf(!HAS_DB)('G12 동시 접수 (#197)', () => {
+  // 같은 계정 · 같은 주소로 한꺼번에 보낸 요청도 처리 중 한도를 넘지 않아야 한다 — 검사와 INSERT 가 따로면 모두 통과하던 경쟁
+  it('같은 계정이 N건을 동시에 보내면 처리 중 한도만큼만 접수하고 나머지는 429, 반려는 행 · 파일을 남기지 않는다', async () => {
+    await h.setSettings({ web_max_active_per_client: 1, web_hourly_request_cap: 100000 });
+    try {
+      await finishAllActive();
+      const u = await loggedInAgent(app, 'race');
+      const before = await count();
+      const res = await Promise.all(Array.from({ length: 5 }, () => uploadPng(u)));
+      const ok = res.filter((r) => r.status === 202);
+      const rejected = res.filter((r) => r.status === 429);
+      expect(ok).toHaveLength(1);
+      expect(rejected).toHaveLength(4);
+      for (const r of rejected) expect(r.body.error.code).toBe('WEB_ACTIVE_REQUEST_EXISTS');
+      expect(await count()).toBe(before + 1); // 반려된 요청은 행을 남기지 않는다
+      const files = await db.query<{ n: number }>('SELECT COUNT(*) AS n FROM upload_file u JOIN score_request r USING (request_id) WHERE r.request_no = ?', [ok[0].body.id]);
+      expect(Number(files[0].n)).toBe(1);
+    } finally {
+      await h.setSettings({ web_max_active_per_client: 100000, web_hourly_request_cap: 100000 });
+    }
+  });
+
+  it('시간당 상한도 동시에 보낸 요청이 넘지 못한다', async () => {
+    await finishAllActive();
+    const u = await loggedInAgent(app, 'racehour');
+    const used = Number((await db.one<{ n: number }>('SELECT COUNT(*) AS n FROM score_request WHERE received_at > NOW() - INTERVAL 1 HOUR'))!.n);
+    await h.setSettings({ web_max_active_per_client: 100000, web_hourly_request_cap: used + 2 });
+    try {
+      const res = await Promise.all(Array.from({ length: 5 }, () => uploadPng(u)));
+      expect(res.filter((r) => r.status === 202)).toHaveLength(2);
+      for (const r of res.filter((x) => x.status !== 202)) { expect(r.status).toBe(429); expect(r.body.error.code).toBe('WEB_HOURLY_LIMIT'); }
+    } finally {
+      await h.setSettings({ web_max_active_per_client: 100000, web_hourly_request_cap: 100000 });
+    }
+  });
+});
