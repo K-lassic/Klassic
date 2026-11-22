@@ -9,6 +9,8 @@ Dockerfile  text eol=lf
 *.sql       text eol=lf
 # #99 nginx 설정(*.conf)은 LF — Windows 에서 CRLF 로 받은 파일이 커밋에 섞이지 않게 (경로 · 서버 블록 diff 가 줄마다 바뀌어 보이는 것을 막는다)
 *.conf      text eol=lf
+# #201 PDF 는 바이너리 — 작은 시험 PDF(api/shared/fixtures/upload)를 Git 이 텍스트로 잘못 판정해 autocrlf=true 인 PC 에서 CRLF 로 바꿔 받는 것을 막는다
+*.pdf       binary
 
 # 사운드폰트(최대 148MB)는 Git LFS — GitHub 일반 파일 한도(100MB)를 넘는다
 *.sf2       filter=lfs diff=lfs merge=lfs -text
