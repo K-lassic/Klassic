@@ -757,6 +757,18 @@ cd api && docker compose up -d
 
 예전 proto_type 은 재부팅 뒤 네트워크가 갈라져 `--force-recreate` 가 필요했다 (2026-11-01). 예비 시연은 #145 로 없앴다.
 
+### 배포 전 설정 파일 줄 끝 확인 (#201)
+
+`.gitattributes` 의 `eol=lf` 는 커밋에 들어가는 내용과 새로 받는 파일을 LF 로 맞춘다. 하지만 편집기가 CRLF 로 저장한 파일은 작업 트리에 CRLF 로 남고, nginx 설정처럼 작업 트리를 마운트하는 파일에는 그대로 들어간다. `pull` 뒤 · 설정을 고친 뒤 확인한다. (서버 PC · Git Bash · 저장소 루트)
+
+```bash
+# 정상: 출력 없음. w/crlf 줄이 나오면 그 파일이 CRLF 다
+git ls-files --eol '*.conf' '*.sh' '*.sql' | grep 'w/crlf'
+
+# 고치기 — git checkout -- 파일 만으로는 다시 쓰지 않는다(2026-11-22 확인). 바뀐 내용이 없는(git status 에 안 나오는) 파일만 지운 뒤 받는다
+rm api/deploy/nginx/proxy.conf && git checkout -- api/deploy/nginx/proxy.conf
+```
+
 ### 자원 측정
 
 인식 중 `docker stats` 측정과 `api/` · proto_type 동시 실행 영향은 **#49** 에서 본다 — `api/` model-api(#24 · #29)가 있어야 잴 수 있다.
