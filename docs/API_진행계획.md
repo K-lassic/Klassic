@@ -135,6 +135,12 @@
      ```
    - 이미 push 한 브랜치는 rebase 하지 않는다. **강제 push(`--force`) 금지**, 특히 `main`.
    - PR 을 병합하기 전에도 GitHub 에서 "This branch is out-of-date" 가 보이면 먼저 `main` 을 합친다.
+   - **연쇄 PR(앞 PR 의 브랜치에서 딴 PR) 절차** (2026-11-22 추가, #99 — PR #68 · #69 · #71 · #72 가 앞 브랜치로 병합되어 `MERGED` 인데 `main` 에 들어가지 않고 이슈도 안 닫혔다)
+     1. 가능하면 연쇄를 만들지 않는다. 앞 PR 이 `main` 에 병합된 뒤 새 `main` 에서 브랜치를 딴다.
+     2. 불가피하면 뒤 PR 의 기준(base)을 앞 브랜치로 두고 본문에 「앞 PR #N 이 먼저 병합되어야 한다」를 적는다.
+     3. **앞 PR 을 `main` 에 병합한 직후, 뒤 PR 의 기준이 `main` 인지 확인하고 아니면 바꾼다.** 병합되면 앞 브랜치는 자동 삭제되고(`delete_branch_on_merge`), GitHub 이 뒤 PR 을 닫지 않고 기준을 앞 PR 의 기준으로 재지정한다. 그 기준이 다른 기능 브랜치일 수 있으니 `gh pr view <번호> --json baseRefName` 으로 보고 `main` 이 아니면 `gh pr edit <번호> --base main`. 이 방식은 merge commit 병합 기준이다(스쿼시 병합이면 앞 PR 변경이 diff 에 남는다).
+        - 앞 PR 이 병합되지 않고 닫히면 기준만 바꿔서는 앞 브랜치 커밋이 diff 에 남는다 — 뒤 브랜치를 새 `main` 에서 다시 딴다.
+     4. 병합 뒤에는 `MERGED` 만 보지 말고 기준 브랜치가 `main` 인지, 이슈가 닫혔는지 확인한다 (`gh pr view <번호> --json baseRefName,state`). 이미 앞 브랜치로 병합돼 `main` 에 안 들어갔다면, #75 처럼 마지막 브랜치에서 `main` 으로 PR 을 열어 한꺼번에 반영하고 그 PR 에서 이슈를 닫는다.
 2. **GitHub 에 남기는 글은 한글로 쓴다** (2026-10-30 추가) — 커밋 메시지 · PR 제목 · PR / 이슈 본문 · 리뷰 댓글.
    - 커밋 메시지 형식은 Conventional Commits. **앞의 종류 · 범위만 영어, 설명은 한글**: `feat(backend): 로그인할 때 세션을 새로 발급` · `build(model-api): 기반 이미지를 python 3.11-slim 으로 고정` · `docs(contracts): web-api 계약에 화면 대조 결과 반영`
    - 종류: `feat` 기능 · `fix` 버그 수정 · `docs` 문서 · `build` 빌드 · Docker · `test` 시험 · `chore` 그 밖 · `refactor` 동작은 같고 구조만 바꿈
