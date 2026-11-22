@@ -518,6 +518,8 @@ docker run --rm --network none --read-only --tmpfs /tmp \
 **발견한 것**
 
 - **외부 키 결과의 파일 주소에 포트가 빠진다.** `http://127.0.0.1/api/v1/files/<token>` 처럼 나온다 (입구가 9713 인데 포트 없음). Nginx 가 `proxy_set_header Host $host` 로 넘겨 포트가 떨어지고, model-api 가 `request.url_for` 로 주소를 만든다. 공개 주소(Funnel HTTPS 443)는 기본 포트라 영향이 없을 것으로 보지만 (추정), 로컬 · 임시 프로젝트 · 9603 직접 접속에서는 주소를 그대로 열 수 없다. `$http_host` 로 바꾸는 방안을 별도 이슈로 검토한다. 이번 시험은 주소의 경로만 떼어 받았다.
+  - **조치 (#154, 2026-11-21):** `deploy/nginx/proxy.conf` 가 `Host` · `X-Forwarded-Host` 를 `$fwd_host` 로 넘긴다 — 클라이언트가 보낸 `Host` 를 포트까지 그대로 쓰고(`$http_host`), 머리글이 없는 요청(HTTP/1.0)만 `$host` 로 대신한다. 이전 값: 둘 다 `$host`(포트 없음). 되돌리는 방법: 두 줄을 `$host` 로 되돌리고 `docker compose exec frontend nginx -s reload`. 이미지를 다시 만들 필요는 없다(`deploy/nginx` 를 읽기 전용으로 붙이므로 Nginx 만 다시 읽힌다).
+  - **확인한 것** (임시 프로젝트 `klassic-exp`, 입구 9703, 외부 키로 `POST /api/v1/performances`): 수정 전 파일 주소가 `http://127.0.0.1/api/v1/files/…` 로 포트가 없고 그대로 열면 연결 실패 → 수정 후 `http://127.0.0.1:9703/api/v1/files/…` 이고 musicxml 31,208B · midi 1,049B 가 200 으로 받아진다. 같은 프로젝트에서 `check-public.ps1 -Url http://127.0.0.1:9703 -Local` 15개 항목 모두 통과. `Host: example.tailnet.ts.net`(Funnel 처럼 포트 없음)을 보내면 주소도 포트 없이 나와 달라지지 않고, HTTP/1.0(Host 없음)도 `/api/health` 200. 백엔드(web)는 `Host` 를 읽지 않아(`req.headers.host` · `hostname` 사용 없음, 코드 검색) 쿠키 · 접속 주소 기록에는 영향이 없다. **확인하지 못한 것:** 실제 공개 주소(Funnel HTTPS) — 리허설(#49) 범위, 관리자 server(`admin/admin.conf` 의 `Host $host`)는 파일 주소를 만들지 않아 바꾸지 않음.
 - Git Bash 에서 임시 폴더(`AppData\Local\Temp\...`) 아래 사본을 빌드하면 Compose 5.6 의 bake 가 `--allow=fs.read=...` 권한을 요구하며 멈췄다. 같은 명령이 PowerShell 에서는 되고, 원래 저장소 경로에서는 Git Bash 로도 된다. 경로 문제로 보이며 프로젝트 코드와는 관계없다 (추정).
 - `compose run` 뒤에 이름 없는 빈 볼륨 2개가 남았다 (위 「CPU 전용 엔진 볼륨 시험」 7번과 같은 현상).
 
