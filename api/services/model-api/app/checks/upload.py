@@ -20,9 +20,9 @@ shared/upload-rules.json으로 사진·PDF를 검사하고 판정·쪽 정보를
   인식용 그림(pages[].image)으로 쓴다. 원본 파일(files[].data)은 그대로. 늘린 쪽은 pages[].upscaled_short_side_px 에 적는다.
 
 2026-09-29 황송해 결정(여러 쪽): 사용자 업로드(multi_page=True)는 한 요청 = 악보 한 곡 —
-  PDF 한 개(모든 쪽) 또는 사진 여러 장(올린 순서), 최대 max_pages(10)쪽.
-  순서: count(파일 수 > 10 → UPLOAD_TOO_MANY_PAGES) → type(파일마다) → 섞기(PDF 둘 이상 · PDF+사진 → UPLOAD_TOO_MANY_FILES)
-        → corrupted(파일마다, PDF 는 열고 쪽수 > 10 이면 UPLOAD_TOO_MANY_PAGES) → size(파일마다) → resolution(쪽마다) → 악보 종류.
+  PDF 한 개(모든 쪽) 또는 사진 여러 장(올린 순서), 최대 max_pages(30)쪽.
+  순서: count(파일 수 > max_pages → UPLOAD_TOO_MANY_PAGES) → type(파일마다) → 섞기(PDF 둘 이상 · PDF+사진 → UPLOAD_TOO_MANY_FILES)
+        → corrupted(파일마다, PDF 는 열고 쪽수 > max_pages 이면 UPLOAD_TOO_MANY_PAGES) → size(파일마다) → resolution(쪽마다) → 악보 종류.
   쪽마다의 반려에는 details.page(몇 쪽인지)를 붙인다(여러 쪽일 때). 통과하면 verdict.pages(쪽마다 그림)·verdict.files.
   내부 입력(/v1/recommend · /v1/render/*, multi_page=False)은 예전처럼 파일 한 개(둘 이상이면 UPLOAD_TOO_MANY_FILES).
 """
@@ -331,7 +331,7 @@ def _check_upload(
     render_pdf: False 면 PDF 쪽을 그리지 않고 크기만 잰다(웹 검사 위임 — 요청을 만들지 않는 검사).
     """
     rules = load_rules()
-    max_pages = int(rules.get("max_pages", 10))
+    max_pages = int(rules.get("max_pages", 30))
 
     # 1) count — 파일이 없으면 요청 형식 오류(BAD_REQUEST)로 돌려준다
     if len(files) == 0:

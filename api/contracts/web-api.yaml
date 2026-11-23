@@ -180,7 +180,7 @@ paths:
       tags: [requests]
       summary: 악보 올리기 (사진 여러 장 또는 PDF 1개)
       description: |
-        - 한 요청 = 악보 한 곡. **PDF 한 개(모든 쪽) 또는 PNG · JPG(JPEG) · WEBP 사진 여러 장(올린 순서 = 쪽 순서), 최대 10쪽**.
+        - 한 요청 = 악보 한 곡. **PDF 한 개(모든 쪽) 또는 PNG · JPG(JPEG) · WEBP 사진 여러 장(올린 순서 = 쪽 순서), 최대 30쪽**.
         - 검사 순서: 개수 → 형식 → 손상 → 용량 → 사진 짧은 변 (`shared/upload-rules.json`).
           PDF 의 열기 · 쪽 수 · 쪽마다 크기는 model-api `POST /v1/internal/upload-check` 에 맡긴다 — 닿지 않으면 503 `UPLOAD_CHECK_UNAVAILABLE`(접수 안 함).
         - MIDI · MusicXML 등은 415 `UPLOAD_UNSUPPORTED_TYPE`(details.allowed=['image','pdf']).
@@ -199,7 +199,7 @@ paths:
                 file:
                   description: 사진이면 여러 개(같은 이름 `file` 반복, 올린 순서), PDF 면 한 개
                   type: array
-                  maxItems: 10
+                  maxItems: 30
                   items: { type: string, format: binary }
                 score_type: { $ref: "#/components/schemas/ScoreType" }
       responses:

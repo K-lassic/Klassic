@@ -1,6 +1,6 @@
 // 파일 종류 짐작(확장자) — 원본 규칙: app/shared/upload-rules.json. 최종 판정은 서버(G1)가 한다.
 // 받는 파일은 PNG · JPG(JPEG) · WEBP 사진 또는 PDF 한 개(2026-09-29 황송해 결정, SD_02 §4-3 — 웹·API 같음).
-// (2026-09-29 여러 쪽 · 2026-09-30 T188) 사진은 여러 장(올린 순서, 최대 10장) — 한 곡. PDF 는 한 개만, 사진과 섞지 않는다.
+// (2026-09-29 여러 쪽 · 2026-09-30 T188) 사진은 여러 장(올린 순서, 최대 30장 — #168 10장에서 늘림) — 한 곡. PDF 는 한 개만, 사진과 섞지 않는다.
 // 받는 종류는 upload-rules.json user_upload_kinds 하나에서 읽는다(서버 config/shared.ts userUploadKinds · 모델 API 와 같은 값).
 import rules from '../../../../shared/upload-rules.json';
 import type { FileKind } from '@/types/api';
@@ -33,13 +33,13 @@ export const LIMITS = {
   warnEdge: (rules.kinds.image as { warn_below_short_edge_px?: number }).warn_below_short_edge_px ?? 500,
   maxFiles: rules.max_files,
   /** 한 요청 최대 쪽 수(사진 장수 또는 PDF 쪽수, 2026-09-29 여러 쪽) */
-  maxPages: (rules as { max_pages?: number }).max_pages ?? 10,
+  maxPages: (rules as { max_pages?: number }).max_pages ?? 30,
   pdfMb: Math.round(rules.kinds.pdf.max_bytes / 1024 / 1024),
 };
 
 /**
  * 올릴 파일 목록에 새 파일을 더해 본다(2026-09-30 T188 여러 쪽 — SD_02 S1 · UC3 E5·E9). 서버(G1)와 같은 순서의 앞부분만:
- * 쪽 수(10 넘음 → UPLOAD_TOO_MANY_PAGES) → 형식(UPLOAD_UNSUPPORTED_TYPE) → 섞기(PDF 둘 이상 · PDF 와 사진 → UPLOAD_TOO_MANY_FILES).
+ * 쪽 수(30 넘음 → UPLOAD_TOO_MANY_PAGES) → 형식(UPLOAD_UNSUPPORTED_TYPE) → 섞기(PDF 둘 이상 · PDF 와 사진 → UPLOAD_TOO_MANY_FILES).
  * 통과하면 올린 순서대로 이어 붙인 목록. 손상·용량·사진 크기는 서버가 본다.
  */
 export function addFiles(current: File[], incoming: File[]): { files: File[]; code: null } | { files: null; code: string } {
