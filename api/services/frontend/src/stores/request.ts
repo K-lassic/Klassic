@@ -183,7 +183,7 @@ export const useRequestStore = defineStore('request', {
     },
     async confirmType(changeTo: ScoreType | null) {
       if (!this.status) return;
-      if (changeTo) this.preview = null; // 다른 종류로 다시 읽으므로 먼저 보인 쪽은 버린다
+      this.preview = null; // 종류를 바꾸든 그대로 가든 다시 읽으므로 먼저 보인 쪽은 버린다 — 남겨 두면 새 미리보기와 쪽 번호가 같아 옛 쪽이 계속 보인다
       this.status = await api.post<RequestStatus>(`/api/requests/${encodeURIComponent(this.status.id)}/type-confirmation`, { change_to: changeTo });
       this.startPolling();
     },
