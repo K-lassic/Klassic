@@ -4,16 +4,13 @@
 #   인터넷 ──HTTPS──▶ <기기>.<tailnet>.ts.net ──▶ 이 PC 127.0.0.1:<Port> (gateway)
 #
 #   - 공개하는 것은 gateway 포트 하나뿐이다. 관리자(26101) · DB · model-api 는 공개하지 않는다.
-#   - 예비 시연(proto_type v0.1.1)은 9503, 재구성(api/)은 다른 포트를 쓰고
-#     발표 전에 -Port 만 바꿔 전환한다.
+#   - 공개 입구는 api/ 의 9603 이다. 예전 예비 시연(proto_type v0.1.1, 9503)은 #145 로 없앴다.
 #   - Tailscale 은 Windows 앱(서비스)을 쓴다. 로그인은 앱에서 사람이 한다 —
 #     인증 키를 이 스크립트 · 저장소 · 로그에 넣지 않는다.
 #
 # 사용:
 #   pwsh api/deploy/funnel.ps1 status
 #   pwsh api/deploy/funnel.ps1 start            # 기본 9603 (api/ 입구 · #139)
-#   pwsh api/deploy/funnel.ps1 start -Port 9503 # 예비 시연 (proto_type 이 있을 때만 · #139)
-#   pwsh api/deploy/funnel.ps1 start -Port 9603 # 재구성 gateway 로 전환
 #   pwsh api/deploy/funnel.ps1 stop
 # =============================================================================
 param(

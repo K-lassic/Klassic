@@ -3,9 +3,12 @@
 import '../helpers/env.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { blobOf, ModelApiDown, modelJson } from '../../src/services/modelApiClient.js';
+import { monotonicNowMs } from '../../src/lib/clock.js';
 import { startFakeModelApi, type FakeModelApi } from '../helpers/fakeModelApi.js';
 
-const later = (ms: number) => new Date(Date.now() + ms);
+// #105 마감은 단조 시계 기준(deadlineMono)으로 넘긴다. 예전 이름 deadline 으로 넘기면 조용히 무시되어
+//   마감 없이(기본 15초) 호출되고, 아래 두 시험이 깨진다 — 시험 파일은 tsc 대상(src)이 아니라 타입 오류로 안 잡힌다.
+const later = (ms: number) => monotonicNowMs() + ms;
 
 describe('model-api 클라이언트 (#174)', () => {
   let fake: FakeModelApi;
@@ -18,14 +21,14 @@ describe('model-api 클라이언트 (#174)', () => {
     form.append('image', blobOf(Buffer.from('a')), '1.png');
     form.append('image', blobOf(Buffer.from('b')), '2.png');
     form.set('request_no', 'R-TEST');
-    await expect(modelJson('POST', '/v1/omr/staff', form, { deadline: later(10000) })).resolves.toEqual({ ok: true });
+    await expect(modelJson('POST', '/v1/omr/staff', form, { deadlineMono: later(10000) })).resolves.toEqual({ ok: true });
     expect(fake.calls.at(-1)).toMatchObject({ files: ['1.png', '2.png'], fields: { request_no: 'R-TEST' }, apiKey: 'test-service-key' });
     expect(fake.calls.at(-1)?.deadline).toBeTruthy();
   });
 
   it('마감을 넘기면 timeout 으로 끊는다', async () => {
     fake.on('post', '/v1/omr/staff', (_q, s) => { setTimeout(() => s.json({ ok: true }), 3000); });
-    const err = await modelJson('POST', '/v1/omr/staff', new FormData(), { deadline: later(300) }).catch((e) => e);
+    const err = await modelJson('POST', '/v1/omr/staff', new FormData(), { deadlineMono: later(300) }).catch((e) => e);
     expect(err).toBeInstanceOf(ModelApiDown);
     expect(err.reason).toBe('timeout');
   });
@@ -40,7 +43,7 @@ describe('model-api 클라이언트 (#174)', () => {
 
   it('오류 응답은 상태 코드와 본문을 담는다', async () => {
     fake.on('post', '/v1/omr/staff', (_q, s) => { s.status(429).json({ error: { code: 'BUSY' } }); });
-    const err = await modelJson('POST', '/v1/omr/staff', new FormData(), { deadline: later(5000) }).catch((e) => e);
+    const err = await modelJson('POST', '/v1/omr/staff', new FormData(), { deadlineMono: later(5000) }).catch((e) => e);
     expect(err).toMatchObject({ reason: 'http', status: 429, body: { error: { code: 'BUSY' } } });
   });
 });

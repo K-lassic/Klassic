@@ -7,6 +7,7 @@ instruments = {mode: default|recommend|original|custom, tracks?: [{part, instrum
 - recommend: 추천 첫 조합(부르는 쪽이 코드 목록을 넘긴다). 실패하면 기본 구성
 - original : 올린 파일의 원래 악기 그대로(정보가 없으면 기본 구성)
 - custom   : 성부별 지정(part 는 0부터 센 성부 번호 — ScoreDoc EditOp 와 같다). DB 에는 'explicit'
+             #93 MP3 렌더링에서는 단일 선율 악기에 part="melodic"을 지정할 수 있다.
 
 타악 파트 처리(T150 — spec 에 "없으면 만든다"는 규칙이 없어 지금 동작을 규칙으로 못 박음, R10 · 화면 ensemble.ts 와 같음):
 - default·recommend: 타악 악기(장구·북)는 **이미 있는 타악 성부**(MIDI 채널 10 · MusicXML 타악 파트)에만 놓는다.
@@ -51,7 +52,7 @@ class Assignment:
         return DB_MODE[self.mode]
 
 
-def parse_assignment(raw: str | None) -> Assignment:
+def parse_assignment(raw: str | None, *, allow_melodic: bool = False) -> Assignment:
     """폼의 instruments(JSON 글자) → Assignment. 알 수 없는 악기 코드는 VALIDATION_ERROR(422, 2026-09-30)."""
     if raw is None or not raw.strip():
         return Assignment()
@@ -77,6 +78,11 @@ def parse_assignment(raw: str | None) -> Assignment:
             raise ApiError("VALIDATION_ERROR", details={"field": f"instruments.tracks[{i}].instrument",
                                                    "allowed": sorted(catalog)})
         part = t.get("part", i)
+        # #93 MP3 렌더링에서만 전체 선율 성부를 한 악기로 지정한다.
+        if (allow_melodic and mode == "custom" and part == "melodic"
+                and len(data["tracks"]) == 1 and not catalog[t["instrument"]].is_percussion):
+            tracks.append({"part": part, "instrument": t["instrument"], "sf2_ref": t.get("sf2_ref")})
+            continue
         if not isinstance(part, int) or isinstance(part, bool) or part < 0:
             raise ApiError("VALIDATION_ERROR", details={"field": f"instruments.tracks[{i}].part"})
         tracks.append({"part": part, "instrument": t["instrument"], "sf2_ref": t.get("sf2_ref")})
@@ -111,7 +117,12 @@ def apply_tracks(score, tracks: list[dict]) -> list[str]:
 def arrange(score, *, assignment: Assignment, codes: list[str] | None, transpose: int, volume: float) -> list[str]:
     """악기 → 조옮김 → 음량 순서로 score 를 바꾼다. 실제로 놓인 악기 코드를 돌려준다(original 이면 빈 목록)."""
     if assignment.mode == "custom":
-        used = apply_tracks(score, assignment.tracks)
+        tracks = assignment.tracks
+        if tracks and tracks[0]["part"] == "melodic":
+            # #93 타악 성부만 있으면 배정 목록이 비어 원래 악기로 연주한다.
+            tracks = [{**tracks[0], "part": i} for i, part in enumerate(score.parts)
+                      if not scoreio.is_percussion_part(part)]
+        used = apply_tracks(score, tracks)
     elif assignment.mode == "original" and codes is None:
         used = []
     else:

@@ -12,6 +12,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import C2GateBlock from '@/components/C2GateBlock.vue';
 import C9StepBar from '@/components/C9StepBar.vue';
+import C10Working from '@/components/C10Working.vue';
 import SharedScoreList from '@/components/SharedScoreList.vue';
 import MyScoresList from '@/components/MyScoresList.vue';
 import StepNav from '@/components/StepNav.vue';
@@ -370,6 +371,9 @@ async function onGateAction() {
           <p v-if="coldHint" class="small" role="status">{{ coldHint }}</p>
         </div>
       </div>
+
+      <!-- (2026-11-04 황송해) 파일을 보내는 동안(여러 장 · 큰 PDF 는 몇 초 걸린다) 화면이 멈춘 것처럼 보이지 않게 -->
+      <C10Working v-if="req.uploading" label="악보를 올리고 있습니다. 잠시만 기다려 주십시오." />
 
       <C2GateBlock v-if="req.gate" :view="req.gate" @action="onGateAction" @retry-ready="retryOpen = true" />
 

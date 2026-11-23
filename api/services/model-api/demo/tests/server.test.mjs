@@ -34,6 +34,20 @@ async function fixture(t, { render = mp3, score, maxActive = 2 } = {}) {
 }
 const bgm = `/demo/api/bgm?share=${SHARE}&inst=gayageum`;
 
+test('demo2 serves the original instrument page and uses the current music API', async (t) => {
+  const { get, calls } = await fixture(t);
+  const redirect = await get('/demo2', { redirect: 'manual' });
+  assert.equal(redirect.headers.get('location'), '/demo2/');
+  assert.match(await (await get('/demo2/')).text(), /국악기 이야기/);
+  assert.equal((await get('/demo2/style.css')).status, 200);
+  assert.match(await (await get('/demo2/app.js')).text(), /fetch\('api\/music'\)/);
+  assert.equal((await get('/demo2/img/gayageum.jpg')).headers.get('content-type'), 'image/jpeg');
+  assert.equal((await get('/demo2/.env')).status, 404);
+  assert.equal((await (await get('/demo2/api/music')).json()).scores[0].share_no, SHARE);
+  assert.equal(await (await get(bgm.replace('/demo/', '/demo2/'))).text(), 'ID3-test-audio');
+  assert.equal(JSON.parse(calls.at(-1).options.body.get('instruments')).tracks[0].part, 'melodic');
+});
+
 test('static files and music list contain no private key or owner; HEAD has no body', async (t) => {
   const { get, calls } = await fixture(t);
   for (const path of ['/demo/', '/demo/app.js', '/demo/style.css', '/demo/api/music']) {
@@ -60,10 +74,10 @@ test('chosen shared MusicXML is rendered with server-held key and returns MP3', 
   assert.equal(await response.text(), 'ID3-test-audio');
   const form = calls.at(-1).options.body;
   assert.equal(await form.get('score').text(), XML);
-  assert.deepEqual(JSON.parse(form.get('instruments')), { mode: 'custom', tracks: [{ part: 0, instrument: 'gayageum' }] });
+  assert.deepEqual(JSON.parse(form.get('instruments')), { mode: 'custom', tracks: [{ part: 'melodic', instrument: 'gayageum' }] });
 });
 
-test('changing instruments only assigns the first part and preserves the original janggu score', async (t) => {
+test('changing instruments assigns all melodic parts and preserves the original janggu score', async (t) => {
   const xml = await readFile(new URL('../../assets/templates/arirang-semachi-demo.musicxml', import.meta.url), 'utf8');
   const { get, calls } = await fixture(t, { score: () => json({ musicxml: xml }) });
   for (const instrument of ['gayageum', 'daegeum']) {
@@ -71,7 +85,7 @@ test('changing instruments only assigns the first part and preserves the origina
     assert.equal(response.status, 200);
     const form = calls.at(-1).options.body;
     assert.equal(await form.get('score').text(), xml);
-    assert.deepEqual(JSON.parse(form.get('instruments')), { mode: 'custom', tracks: [{ part: 0, instrument }] });
+    assert.deepEqual(JSON.parse(form.get('instruments')), { mode: 'custom', tracks: [{ part: 'melodic', instrument }] });
   }
 });
 

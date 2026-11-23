@@ -42,7 +42,14 @@ interface PartMetaJson {
 
 /** MIDI 바이트 → ScoreDoc (틱은 480 기준으로 바꾼다) */
 export function parseMidi(bytes: Uint8Array, catalog: InstrumentCatalog = BUILTIN_INSTRUMENTS): ScoreDoc {
-  const midi = new Midi(bytes);
+  let midi: InstanceType<MidiCtor>;
+  try {
+    midi = new Midi(bytes);
+  } catch (e) {
+    // midi-file 은 깨진 파일에서 Error 가 아니라 문자열을 던진다 ("Bad MIDI file. Expected 'MHdr' …").
+    // 그대로 두면 부르는 쪽의 `catch (e) { e.message }` 가 undefined 가 된다 — parseMusicXml 처럼 Error 로 맞춘다.
+    throw new Error(`MIDI 파일을 읽지 못했어요 (${e instanceof Error ? e.message : String(e)})`);
+  }
   const f = PPQ / (midi.header.ppq || PPQ);
   const doc = createScoreDoc({ ppq: PPQ });
   const title = fromByteString(midi.header.name ?? '').trim();

@@ -2,7 +2,7 @@
 
 국악보 변환·편집 서비스를 Linux·Docker 운영 구조로 재구성하는 저장소.
 
-- 기준판: `proto_type/` (v0.1.x) — 참고만 하고 고치지 않는다
+- 기준판: v0.1.1 은 Git 태그 `v0.1.1` 의 `proto_type/` 에 있다 — 참고만 한다. 저장소에서는 지웠다 (#145, 2026-11-20, 빌드용 보관본은 백업 드라이브)
 - 재구성 서비스: `api/` (v0.2.x) — 구조와 폴더 담당은 [api/README.md](api/README.md)
 - 진행 계획: [docs/API_진행계획.md](docs/API_진행계획.md) · 운영 Runbook: [api/deploy/README.md](api/deploy/README.md)
 

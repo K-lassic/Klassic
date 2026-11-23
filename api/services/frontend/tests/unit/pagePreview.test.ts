@@ -46,7 +46,8 @@ describe('먼저 변환된 쪽 — 연주 · 악기 바꾸기', () => {
 
   it('변환 중에 읽은 쪽 수 · 미리보기 악보 · 악기 표 · 연주 막대가 보인다', async () => {
     const w = await open();
-    expect(w.get('[data-test="pages-read"]').text()).toBe('3쪽 중 1쪽 읽음');
+    // 읽은 쪽 수는 처리 중 애니메이션(C10Working)의 label 로 나온다
+    expect(w.get('[data-test="working"]').text()).toBe('3쪽 중 1쪽 읽음');
     expect(w.get('[data-test="page-preview"]').text()).toContain('1쪽을 먼저 보여 드립니다');
     expect(w.find('[data-test="step2-tracks"]').exists()).toBe(true);
     const bar = w.findComponent({ name: 'C5PlayerBar' });

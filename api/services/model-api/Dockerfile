@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # #24 model-api: 공통 설정은 이미지에 포함하고 엔진·음원은 읽기 전용으로 마운트한다.
-FROM python:3.11-slim-bookworm AS build
+FROM python:3.11-slim-bookworm@sha256:94a8fee35252d06ab75856f15f12c7bae67b10e8a6da93c7fded82b2610926cd AS build
 ARG UV_VERSION=0.11.1
 RUN pip install --no-cache-dir uv==${UV_VERSION}
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
@@ -8,7 +8,7 @@ WORKDIR /app/services/model-api
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
 
-FROM python:3.11-slim-bookworm AS runtime
+FROM python:3.11-slim-bookworm@sha256:94a8fee35252d06ab75856f15f12c7bae67b10e8a6da93c7fded82b2610926cd AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH=/opt/venv/bin:$PATH \
     SHARED_DIR=/app/shared ENGINES_DIR=/opt/gugak-engines SOUNDFONTS_DIR=/app/shared/soundfonts \
     XDG_CACHE_HOME=/tmp/engine-cache MPLCONFIGDIR=/tmp/matplotlib TMPDIR=/storage/tmp
