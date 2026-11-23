@@ -126,6 +126,38 @@ def test_invalid_assignment_is_422(client, assignment):
     app.state.render_pool.render.assert_not_awaited()
 
 
+@pytest.mark.parametrize(("allow_melodic", "tracks"), [
+    (False, [{"part": "melodic", "instrument": "daegeum"}]),
+    (True, [{"part": "melodic", "instrument": "janggu"}]),
+    (True, [{"part": "melodic", "instrument": "daegeum"}, {"part": 0, "instrument": "gayageum"}]),
+])
+def test_melodic_assignment_rejects_unsupported_requests(allow_melodic, tracks):
+    with pytest.raises(ApiError) as error:
+        parse_assignment(json.dumps({"mode": "custom", "tracks": tracks}), allow_melodic=allow_melodic)
+    assert error.value.code == "VALIDATION_ERROR"
+
+
+@pytest.mark.parametrize("melodic_count", [0, 1, 17])
+def test_melodic_assignment_preserves_janggu_and_changes_all_melodies(melodic_count):
+    from copy import deepcopy
+    from music21 import stream
+
+    template = Path(__file__).resolve().parents[1] / "assets/templates/arirang-semachi-demo.musicxml"
+    original = scoreio.load_score(template.read_bytes())
+    melody, janggu = original.parts
+    doc = stream.Score()
+    for index in range(melodic_count):
+        part = deepcopy(melody)
+        part.id = f"melody-{index}"
+        doc.insert(0, part)
+    doc.insert(0, deepcopy(janggu))
+    assignment = parse_assignment(
+        '{"mode":"custom","tracks":[{"part":"melodic","instrument":"daegeum"}]}', allow_melodic=True,
+    )
+    assert arrange(doc, assignment=assignment, codes=None, transpose=0, volume=1) == ["daegeum"] * melodic_count
+    assert render_presets(doc) == [(128, 1) if scoreio.is_percussion_part(part) else (1, 2) for part in doc.parts]
+
+
 def test_default_and_custom_instruments_have_correct_bank_and_soundfont():
     doc = scoreio.load_score(XML.encode())
     arrange(doc, assignment=parse_assignment(None), codes=None, transpose=0, volume=1)

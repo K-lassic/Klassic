@@ -1,0 +1,125 @@
+# backend 를 PR 마다 시험한다 — 빌드 · 단위 · 통합(임시 MariaDB) · 계약 대조 (#95 CI 자동화 · 담당: 팀장)
+#
+#   구조에서의 위치: GitHub 가 PR 을 열거나 고칠 때 · main 에 병합될 때 실행. 실제 서버 · 실제 DB 와는 관계없다.
+#     통합 시험은 이 실행 안에서만 사는 임시 MariaDB(서비스 컨테이너)에 붙는다. 끝나면 사라진다.
+#   무엇을 보나:
+#     1) score-core 빌드 (backend 가 `file:../../packages/score-core` 로 가져다 쓴다)
+#     2) backend 빌드 (tsc)
+#     3) 마이그레이션 — api/db/migrate.sh 를 운영과 같은 mariadb:12.0.2 이미지로 두 번 돌린다 (두 번째는 적용 0개여야 한다)
+#     4) npm test — TEST_DB_HOST 가 있으므로 tests/integration/* 도 건너뛰지 않고 돈다.
+#        통합 시험의 모든 JSON 응답은 contracts/web-api.yaml 과 대조된다 (tests/helpers/contract.ts · #44)
+#     5) 건너뛴 시험이 0개인지 확인 (#95 완료 기준). DB 연결이 조용히 빠지면 161개가 건너뛰어도 '통과' 로 보이기 때문이다
+#   바뀐 폴더만: 아래 paths 에 걸리는 PR 에서만 돈다. 계약 · 마이그레이션 · shared 가 바뀌어도 돈다.
+#   DB 계정 값은 이 실행에서만 쓰는 시험용 고정값이다 — 비밀값이 아니다. 실제 값은 api/.env 에만 있다.
+#   pull_request 를 쓴다 (pull_request_target 아님): PR 의 코드를 실행하므로 쓰기 권한 · 비밀값을 주지 않는다.
+name: backend 시험
+
+on:
+  pull_request:
+    paths:
+      - 'api/services/backend/**'
+      - 'api/packages/score-core/**'
+      - 'api/shared/**'
+      - 'api/contracts/web-api.yaml'
+      - 'api/db/**'
+      - '.github/workflows/backend.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/services/backend/**'
+      - 'api/packages/score-core/**'
+      - 'api/shared/**'
+      - 'api/contracts/web-api.yaml'
+      - 'api/db/**'
+      - '.github/workflows/backend.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '22.21.1'
+  # 시험용 임시 DB — 이 실행 안에서만 산다
+  TEST_DB_HOST: 127.0.0.1
+  TEST_DB_PORT: '3306'
+  TEST_DB_USER: klassic_ci
+  TEST_DB_PASSWORD: klassic_ci_only
+  TEST_DB_NAME: klassic_ci
+
+jobs:
+  test:
+    name: backend (build · 단위 · 통합 · 계약 대조)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      db:
+        # deploy/compose.yaml 의 db 와 같은 이미지 · 같은 서버 옵션
+        image: mariadb:12.0.2
+        env:
+          MARIADB_ROOT_PASSWORD: klassic_ci_root_only
+          MARIADB_DATABASE: klassic_ci
+          MARIADB_USER: klassic_ci
+          MARIADB_PASSWORD: klassic_ci_only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            api/packages/score-core/package-lock.json
+            api/services/backend/package-lock.json
+
+      - name: score-core 빌드
+        working-directory: api/packages/score-core
+        run: npm ci --no-audit --no-fund && npm run build
+
+      - name: backend 의존성 설치 · 빌드
+        working-directory: api/services/backend
+        run: npm ci --no-audit --no-fund && npm run build
+
+      # 운영의 migrate 서비스와 같은 이미지 · 같은 스크립트. 러너에 mariadb 클라이언트를 깔지 않는다.
+      # --network host: 서비스 컨테이너가 러너의 3306 으로 열려 있다.
+      - name: 마이그레이션 (두 번 — 두 번째는 새로 적용할 것이 없어야 한다)
+        run: |
+          migrate() {
+            docker run --rm --network host \
+              -e DB_HOST=127.0.0.1 -e DB_PORT=3306 \
+              -e DB_NAME="$TEST_DB_NAME" -e DB_USER="$TEST_DB_USER" -e DB_PASSWORD="$TEST_DB_PASSWORD" \
+              -e MIGRATIONS_DIR=/db/migrations \
+              -v "$PWD/api/db:/db:ro" mariadb:12.0.2 sh /db/migrate.sh
+          }
+          migrate
+          migrate | tee second.log
+          grep -q "적용 0 개" second.log || { echo "::error::두 번째 마이그레이션에서 다시 적용된 파일이 있습니다"; exit 1; }
+
+      - name: 시험 (단위 + 통합 + 계약 대조)
+        working-directory: api/services/backend
+        env:
+          SHARED_DIR: ${{ github.workspace }}/api/shared
+        run: npm test -- --reporter=default --reporter=json --outputFile.json=../../../vitest-backend.json
+
+      - name: 건너뛴 시험이 없는지 확인
+        run: |
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("vitest-backend.json", "utf8"));
+            const skipped = r.numPendingTests + r.numTodoTests;
+            console.log(`통과 ${r.numPassedTests} · 실패 ${r.numFailedTests} · 건너뜀 ${skipped} · 전체 ${r.numTotalTests}`);
+            if (skipped > 0) {
+              const names = r.testResults.flatMap((f) => f.assertionResults.filter((a) => a.status !== "passed" && a.status !== "failed").map((a) => `${f.name.split("/tests/")[1]} > ${a.fullName}`));
+              console.log(names.slice(0, 30).join("\n"));
+              console.log("::error::건너뛴 시험이 있습니다 — DB 연결(TEST_DB_HOST)이 빠졌거나 it.skip 이 남았습니다");
+              process.exit(1);
+            }'

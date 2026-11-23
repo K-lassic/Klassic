@@ -5,6 +5,8 @@
 //   v0.1.1 과 다른 점: 수신 주소 기본값이 127.0.0.1 → 0.0.0.0 (컨테이너 밖 Nginx 가 부르므로 · 작성규칙 1-6),
 //     model-api 주소가 서비스 이름(http://model-api:9543), shared 위치가 SHARED_DIR(이미지 안 /app/shared).
 import { z } from 'zod';
+import { parseCidrList } from '../lib/cidr.js';
+import { parseTrustList } from '../lib/trustedProxy.js';
 
 const schema = z.object({
   // DB (#20 · 서비스 이름 db)
@@ -19,6 +21,21 @@ const schema = z.object({
   WEB_PORT: z.coerce.number().int().positive().default(9523),
   ADMIN_HOST: z.string().min(1).default('0.0.0.0'),
   ADMIN_PORT: z.coerce.number().int().positive().default(26101),
+  /**
+   * #100 관리자 API 에 들어올 수 있는 접속 주소 범위(CIDR, 쉼표로 나눔) — 밖이면 403 ADMIN_NETWORK_DENIED (G5).
+   * 기본값: 같은 PC(127.0.0.1 · ::1)와 Docker 사설 대역(172.16.0.0/12). 관리자 포트는 호스트의 127.0.0.1 에만 열리지만(frontend compose),
+   * Docker Desktop 에서는 그 접속이 Nginx 에 Docker 망의 주소(게이트웨이)로 보이므로 이 대역이 필요하다.
+   * 비어 있거나 한 항목이라도 잘못이면 시작하지 않는다(잘못된 설정으로 범위가 넓어지지 않게).
+   */
+  ADMIN_ALLOWED_CIDRS: z.string().default('127.0.0.1/32,::1/128,172.16.0.0/12')
+    .refine((v) => parseCidrList(v) !== null, 'ADMIN_ALLOWED_CIDRS 는 CIDR 목록(예: 127.0.0.1/32,::1/128)이어야 합니다'),
+  /**
+   * #100 관리자 앱이 X-Forwarded-For(접속 주소)를 믿을 연결 상대 — loopback · IP · CIDR · 서비스 이름을 쉼표로.
+   * 기본값: 이 컨테이너 안(loopback)과 관리자 Nginx 가 있는 `frontend` 서비스. 다른 컨테이너가 Nginx 를 거치지 않고 붙어 헤더를 꾸며도 믿지 않는다(PR #167 리뷰).
+   * web 용 TRUST_PROXY 와 따로 둔다 — 그쪽은 사설망 전체를 믿는다. 비어 있거나 한 항목이라도 잘못이면 시작하지 않는다.
+   */
+  ADMIN_TRUSTED_PROXIES: z.string().default('loopback,frontend')
+    .refine((v) => parseTrustList(v) !== null, 'ADMIN_TRUSTED_PROXIES 는 loopback · IP · CIDR · 서비스 이름 목록(예: loopback,frontend)이어야 합니다'),
 
   // 다른 서비스 — 서비스 이름으로 부른다 (127.0.0.1 고정 없음)
   MODEL_API_URL: z.string().url().default('http://model-api:9543'),

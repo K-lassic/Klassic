@@ -48,9 +48,11 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 
 켜기 · 끄기는 PR #131 병합 뒤 `api/` 에서 `docker compose --profile demo up -d demo` · `docker compose stop demo`. Nginx 는 다시 띄우지 않아도 된다. 남은 확인: 실제 demo 서버 · 외부 키 · Funnel 브라우저 재생 (#49).
 
+데모의 전체 선율 악기 지정(`part: "melodic"`)을 배포할 때는 `model-api`를 먼저 갱신하고 healthy를 확인한 다음 데모를 갱신한다. 구버전 모델 API는 새 데모의 요청에 422를 반환한다. 되돌릴 때는 이전 데모를 먼저 올리고 그다음 이전 `model-api`로 되돌린다. `/demo2/` 경로를 추가하거나 되돌릴 때는 Nginx 설정도 다시 읽힌다.
+
 - 도메인 없이 `*.ts.net` 주소와 HTTPS 인증서를 받는다. 공유기 포트를 열지 않는다.
 - **Tailscale 은 Windows 앱(서비스)으로 돌린다** (#9 결정). 컨테이너로 돌리지 않으므로 인증 키(`TS_AUTHKEY`)가 필요 없다 — 로그인은 앱에서 사람이 한다.
-- 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(proto_type 9503 또는 api/ 9603)이고, 관리자 · 내부 포트(26101 · 26201 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
+- 켜기 · 끄기는 [funnel.ps1](funnel.ps1). 공개하는 포트는 입구 하나(api/ 9603)이고, 관리자 · 내부 포트(26101 · 26201 · 9523 · 9543 · 3306)는 스크립트가 거부한다.
 - Funnel 은 대역폭 제한이 있으므로 시연 · 소규모 사용 기준으로 본다.
 
 ### 켜기 · 끄기 (#9)
@@ -58,13 +60,14 @@ DB · Nginx 경로 나누기(`nginx/`) · 외부 공개 · 운영 설정.
 ```powershell
 pwsh api/deploy/funnel.ps1 status             # 로그인 상태 · 공개 주소
 pwsh api/deploy/funnel.ps1 start              # 재구성: api/ 입구(9603) 공개 — 기본값 (#139)
-pwsh api/deploy/funnel.ps1 start -Port 9503   # 예비 시연: proto_type gateway(9503) 공개 (proto_type 이 있을 때만)
 pwsh api/deploy/funnel.ps1 stop               # 공개 끄기
 ```
 
 ### api/ 로 전환 · 되돌리기 (#48)
 
 전환은 **사람이 실행한다.** 외부 공개를 바꾸는 명령이라 Claude 는 실행하지 않는다.
+
+> 2026-11-01 전환 때의 기록이다. 되돌릴 곳이던 예비 시연(9503)은 #145 로 없앴다 (「v0.1.1 대역 · 예비 시연 폐지」). 지금 되돌리기는 이전 이미지 태그로 한다.
 
 ```powershell
 # 0. 되돌릴 곳 살리기 — 9503 이 응답하지 않으면 (재부팅 뒤 네트워크 분리)
@@ -139,10 +142,9 @@ pwsh api/deploy/funnel.ps1 stop
 - Tailscale 서비스는 자동 시작(Automatic)이지만 **"Run unattended"** 가 꺼져 있으면 Windows 사용자가 로그아웃할 때 연결이 끊긴다.
 - 조치: 작업 표시줄 Tailscale 아이콘 → Preferences → **Run unattended** 켜기 (#47). 재부팅 시험은 하지 않았다 — 발표는 켜 둔 채 진행한다.
 
-### 예비 시연 ↔ 재구성 전환
+### 예비 시연 ↔ 재구성 전환 (폐지)
 
-- proto_type(v0.1.1)은 9503 · 26101 을 쓴다. `api/` 는 **9603 · 26201**(`API_PUBLIC_PORT` · `API_ADMIN_PORT`)로 띄워서 둘이 같이 떠 있게 한다 (#20).
-- 발표에 쓸 쪽을 정하면 `start -Port <포트>` 로 Funnel 이 가리키는 곳만 바꾼다. 컨테이너는 끄지 않는다.
+- 예전에는 proto_type(v0.1.1)을 9503 · 26101 에, `api/` 를 **9603 · 26201** 에 같이 띄우고 Funnel 이 가리키는 포트만 바꿨다 (#20). 예비 시연은 #145(2026-11-20)로 없앴다.
 
 ## 엔진 자가 검사 — 재구성 이미지 사용 (#142)
 
@@ -175,69 +177,16 @@ Compose 전체를 해석하기 위한 로컬 `.env`는 필요하지만, 검사 �
 전체 Compose를 `up -d --build --wait`로 실행해 상시 서비스 healthy와 브라우저 API활용 화면 표시를
 확인한 뒤 같은 프로젝트·환경 파일로 `down`했다. 잔여 컨테이너는 없고 엔진·DB 볼륨과 롤백 이미지는 보존했다.
 
-## model-api 대역 (#49)
+## v0.1.1 대역 · 예비 시연 폐지 (#145, 2026-11-20)
 
-재구성 model-api(#24 · #28~#31)가 발표까지 갖춰지지 않을 때를 대비해, **v0.1.1 이미지를 `model-api` 이름으로 `api/` 에 붙인다.** 코드는 고치지 않는다. 파일은 [compose.standin.yaml](compose.standin.yaml) · [model-standin.env](model-standin.env)(키 이름만) 두 개다.
+재구성 model-api 가 2026-11-03 부터 실제 서버 기본이고(#87), 대역(v0.1.1 model-api 를 `api/` 에 붙이는 구성)과 예비 시연(proto_type 9503)은 쓰지 않는다. 사용자 결정(2026-11-20)으로 둘 다 없앴다.
 
-```
-web ──┐
-      ├─▶ model-api:9543 (klassic/klassic-model-api:0.1.1) ─▶ db · 엔진 볼륨 klassic_engines(읽기 전용)
-Nginx ┘
-```
-
-대역을 선택할 때만 필요한 것: 이미지 `klassic/klassic-model-api:0.1.1` · 볼륨 `klassic_engines` · `api/.env` 의 `SERVICE_API_KEY`.
-위 #142의 재구성 엔진 자가 검사에는 이 이미지가 필요하지 않다. proto_type 컨테이너는 떠 있지 않아도 된다.
-
-**처음 한 번 — 서비스 키 만들기** (서버 PC · Git Bash · `api/` 폴더)
-
-```bash
-cd /c/project/Klassic/api
-# 1) 운영자 만들기 — 비밀번호를 두 번 묻는다 (12자 이상, 화면에 안 보임)
-docker compose run --rm -it web node dist/tools/createOperator.js --login <아이디> --name <이름>
-# 2) 서비스 키를 발급해 .env 에 넣는다 — 화면에 키가 나오지 않는다
-KEY=$(docker compose run --rm -T web node dist/tools/issueServiceKey.js --operator <아이디> 2>/dev/null | tail -1)
-sed -i '/^SERVICE_API_KEY=/d' .env; printf '\nSERVICE_API_KEY=%s\n' "$KEY" >> .env; unset KEY
-grep -c '^SERVICE_API_KEY=gk_' .env   # 1 이 나오면 정상
-```
-
-**대역을 기본으로 되돌릴 때만 (서버 PC, #86)** — 2026-11-03 부터 기본은 재구성판이고 이 두 줄은 지웠다. `api/.env` 에 두 줄을 더하면 `api/` 폴더에서 `-f` 없이 써도 대역이 유지된다. 비밀값이 아니다.
-
-```bash
-cd /c/project/Klassic/api
-printf '\nCOMPOSE_PATH_SEPARATOR=:\nCOMPOSE_FILE=compose.yaml:deploy/compose.standin.yaml\n' >> .env
-docker compose config --services    # 목록에 model-api 가 있고
-docker compose config | grep 'image: klassic/klassic-model-api'    # 이 줄이 나오면 정상
-```
-
-**켜기 · 확인 · 끄기**
-
-```bash
-cd /c/project/Klassic/api
-docker compose up -d --wait                                     # model-api 가 Healthy
-pwsh deploy/check-public.ps1 -Url http://127.0.0.1:9603 -Local  # 모두 통과 (PowerShell 7 필요)
-docker compose stop model-api                                   # 끄기
-```
-
-- `web` 까지 다시 만들어야 새 서비스 키를 읽는다 — 위 `up -d` 가 함께 처리한다.
-- **대역을 쓰려면 `-f compose.yaml -f deploy/compose.standin.yaml` 을 붙인다.** 안 붙이면 재구성판이 뜬다. `COMPOSE_FILE` 은 `api/` 폴더에서만 읽힌다.
-- 이 실수는 `check-public.ps1` 의 「인식 · 렌더링 경로」 줄이 잡는다. 재구성판도 `/api/v1/health` 200 · 엔진 `ready` 라서 상태만으로는 알 수 없다.
-- 대역은 재구성판 서비스 정의 위에 합쳐진다. 재구성판 값이 섞이지 않게 `!reset` · `!override` 를 쓴다 (Docker Compose 2.24 이상).
-- **재구성 model-api 로 교체:** #29 · #30 · #31 이 끝난 뒤 `api/.env` 의 두 줄을 지우고 `docker compose up -d --build model-api`. 서비스 이름 · 포트가 같아 backend · Nginx 는 고칠 것이 없다.
-
-**시험 결과 (2026-11-02, 임시 프로젝트)**
-
-| 확인 | 결과 |
-|---|---|
-| non-root · 뿌리 읽기 전용 · 엔진 볼륨 읽기 전용 | ✅ |
-| 기동 | ✅ 약 20초 뒤 healthy |
-| 미뉴에트 오선보 | ✅ homr 31초 · 신뢰 등급 |
-| 타령 정간보 PDF 2쪽 | ✅ PDF 검사 통과 · jeongganbo-omr 23초 · 신뢰 등급 |
-| 편집 후 MIDI · PDF · MP3 | ✅ MP3 최대 7.3초 · PDF 3.2초 |
-| `/api/v1/health` (Nginx 경유) · 공개 점검 | ✅ 모두 통과 |
-| 메모리 | 최대 2.24GiB (`mem_limit` 4g) |
-
-추천(LLM) 모델과 audiveris 는 이 구성에서 `unavailable` 이다 — 발표 흐름에는 쓰지 않는다.
-
+- **이미지를 남기지 않는다.** `klassic/klassic-app:0.1.1` · `klassic/klassic-model-api:0.1.1` · `klassic/klassic-engines-installer:*` 은 다시 빌드할 코드와 절차가 있으므로 지운다.
+- **v0.1.1 코드는 Git 태그 `v0.1.1` 에 있다** (`git ls-tree -r v0.1.1 --name-only | grep -c '^proto_type/'` = 567). 빌드 절차는 그 태그의 `proto_type/README.md` 다.
+- **보관본:** 이 PC 의 백업 드라이브(`D:\[Back-up]\[Mini_Project]\Klassic`)에 `proto_type` 빌드용 압축본을 둔다. 공개 배포처에서 다시 받을 수 있는 `FluidR3_GM.sf2` 와 비밀값(`.env`)은 넣지 않았다 — 압축본 안의 `복원방법.md` 에 받는 주소 · 해시가 있다.
+- 지운 구성: `deploy/compose.standin.yaml` · `deploy/model-standin.env`, CI 의 대역 구성 검사, `.env.example` 의 대역 주석. 엔진 볼륨 `klassic_engines` 는 재구성판이 쓰므로 **지우지 않는다**.
+- 대역으로 시험한 기록(2026-11-02)은 아래 「재구성 model-api 전환 시험」에 남긴다.
+- 조사 · 바꾼 것 · 압축본 재빌드 확인: [../docs/proto_type_정리_20261120.md](../docs/proto_type_정리_20261120.md)
 
 ## 재구성 model-api 전환 시험 (#87, 2026-11-02)
 
@@ -569,6 +518,8 @@ docker run --rm --network none --read-only --tmpfs /tmp \
 **발견한 것**
 
 - **외부 키 결과의 파일 주소에 포트가 빠진다.** `http://127.0.0.1/api/v1/files/<token>` 처럼 나온다 (입구가 9713 인데 포트 없음). Nginx 가 `proxy_set_header Host $host` 로 넘겨 포트가 떨어지고, model-api 가 `request.url_for` 로 주소를 만든다. 공개 주소(Funnel HTTPS 443)는 기본 포트라 영향이 없을 것으로 보지만 (추정), 로컬 · 임시 프로젝트 · 9603 직접 접속에서는 주소를 그대로 열 수 없다. `$http_host` 로 바꾸는 방안을 별도 이슈로 검토한다. 이번 시험은 주소의 경로만 떼어 받았다.
+  - **조치 (#154, 2026-11-21):** `deploy/nginx/proxy.conf` 가 `Host` · `X-Forwarded-Host` 를 `$fwd_host` 로 넘긴다 — 클라이언트가 보낸 `Host` 를 포트까지 그대로 쓰고(`$http_host`), 머리글이 없는 요청(HTTP/1.0)만 `$host` 로 대신한다. 이전 값: 둘 다 `$host`(포트 없음). 되돌리는 방법: 두 줄을 `$host` 로 되돌리고 `docker compose exec frontend nginx -s reload`. 이미지를 다시 만들 필요는 없다(`deploy/nginx` 를 읽기 전용으로 붙이므로 Nginx 만 다시 읽힌다).
+  - **확인한 것** (임시 프로젝트 `klassic-exp`, 입구 9703, 외부 키로 `POST /api/v1/performances`): 수정 전 파일 주소가 `http://127.0.0.1/api/v1/files/…` 로 포트가 없고 그대로 열면 연결 실패 → 수정 후 `http://127.0.0.1:9703/api/v1/files/…` 이고 musicxml 31,208B · midi 1,049B 가 200 으로 받아진다. 같은 프로젝트에서 `check-public.ps1 -Url http://127.0.0.1:9703 -Local` 15개 항목 모두 통과. `Host: example.tailnet.ts.net`(Funnel 처럼 포트 없음)을 보내면 주소도 포트 없이 나와 달라지지 않고, HTTP/1.0(Host 없음)도 `/api/health` 200. 백엔드(web)는 `Host` 를 읽지 않아(`req.headers.host` · `hostname` 사용 없음, 코드 검색) 쿠키 · 접속 주소 기록에는 영향이 없다. **확인하지 못한 것:** 실제 공개 주소(Funnel HTTPS) — 리허설(#49) 범위, 관리자 server(`admin/admin.conf` 의 `Host $host`)는 파일 주소를 만들지 않아 바꾸지 않음.
 - Git Bash 에서 임시 폴더(`AppData\Local\Temp\...`) 아래 사본을 빌드하면 Compose 5.6 의 bake 가 `--allow=fs.read=...` 권한을 요구하며 멈췄다. 같은 명령이 PowerShell 에서는 되고, 원래 저장소 경로에서는 Git Bash 로도 된다. 경로 문제로 보이며 프로젝트 코드와는 관계없다 (추정).
 - `compose run` 뒤에 이름 없는 빈 볼륨 2개가 남았다 (위 「CPU 전용 엔진 볼륨 시험」 7번과 같은 현상).
 
@@ -659,6 +610,118 @@ ENGINES_VOLUME_NAME=klassic_engines_restored docker compose up -d --wait model-a
 - 실제 `klassic_engines` 는 거부 시험에서 이름만 대조했고 열지 않았다.
 - 시험하지 않은 것: 실제 서비스 볼륨 백업 실행(필요한 시점에 사람이 정한다), 다른 PC 로 옮겨 복원, 서버 PC(노트북)에서의 소요 시간.
 
+## 관리자 API — 접속 허용 범위 · 운영자 로그인 (#100)
+
+관리자 API(`/admin/*`)의 첫 묶음이다. 계정 · 키 · 설정 · 모델 등 나머지는 #100 의 다음 PR 에서 붙는다. 운영자 계정은 지금처럼 명령줄로만 만든다 (`createOperator`, backend README 「운영 명령줄 도구」).
+
+**지금 되는 것:** `POST /admin/login` · `POST /admin/logout` · `GET /admin/me` · `POST /admin/service-key`. 그 밖의 `/admin/*` 는 로그인 전에 401, 로그인 뒤에는 404(아직 없음)다.
+
+**접속 허용 범위** — `api/.env` 의 `ADMIN_ALLOWED_CIDRS`(쉼표로 나눈 CIDR). 범위 밖이면 `403 ADMIN_NETWORK_DENIED`(G5)이고 사건은 `gate_event` 에 주소 **해시**만 남는다.
+
+| 항목 | 값 |
+|---|---|
+| 기본값 | `127.0.0.1/32,::1/128,172.16.0.0/12` (같은 PC + Docker 사설 대역) |
+| 왜 172.16.0.0/12 | 관리자 포트는 호스트 `127.0.0.1` 에만 열리지만, Docker 포트 전달로 들어온 접속은 Nginx 에 **compose 네트워크 게이트웨이(172.x.0.1)** 로 보인다. 2026-11-04 코드 작업용 PC(Docker Desktop)에서 실측: `172.18.0.1` |
+| 잘못된 값 | 항목이 하나라도 CIDR 이 아니거나 비어 있으면 **admin 이 시작하지 않는다**(키 이름만 알리고 값은 출력하지 않음). 일부만 적용해 범위가 넓어지는 일이 없다 |
+| 그대로 통과 | `/admin/health` — 컨테이너 healthcheck 용이고 준비 여부만 알린다 |
+| 접속 주소 헤더를 믿을 상대 | `ADMIN_TRUSTED_PROXIES`(기본 `loopback,frontend`) — 관리자 Nginx 가 있는 `frontend` 서비스와 컨테이너 안(loopback)만. **다른 컨테이너가 Nginx 를 거치지 않고 관리자 포트에 직접 붙어 `X-Forwarded-For` 를 꾸며도 믿지 않고** 그 연결의 실제 주소로 판정한다(PR #167 리뷰). 서비스 이름은 Docker 이름 풀이로 주소를 알아내고, **푼 주소는 10초 동안만 믿는다**(컨테이너를 다시 만들면 주소가 바뀌고 이전 주소가 다른 컨테이너에 배정될 수 있어서 — PR #167 리뷰 2차). 유효기간이 지난 주소는 그 주소에서 요청이 와도 이름을 다시 풀고(풀이는 2초 이상 간격 · 동시 요청은 한 번), 풀이에 실패하면 믿지 않는다. 이름을 못 풀면 loopback 밖은 믿지 않는다. 잘못된 값이면 시작하지 않는다. web 용 `TRUST_PROXY`(사설망 전체)와 별개다 |
+
+**접속 주소는 헤더가 아니라 실제 접속 주소다.** 관리자 Nginx(`deploy/nginx/admin/admin.conf`)는 `X-Forwarded-For` 를 믿지 않고 실제 TCP 접속 주소로 덮어써 넘긴다. 이전에는 `set_real_ip_from` 이 compose 게이트웨이를 신뢰해서, 접속자가 `X-Forwarded-For: 10.1.1.1` 을 직접 보내면 범위 검사를 우회할 수 있었다(아래 시험 결과). 앞에 프록시를 두면 그 프록시의 주소만 `set_real_ip_from` 에 넣는다(대역 전체를 넣지 않는다).
+
+**로그인 · 세션**
+- 일반 계정으로 로그인하고 `operator` 역할이 있어야 한다. 쿠키 `gugak_admin` — 서명 · HttpOnly · SameSite=Strict · 8시간, 요청마다 DB 에서 계정 · 역할 · 운영자 사용 여부를 다시 본다(역할을 빼면 다음 요청부터 401).
+- 처리 설정의 `login_max_failures` 번 틀리면 `login_lock_minutes` 분 잠금(423). 사용자 로그인과 같은 계정 표를 쓴다.
+- **admin 컨테이너를 다시 띄우면 모든 운영자가 다시 로그인해야 한다.** 로그아웃한 쿠키를 막아 둔 목록이 메모리에만 있어서, 쿠키에 프로세스 시작 표식을 넣어 재시작 때 이전 쿠키를 모두 무효로 한다. (이 표식이 없던 첫 구현은 재시작 뒤 로그아웃했던 쿠키가 200 으로 되살아났다 — 실측.)
+- 서비스 키(`POST /admin/service-key`)는 명령줄 도구 `issueServiceKey` 와 같은 함수다. 원문은 응답에서 한 번만 나오고(`Cache-Control: no-store`), 발급해도 `api/.env` 의 `SERVICE_API_KEY` 를 바꾸고 web 을 다시 만들어야 적용된다.
+
+**서버 PC 에 반영할 때** (서버 PC · Git Bash · `api/` 폴더). 마이그레이션은 없다(DB 표 변경 없음).
+
+```bash
+git pull
+docker compose up -d --build web admin
+docker compose restart frontend
+```
+
+- web · admin 은 같은 이미지(`klassic/backend`)라 둘 다 다시 만든다. web 은 몇 초 끊긴다(그동안 진행 중인 인식 요청은 재시작 복구로 이어진다).
+- `frontend` 는 다시 시작해야 바뀐 `admin.conf` 를 읽는다(설정 폴더를 `:ro` 로 붙여 둔다). 사용자 화면이 몇 초 끊긴다.
+- 끝난 뒤 `docker compose ps` 의 web · admin · frontend 가 `(healthy)` 이고, **web · admin 컨테이너의 이미지 ID 가 방금 빌드한 이미지와 같은지** `docker inspect -f '{{.Image}}' <컨테이너>` 와 `docker images` 로 대조한다(`up -d` 가 다시 만들지 않는 일이 있었다).
+- 반영하면 아래 「서버 PC 운영 변경 기록」 표에 한 줄 남긴다(이전 값 · 지금 값 · 되돌리는 방법).
+
+**확인** (서버 PC · Git Bash). 정상 결과는 각 줄 끝에 적었다.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:26201/admin/health
+```
+→ `200`
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:26201/admin/me
+```
+→ `401` (로그인 전). `403` 이면 접속 허용 범위가 이 PC 를 막고 있다 — `ADMIN_ALLOWED_CIDRS` 와 Nginx 가 본 주소(`docker compose logs frontend` 의 접속 기록 첫 칸)를 비교한다.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-For: 203.0.113.9" http://127.0.0.1:26201/admin/me
+```
+→ `401`. 꾸민 헤더가 무시된다는 뜻이다(범위가 넓어서 통과한 것이지, 헤더를 믿은 것이 아니다). 헤더가 통하는지 가려내려면 범위를 좁혀 본다:
+
+```bash
+ADMIN_ALLOWED_CIDRS=10.0.0.0/8 docker compose up -d admin
+curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-For: 10.1.1.1" http://127.0.0.1:26201/admin/me
+docker compose up -d admin
+```
+→ 가운데 줄이 `403` 이어야 정상이다(`401` 이면 헤더가 통하는 것 — Nginx 설정이 옛것이다). **마지막 줄로 반드시 원래 범위로 되돌린다**(셸에만 준 값이라 다시 `up -d` 하면 `.env` 값으로 돌아온다). 이 확인은 admin 을 두 번 다시 띄우므로 로그인 중인 운영자가 있으면 풀린다.
+
+**외부에서 접속 불가** — 호스트 `127.0.0.1` 에만 열려 있어서 LAN · Tailscale 주소로는 연결 자체가 안 된다(`curl http://<PC 의 LAN 주소>:26201/admin/health` 가 `000`). Funnel 은 사용자 포트(9603)만 가리킨다.
+
+### #100 1차 시험 결과 (2026-11-04, 코드 작업용 PC · 임시 프로젝트 `klassic-api-test` · 이미지 태그 `issue100` · 포트 9703 · 26301)
+
+| 확인 | 결과 |
+|---|---|
+| 자동 시험 (격리 DB) | 단위 52(CIDR) + 통합 40(`admin.test.ts`), **backend 전체 284개 통과**. 계약 대조 포함 |
+| 시험이 실패를 잡는가 | 코드를 일부러 망가뜨려 8곳 확인 — 접속 검사 뺌(9개 실패) · 로그인 검사 뺌(4) · 로그아웃 막기 뺌(1) · 역할 확인 뺌(1) · 만료 확인 뺌(1) · 잠금 뺌(2) · 서비스 키 상태를 계약과 다르게(2, 계약 대조) · 프로세스 표식 검사 뺌(1) — 모두 시험이 실패 |
+| 실제 Nginx 경유 | health 200 · 로그인 전 me 401 · 틀린 비밀번호 401 · 로그인 200 + 쿠키(HttpOnly, path `/`, Secure 아님) · me 200 · 서비스 키 201 · 로그아웃 204 · 로그아웃한 쿠키 401 |
+| 접속 주소 실측 | 호스트 `127.0.0.1:26301` 접속이 Nginx 에 `172.18.0.1` 로 보임 → 기본 범위 안 |
+| 범위 좁히기(`10.0.0.0/8`) | 로그인 시도 403 `ADMIN_NETWORK_DENIED` · health 200 |
+| **발견 1 — 헤더 우회** | 위 범위에서 `X-Forwarded-For: 10.1.1.1` 을 보내면 **401 로 통과**했다(`admin.conf` 의 `set_real_ip_from`). 해당 블록을 지운 뒤 같은 요청 · `X-Real-IP` · `Forwarded` 모두 403. 기본 범위로 되돌리면 로그인 200 |
+| **발견 2 — 재시작 뒤 쿠키 부활** | 첫 구현에서 admin 을 다시 띄우면 로그아웃했던 쿠키가 200. 프로세스 시작 표식을 넣은 뒤 재시작 후 401, 다시 로그인하면 200 |
+| LAN 주소 접속 | 이 PC 의 Tailscale 주소로 `:26301` → 연결 안 됨(`000`). 이 PC 에는 다른 LAN 주소가 없어 Tailscale 주소로만 확인했다 |
+| 잘못된 `ADMIN_ALLOWED_CIDRS` | admin 시작 중단 · 출력에 키 이름만 있고 값은 없음 |
+| 기존 이미지 | `klassic/backend:dev` · `klassic/frontend:dev` 는 그대로 (시험 태그 `issue100` 으로 분리) |
+
+### #100 리뷰 반영 시험 — 직접 붙은 컨테이너의 헤더 위조 (2026-11-04, 서버 PC · 임시 프로젝트 `klassic-api-t167` · 이미지 태그 `issue100fix` · 포트 9733 · 26341)
+
+예은님 리뷰(PR #167): 허용 범위를 `10.0.0.0/8` 로 두고 다른 컨테이너에서 Nginx 를 거치지 않고 `GET /admin/me` 에 `X-Forwarded-For: 10.1.1.1` 을 붙이면 401 로 통과했다(관리자 앱이 사설망 전체의 헤더를 믿어서). 이 앱만 `frontend` 를 믿게 좁혔다.
+
+| 확인 | 결과 |
+|---|---|
+| 자동 시험 | backend **19개 파일 292개 통과** (이전 284 + 단위 `trustedProxy.test.ts` 6 + 통합 2 — 직접 붙은 연결이 헤더로 허용 주소를 꾸며도 403 · 믿을 프록시가 넘긴 헤더는 읽음) |
+| 시험이 실패를 잡는가 | 믿을 상대 판정을 "모두 믿음" 으로 일부러 바꾸자 새 시험 2개가 실패 (원래대로 되돌린 뒤 전체 통과) |
+| **실제 컨테이너 재현** (범위 `10.0.0.0/8`) | 다른 컨테이너 → `admin:26101` 직접: 헤더 없음 **403**, `X-Forwarded-For: 10.1.1.1` 위조 **403 `ADMIN_NETWORK_DENIED`** (수정 전에는 401 로 통과) |
+| 범위 = compose 게이트웨이 | 호스트 → Nginx → admin: **401**(Nginx 가 넘긴 헤더는 읽음 → 범위 안) · 다른 컨테이너가 게이트웨이 주소를 헤더로 위조해 직접 접속: **403** |
+| 범위 밖 | 호스트 → Nginx (범위 `10.0.0.0/8`): 403 |
+
+- 시험 뒤 임시 컨테이너 · 볼륨 · 이미지 태그(`issue100fix`)를 지웠다. 기존 `klassic_*` 볼륨과 `:dev` 이미지는 그대로다.
+- 시험하지 못한 것: 다른 컨테이너 → `frontend:26201`(Nginx 경유) 위조 시험은 연결이 되지 않아(`fetch failed`, 원인은 확인하지 않음) 확인하지 못했다. Nginx 가 헤더를 덮어쓰는 동작은 앞의 실측(호스트 → Nginx)으로 확인했다.
+
+### #100 리뷰 2차 반영 시험 — Nginx 가 쓰던 IP 가 다른 컨테이너에 배정된 뒤의 신뢰 (2026-11-04, 코드 작업용 PC · 임시 프로젝트 `klassic-api-test`)
+
+예은님 리뷰(PR #167, `b1fa826`): 이름 풀이로 얻은 Nginx(frontend) 주소를 만료 없이 믿어서 ① 이름 풀이가 실패해도 이전 주소를 계속 믿고 ② 주소가 바뀐 뒤에도 "이미 믿는 주소"라고 다시 풀기를 건너뛰었다. 푼 주소에 유효기간(10초)을 두고, 만료됐으면 그 주소의 요청에서도 다시 풀며, 풀이에 실패하면 만료된 주소를 믿지 않게 했다(`lib/trustedProxy.ts`).
+
+| 확인 | 결과 |
+|---|---|
+| 자동 시험 | backend **19개 파일 302개 통과** (이전 292). `trustedProxy.test.ts` 14개(가짜 시계 · 가짜 이름 풀이) + 통합 회귀 2개(`admin.test.ts` 「Nginx 주소가 바뀐 뒤의 신뢰」) |
+| 옛 구현에서 새 시험 | **단위 7개 · 통합 2개 실패** (통합은 `expected 401 to be 403` — 꾸민 헤더가 허용 범위를 통과) → 시험이 문제를 잡는다 |
+| 변이 시험 | 유효기간 무시 · 경계 한 칸 늘림 · 풀이 실패 때 기간 연장 · 이미 믿던 주소라고 건너뜀 · 동시 풀이 · 풀이 간격 무시 · 빈 목록 미반영 · 갱신 호출 제거 — **8개 모두 시험이 잡음** |
+| **실제 Docker** (고정 서브넷, 범위 `10.0.0.0/8`) 시나리오 A: frontend 가 `.10` → `.11` 로 이동, 공격자 컨테이너가 이전 `.10` 수령 | 옛 구현: 12초 뒤에도 공격자의 `X-Forwarded-For: 10.1.1.1` 이 **401(통과)**. 수정: **403**, 새 frontend(`.11`)는 401 |
+| 시나리오 B: frontend 가 사라져 이름이 풀리지 않음, 공격자가 `.10` 수령 | 옛 구현: 12초 뒤에도 **401(통과)**. 수정: **403** |
+
+- **남는 한계(설계):** 유효기간(10초) 안에서는 이전 주소를 아직 믿는다 — 주소가 바뀐 직후 최대 10초. 같은 시나리오에서 유효기간 안(직후)의 공격자 요청은 수정본에서도 401 이었다. 줄이려면 `TRUST_TTL_MS`(`lib/trustedProxy.ts`)를 낮춘다(이름 풀이가 그만큼 잦아진다).
+- 이름 풀이가 오래 실패하면 10초 뒤부터 frontend 가 보낸 `X-Forwarded-For` 도 읽지 않는다 → 실제 접속자 대신 Nginx 연결 주소가 접속 주소로 판정된다(기본 범위 `172.16.0.0/12` 안이라 로그인은 되지만 접속 주소별 구분은 흐려진다). Docker DNS 가 멈추는 일은 드물어 이 쪽(fail-closed)을 택했다.
+- 시험하지 못한 것: Docker 가 실제로 같은 IP 를 다시 배정하는 순서는 고정 서브넷에서 IP 를 직접 지정해 재현했다(기본 네트워크에서 Docker 가 알아서 같은 IP 를 주는지는 확인하지 않음). 노트북(서버 PC)에서는 시험하지 않았다.
+
+- **시험하지 않은 것:** 서버 PC(노트북)에서의 동작, 브라우저 화면(관리자 화면은 #101), 인증서(https) 접속에서의 Secure 쿠키(단위 시험으로만 확인), 두 운영자의 동시 사용, 로그인 실패가 쌓이는 gate_event 의 용량.
+- **알려진 한계:** 재시작하면 로그인이 풀린다(위). 계정 잠금은 사용자 로그인과 같은 계정 표를 쓰므로, 사용자 화면에서 틀려도 같은 잠금이 걸린다.
+
 ## 서버 PC 운영 (#47)
 
 서버 PC = 팀장 노트북(Windows · Docker Desktop · WSL2). 코드 작업은 다른 PC 에서 하므로, **서버 PC 설정을 바꾸면 이 표에 남긴다.**
@@ -688,14 +751,23 @@ ENGINES_VOLUME_NAME=klassic_engines_restored docker compose up -d --wait model-a
 
 ```bash
 # api/ — 시연 서비스 (Docker Desktop 이 뜨면 restart 정책으로 돌아온다. 안 돌아온 것만 띄운다)
-# 재구성 model-api 가 함께 뜬다 (#87). 대역은 「model-api 대역」 참고
+# 재구성 model-api 가 함께 뜬다 (#87)
 cd api && docker compose up -d
-
-# proto_type — 예비 시연 · 코드 작업 중 필요할 때만
-cd proto_type && docker compose up -d --force-recreate web gateway admin model-api
 ```
 
-proto_type 은 `network_mode: service:web` 구조라 재부팅 뒤 web 과 gateway · model-api 의 네트워크가 갈라져 9503 이 응답하지 않는다 (2026-11-01 확인). `docker compose restart` 로는 풀리지 않고 위 명령이 필요하다. 볼륨은 건드리지 않는다.
+예전 proto_type 은 재부팅 뒤 네트워크가 갈라져 `--force-recreate` 가 필요했다 (2026-11-01). 예비 시연은 #145 로 없앴다.
+
+### 배포 전 설정 파일 줄 끝 확인 (#201)
+
+`.gitattributes` 의 `eol=lf` 는 커밋에 들어가는 내용과 새로 받는 파일을 LF 로 맞춘다. 하지만 편집기가 CRLF 로 저장한 파일은 작업 트리에 CRLF 로 남고, nginx 설정처럼 작업 트리를 마운트하는 파일에는 그대로 들어간다. `pull` 뒤 · 설정을 고친 뒤 확인한다. (서버 PC · Git Bash · 저장소 루트)
+
+```bash
+# 정상: 출력 없음. w/crlf 줄이 나오면 그 파일이 CRLF 다
+git ls-files --eol '*.conf' '*.sh' '*.sql' | grep 'w/crlf'
+
+# 고치기 — git checkout -- 파일 만으로는 다시 쓰지 않는다(2026-11-22 확인). 바뀐 내용이 없는(git status 에 안 나오는) 파일만 지운 뒤 받는다
+rm api/deploy/nginx/proxy.conf && git checkout -- api/deploy/nginx/proxy.conf
+```
 
 ### 자원 측정
 
@@ -703,5 +775,5 @@ proto_type 은 `network_mode: service:web` 구조라 재부팅 뒤 web 과 gatew
 
 ## 참고
 
-- `proto_type/src/app/ops/gateway.mjs` — 경로 규칙 · 내부 API 차단 · 대기 시간을 Nginx `proxy.conf` 로 옮긴다 (127.0.0.1 고정 호출 → 서비스 이름)
-- `proto_type/docker-compose.yml` 의 `db`
+- 태그 `v0.1.1` 의 `proto_type/src/app/ops/gateway.mjs` — 경로 규칙 · 내부 API 차단 · 대기 시간을 Nginx `proxy.conf` 로 옮긴다 (127.0.0.1 고정 호출 → 서비스 이름)
+- 태그 `v0.1.1` 의 `proto_type/docker-compose.yml` 의 `db`

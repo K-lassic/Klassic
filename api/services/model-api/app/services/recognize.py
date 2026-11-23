@@ -593,6 +593,10 @@ async def _check_success(inp: RecognizeInput, result: Any, extra: dict, out: Pag
         log.warning("validity_check_failed error_type=%s", type(exc).__name__)
         grade, items = "caution", {}
     v_end = utcnow()
+    if grade == "distrust":
+        # 빠진 쪽은 validity_check_item 에 남지 않으므로 왜 떨어졌는지 로그로 남긴다(#177)
+        log.info("page_distrust request_no=%s page=%s score=%s items=%s", inp.request_no, out.page_no,
+                 out.validity_score, items)
     if items.get("note_count") is not None and float(items["note_count"]) <= 0:
         return None
     if items.get("note_count") is None:

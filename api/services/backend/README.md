@@ -64,6 +64,9 @@ web ─▶ model-api (MODEL_API_URL, 서비스 키 SERVICE_API_KEY)
 | `src/services/fallback.ts` | (#34) 대체 결과 — `assets/templates/` · 없으면 `service_down` |
 | `src/services/modelApiClient.ts` · `modelStatus.ts` · `uploadInspect.ts` | (#34) model-api 호출 · 모델 상태 캐시 · PDF 검사 위임 |
 | `assets/` | (#34) 이미지에 굽는 예시 악보 · 대체 악보. 출처는 `assets/examples/SOURCES.md` |
+| `src/admin/networkGuard.ts` · `src/lib/cidr.ts` | (#100) 관리자 접속 허용 범위 `ADMIN_ALLOWED_CIDRS` — 밖이면 403 `ADMIN_NETWORK_DENIED`(G5). 판정할 수 없으면 막는다 |
+| `src/admin/auth.ts` | (#100) `/admin/login` · `logout` · `me` + `requireOperator` — 쿠키 `gugak_admin`(서명 · HttpOnly · SameSite=Strict · 8시간), 잠금 423, operator 역할 없으면 403 |
+| `src/admin/serviceKey.ts` | (#100) `POST /admin/service-key` — 명령줄 도구(#26)와 같은 `issueServiceKey` |
 | `src/config/env.ts` | 환경변수 zod 검증 — 빠진 키 이름만 알리고 값은 출력하지 않음 |
 | `src/config/shared.ts` | `api/shared` 읽기 — 오류 파일 세 개를 합침 (중복이면 시작 안 함) |
 | `src/config/settings.ts` | 처리 설정 판본(DB) — 5초 캐시 |
@@ -131,9 +134,9 @@ docker compose -p klassic-api-test down -v   # 시험용 프로젝트만 지운�
 | `migrate` | `migrate.test.ts` |
 | `unit/requestDeadline` | `storage.test.ts` |
 
-옮기지 않은 것 (P2 · P3 — 그 기능을 만들 때 옮긴다): `rbac` 의 키 신청 · 관리자 로그인, `us7_us8` 의 세션 2시간 정리, `admin_accounts` · `jobs` · `my_scores` · `shared_*` · `us9_admin` · `us10_keys` · `instrument_selection`.
+옮기지 않은 것 (P2 · P3 — 그 기능을 만들 때 옮긴다): `us7_us8` 의 세션 2시간 정리, `admin_accounts` · `jobs` · `my_scores` · `shared_*` · `us9_admin` · `us10_keys` · `instrument_selection`. (`rbac` 의 관리자 로그인은 #100 에서 옮겼다 — `tests/integration/admin.test.ts`)
 
-계약의 `POST /admin/service-key`(P1)는 API 가 아니라 명령줄 도구로 대신한다 (#26). 인식 · 렌더링을 실제 엔진으로 확인한 결과는 PR #73 · #74.
+계약의 `POST /admin/service-key` 는 처음에 P1 로 적혀 있었지만 명령줄 도구로 대신했고(#26), #100 에서 관리자 API 로도 만들어 P3 로 맞췄다. 도구는 그대로 둔다. 인식 · 렌더링을 실제 엔진으로 확인한 결과는 PR #73 · #74.
 
 ### 운영 명령줄 도구 (#26)
 
@@ -185,6 +188,7 @@ docker compose run --rm -T web node dist/tools/confirmLicense.js --operator <운
 | 재생해도 소리가 안 남 · `/soundfonts/*` 404 또는 아주 작은 파일 | 로그 `음원 파일이 없거나 LFS 포인터뿐` | `git lfs pull` 후 `docker compose up -d web` — 파일은 `api/shared/soundfonts`, 읽기 전용 마운트 |
 | MP3 · PDF 만 `failed` · MIDI · MusicXML 은 됨 | model-api 렌더링 문제. `failure_reason` 이 `ENGINE_DOWN`(닿지 않음) · `RENDERER_MISSING` · `RENDER_TIMEOUT`(10분) | `docker compose logs model-api`. web 재시작으로 `RENDER_FAILED` 가 됐다면 다시 내보내면 된다 |
 | 인식이 모두 `ENGINE_DOWN` 대체로 끝남 | model-api 가 꺼졌거나 500 (대체 이유가 `ENGINE_DOWN`) | `docker compose ps model-api` · `logs model-api` |
+| 여러 쪽 인식만 약 290초 만에 `ENGINE_DOWN` 대체 · model-api 는 계속 인식 중 | (#174 이전 이미지) Node 내장 `fetch` 의 응답 대기 300초(`UND_ERR_HEADERS_TIMEOUT`) | #174 에서 model-api 호출은 대기 한도를 끈 undici `Agent` 로 바꿨다. 이 증상이 보이면 web 이미지가 #174 이후인지 확인 |
 | 인식이 모두 `RECOGNITION_FAILED` 대체로 끝남 | model-api 가 4xx — 대개 서비스 키 오류 | 위의 401 조치 |
 | 요청이 한동안 `queued` | 동시 처리 상한(`web_concurrency_share`)만큼 앞 요청을 처리 중. 마감을 넘기면 `TIMEOUT` 대체로 끝난다 | 설정 판본 확인 · `docker compose logs web` |
 | `/score` 410 인데 보관 기간 안 · 로그 `DB 에 있는 결과 파일이 저장소에 없음` | DB 와 볼륨이 어긋남 | 볼륨 `klassic-api_storage` 가 붙어 있는지 · 지워지지 않았는지 |
@@ -259,7 +263,7 @@ docker compose run --rm -T web node dist/tools/confirmLicense.js --operator <운
 | H25 | 게이트 기록 | 막힌 사건(G2 키 · G12 한도 · G13 권한 등)을 `gate_event` 에 남긴다 | `services/gateEvents.ts` | P2 |
 | H26 | 오류 응답 한 모양 | `{error:{code,message,fix,gate,retry_after,details},api_version}` · 코드 · 문구 · HTTP 상태는 `shared/error-codes.json`(70개) · `retry_after` 면 `Retry-After` 머리글 | `web/errors.ts` | **P1** |
 | H27 | 로그 마스킹 | pino JSON → stdout · DB 오류는 SQL 본문 · 값을 지우고 코드만 | `lib/logger.ts` | **P1** |
-| H28 | model-api 호출 규칙 | `X-API-Key`(서비스 키) · 마감 있으면 남은 시간, 없으면 15초 타임아웃 · 실패는 `ModelApiDown(unreachable/timeout/http)` 하나로 | `services/modelApiClient.ts` | **P1** |
+| H28 | model-api 호출 규칙 | `X-API-Key`(서비스 키) · 마감 있으면 남은 시간, 없으면 15초 타임아웃 · undici 머리글 · 본문 대기 한도는 끔(#174) · 실패는 `ModelApiDown(unreachable/timeout/http)` 하나로 | `services/modelApiClient.ts` | **P1** |
 | H29 | 엔진 상태 캐시 · 순서 | model-api `/v1/models` 상태를 캐시하고 설정 판본의 엔진 순서로 첫 사용 가능 엔진을 고른다 | `services/modelStatus.ts` | **P1** |
 | H30 | 공유 악보로 시작 | 공유 악보를 "쓰기" 하면 새 요청을 만든다 (`request_from_share`) | `web/shared.ts` | P2 |
 

@@ -13,6 +13,7 @@ import { exec, one, query } from '../db/pool.js';
 import { currentSettings, timeoutForVersion } from '../config/settings.js';
 import { shared } from '../config/shared.js';
 import { completeWithFallback, type DbFallbackReason } from './fallback.js';
+import { monotonicNowMs } from '../lib/clock.js';
 import { blobOf, ModelApiDown, modelJson } from './modelApiClient.js';
 import { readStored, saveFile } from './storage.js';
 import { logger } from '../lib/logger.js';
@@ -28,8 +29,11 @@ interface RecognitionResult {
   short_edge_px?: number | null;
 }
 
-/** waitUntil = 줄에서 이때까지 차례가 오지 않으면 시간 초과, deadline = 처리 마감(처리를 시작하면 다시 잰다) */
-interface Job { requestId: number; requestNo: string; scoreType: 'staff' | 'jeongganbo'; waitUntil: Date; limitMs: number; deadline: Date }
+/**
+ * 시각은 모두 단조 시계(monotonicNowMs) 값이다 (#105).
+ * waitUntil = 줄에서 이때까지 차례가 오지 않으면 시간 초과, startedMono = 이미 처리를 시작했던 요청(재시작 · 재인식)의 시작, deadline = 처리 마감(처리를 시작하면 다시 잰다)
+ */
+interface Job { requestId: number; requestNo: string; scoreType: 'staff' | 'jeongganbo'; waitUntil: number; limitMs: number; startedMono: number | null; deadline: number }
 
 /** 처리를 시작한 뒤 model-api 가 마감에 맞춰 대체를 돌려줄 여유 */
 export const DEADLINE_GRACE_MS = 15_000;
@@ -44,26 +48,55 @@ const pendingAnswer = new Map<number, DbFallbackReason | null>();
 let started = false;
 let watchdog: NodeJS.Timeout | null = null;
 
+/** 요청의 제한 시간(ms) = 설정 제한 × 쪽 수 */
+function limitMsOf(timeoutSeconds: number | null, pageCount: number): number {
+  return (timeoutSeconds ?? 180) * 1000 * Math.max(1, Number(pageCount) || 1);
+}
+
+/** 요청 단계('wait' 접수 뒤 · 'run' 처리 시작 뒤)가 시작된 때(단조 시계). 키 = `번호:단계` */
+const phaseStarts = new Map<string, number>();
+
 /**
- * 요청의 마감(밀리초) — 감시와 화면(deadline_at)이 같이 쓴다.
+ * 단계의 시작을 단조 시계로 돌려준다. 이 프로세스가 처음 보는 단계면 DB 가 잰 경과 시간(elapsedMs)을 한 번만 읽어
+ * 그만큼 거슬러 올라간 값으로 기록하고, 그 뒤로는 벽시계를 다시 읽지 않는다 (#105).
+ * DB 시각이 미래라 경과가 음수면 0 으로 본다.
+ */
+function phaseStart(requestId: number, phase: 'wait' | 'run', elapsedMs: number | null, refresh = false): number {
+  const key = `${requestId}:${phase}`;
+  let t = phaseStarts.get(key);
+  if (refresh || t === undefined) {
+    t = monotonicNowMs() - Math.max(0, Math.round(Number(elapsedMs) || 0));
+    phaseStarts.set(key, t);
+  }
+  return t;
+}
+
+/** DB 가 같은 시각 기준으로 잰 경과 시간(ms) — 두 시각의 차이만 쓰고, 지금 시각 자체는 가져오지 않는다 */
+const ELAPSED_MS_SQL = (from: string) => `TIMESTAMPDIFF(MICROSECOND, ${from}, CURRENT_TIMESTAMP(3)) / 1000`;
+const QUEUE_ENDED_SQL = `(SELECT t.ended_at FROM stage_timing t WHERE t.request_id = r.request_id AND t.stage_code = 'queue')`;
+
+/**
+ * 요청의 마감(밀리초, 벽시계) — 화면(deadline_at) 표시 전용이다. 감시 · 대기 상한 판단에는 쓰지 않는다 (#105).
  * 처리를 시작했으면 그때 + 제한 × 쪽 수 (+ 여유), 아니면 대기 상한(접수 + 제한 × 쪽 수). 줄에서 기다린 시간은 처리 시간에서 깎지 않는다.
  */
 export function requestDeadlineMs(receivedAt: Date, startedAt: Date | null, timeoutSeconds: number | null,
   pageCount: number, grace = true): number {
-  const limitMs = (timeoutSeconds ?? 180) * 1000 * Math.max(1, Number(pageCount) || 1);
+  const limitMs = limitMsOf(timeoutSeconds, pageCount);
   if (startedAt) return new Date(startedAt).getTime() + limitMs + (grace ? DEADLINE_GRACE_MS : 0);
   return new Date(receivedAt).getTime() + limitMs;
 }
 
-async function limitsOf(requestId: number): Promise<{ waitUntil: Date; limitMs: number }> {
-  const r = await one<{ received_at: Date; setting_version_id: number; page_count: number; started_at: Date | null }>(
-    `SELECT r.received_at, r.setting_version_id, ${PAGE_COUNT_SQL} AS page_count,
-            (SELECT t.ended_at FROM stage_timing t WHERE t.request_id = r.request_id AND t.stage_code = 'queue') AS started_at
+async function limitsOf(requestId: number): Promise<{ waitUntil: number; limitMs: number; startedMono: number | null }> {
+  const r = await one<{ setting_version_id: number; page_count: number; waited_ms: number; run_ms: number | null }>(
+    `SELECT r.setting_version_id, ${PAGE_COUNT_SQL} AS page_count,
+            ${ELAPSED_MS_SQL('r.received_at')} AS waited_ms,
+            (SELECT ${ELAPSED_MS_SQL('t.ended_at')} FROM stage_timing t WHERE t.request_id = r.request_id AND t.stage_code = 'queue' AND t.ended_at IS NOT NULL) AS run_ms
        FROM score_request r WHERE r.request_id = ?`, [requestId]);
   if (!r) throw new Error(`요청 없음: ${requestId}`);
-  const limitMs = (await timeoutForVersion(r.setting_version_id)) * 1000 * Math.max(1, Number(r.page_count) || 1);
-  // 이미 처리를 시작했던 요청(재시작 · 재인식)은 그 시작 시각부터 — 감시(requestDeadlineMs)와 같은 기준
-  return { waitUntil: new Date(new Date(r.started_at ?? r.received_at).getTime() + limitMs), limitMs };
+  const limitMs = limitMsOf(await timeoutForVersion(r.setting_version_id), r.page_count);
+  // 다시 대기열에 넣을 때는 감시가 남긴 이전 단계 값 대신 현재 DB 기록을 기준으로 삼는다 (#105).
+  const startedMono = r.run_ms === null ? null : phaseStart(requestId, 'run', r.run_ms, true);
+  return { waitUntil: (startedMono ?? phaseStart(requestId, 'wait', r.waited_ms, true)) + limitMs, limitMs, startedMono };
 }
 
 /** 요청을 대기열에 넣는다. 대기 시간을 재기 시작한다 */
@@ -71,12 +104,12 @@ export async function enqueueRecognition(requestId: number): Promise<void> {
   const r = await one<{ request_no: string; chosen_score_type: 'staff' | 'jeongganbo' }>(
     'SELECT request_no, chosen_score_type FROM score_request WHERE request_id = ?', [requestId]);
   if (!r) return;
-  const { waitUntil, limitMs } = await limitsOf(requestId);
+  const { waitUntil, limitMs, startedMono } = await limitsOf(requestId);
   await exec("UPDATE score_request SET status = 'queued' WHERE request_id = ? AND status = 'received'", [requestId]);
   await exec(
     `INSERT INTO stage_timing (request_id, stage_code, started_at) VALUES (?, 'queue', CURRENT_TIMESTAMP(3))
      ON DUPLICATE KEY UPDATE started_at = started_at`, [requestId]);
-  queue.push({ requestId, requestNo: r.request_no, scoreType: r.chosen_score_type, waitUntil, limitMs, deadline: waitUntil });
+  queue.push({ requestId, requestNo: r.request_no, scoreType: r.chosen_score_type, waitUntil, limitMs, startedMono, deadline: waitUntil });
   pump();
 }
 
@@ -109,15 +142,16 @@ async function stillOpen(requestId: number): Promise<string | null> {
 
 async function runJob(job: Job): Promise<void> {
   if (!(await stillOpen(job.requestId))) return;
-  if (Date.now() >= job.waitUntil.getTime()) { // 대기 상한 안에 차례가 오지 않음
+  if (monotonicNowMs() >= job.waitUntil) { // 대기 상한 안에 차례가 오지 않음
     await completeWithFallback(job.requestId, 'timeout');
     return;
   }
   await exec("UPDATE score_request SET status = 'converting' WHERE request_id = ? AND status IN ('received','queued')", [job.requestId]);
   await exec("UPDATE stage_timing SET ended_at = GREATEST(CURRENT_TIMESTAMP(3), started_at) WHERE request_id = ? AND stage_code = 'queue' AND ended_at IS NULL", [job.requestId]);
-  // 처리 마감은 처리를 시작한 시각(대기열 끝)부터 — 감시 · 화면과 같은 기준
-  const st = await one<{ ended_at: Date | null }>("SELECT ended_at FROM stage_timing WHERE request_id = ? AND stage_code = 'queue'", [job.requestId]);
-  job.deadline = new Date((st?.ended_at ? new Date(st.ended_at).getTime() : Date.now()) + job.limitMs);
+  // 처리 마감은 처리를 시작한 때(대기열 끝)부터 — 감시 · 화면과 같은 기준. 이미 시작했던 요청은 그때부터, 아니면 지금부터 (단조 시계)
+  const startMono = job.startedMono ?? monotonicNowMs();
+  phaseStarts.set(`${job.requestId}:run`, startMono);
+  job.deadline = startMono + job.limitMs;
   await recognize(job);
 }
 
@@ -134,7 +168,7 @@ async function recognize(job: Job): Promise<void> {
     for (const img of images) form.append('image', blobOf(img.data), img.name);
     form.set('request_no', job.requestNo);
     try {
-      result = await modelJson<RecognitionResult>('POST', `/v1/omr/${job.scoreType}`, form, { deadline: job.deadline });
+      result = await modelJson<RecognitionResult>('POST', `/v1/omr/${job.scoreType}`, form, { deadlineMono: job.deadline });
       break;
     } catch (e) {
       if (!(e instanceof ModelApiDown)) throw e;
@@ -142,8 +176,9 @@ async function recognize(job: Job): Promise<void> {
       if (e.reason === 'unreachable' || (e.status ?? 500) >= 500) { await completeWithFallback(job.requestId, 'engine_stopped'); return; }
       if (e.status !== 429) { await completeWithFallback(job.requestId, 'recognition_failed'); return; } // 4xx: 웹이 이미 검사한 파일이므로 인식 실패
       const retry = (e.body as { error?: { retry_after?: string } })?.error?.retry_after;
+      // retry_after 는 model-api 가 벽시계로 적어 준 짧은 약속 시각이라 지금과의 차이(기간)로만 바꾼다. 마감 비교는 단조 시계
       const waitMs = retry ? Math.max(500, new Date(retry).getTime() - Date.now()) : 2000;
-      if (Date.now() + waitMs >= job.deadline.getTime()) { await completeWithFallback(job.requestId, 'timeout'); return; }
+      if (monotonicNowMs() + waitMs >= job.deadline) { await completeWithFallback(job.requestId, 'timeout'); return; }
       await exec("UPDATE score_request SET status = 'queued' WHERE request_id = ? AND status = 'converting'", [job.requestId]);
       await new Promise((r) => setTimeout(r, waitMs));
       if (!(await stillOpen(job.requestId))) return;
@@ -216,13 +251,22 @@ export async function answerTypeQuestion(requestId: number, changeTo: 'staff' | 
 
 /** 감시: 제한 시간을 넘긴 요청을 대체로 끝내고, 답이 없는 종류 질문은 고른 종류로 끝낸다 */
 export async function watchdogTick(): Promise<void> {
-  const open = await query<{ request_id: number; status: string; received_at: Date; timeout_seconds: number | null; page_count: number; started_at: Date | null }>(
-    `SELECT r.request_id, r.status, r.received_at, s.timeout_seconds, ${PAGE_COUNT_SQL} AS page_count,
-            (SELECT t.ended_at FROM stage_timing t WHERE t.request_id = r.request_id AND t.stage_code = 'queue') AS started_at
+  const open = await query<{ request_id: number; status: string; timeout_seconds: number | null; page_count: number; waited_ms: number; run_ms: number | null }>(
+    `SELECT r.request_id, r.status, s.timeout_seconds, ${PAGE_COUNT_SQL} AS page_count,
+            ${ELAPSED_MS_SQL('r.received_at')} AS waited_ms,
+            (SELECT ${ELAPSED_MS_SQL('t.ended_at')} FROM stage_timing t WHERE t.request_id = r.request_id AND t.stage_code = 'queue' AND t.ended_at IS NOT NULL) AS run_ms
        FROM score_request r JOIN processing_setting_version s ON s.setting_version_id = r.setting_version_id
       WHERE r.channel = 'web' AND r.status IN ('received','queued','converting','awaiting_type_answer')`);
+  // 끝난 요청의 단계 기록은 비운다
+  const openIds = new Set(open.map((r) => String(r.request_id)));
+  for (const key of phaseStarts.keys()) if (!openIds.has(key.split(':')[0])) phaseStarts.delete(key);
   for (const r of open) {
-    if (Date.now() < requestDeadlineMs(r.received_at, r.started_at, r.timeout_seconds, r.page_count)) continue;
+    // 마감은 단조 시계로만 잰다 (#105): 처리를 시작했으면 시작 + 제한 + 여유, 아니면 접수 + 제한
+    const limitMs = limitMsOf(r.timeout_seconds, r.page_count);
+    const deadline = r.run_ms === null
+      ? phaseStart(r.request_id, 'wait', r.waited_ms) + limitMs
+      : phaseStart(r.request_id, 'run', r.run_ms) + limitMs + DEADLINE_GRACE_MS;
+    if (monotonicNowMs() < deadline) continue;
     if (r.status === 'awaiting_type_answer') await finalize(r.request_id, pendingAnswer.get(r.request_id) ?? null);
     else await completeWithFallback(r.request_id, 'timeout');
   }
