@@ -56,6 +56,30 @@ describe('useRequestStore', () => {
   beforeEach(() => { setActivePinia(createPinia()); vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+  it('여러 쪽을 읽는 동안 먼저 변환된 쪽을 받아 두고, 완료되면 지운다 (2026-11-04, #181)', async () => {
+    const calls: string[] = [];
+    let n = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${url}`);
+      if (url === '/api/requests' && init?.method === 'POST') return jsonResponse(status({ status: 'converting', page_count: 3 }), { status: 202 });
+      if (url.endsWith('/preview')) return jsonResponse({ page_no: 1, page_count: 3, musicxml: '<p1/>' });
+      if (url.endsWith('/score')) return jsonResponse({ scoredoc: { version: 1, ppq: 480, tempoBpm: 90, timeSignature: { beats: 4, beatType: 4 }, keyFifths: 0, parts: [] }, musicxml: '<all/>', has_original_instruments: false, fallback: false, fallback_reason: null, fallback_message: null, retry_hint: null });
+      n += 1;
+      return jsonResponse(n < 3 ? status({ status: 'converting', page_count: 3, preview: { page_no: 1, page_count: 3 } })
+        : status({ status: 'completed', result_band: 'trust', page_count: 3, preview: null }));
+    }));
+    const store = useRequestStore();
+    await store.upload([new File(['x'], 'a.png'), new File(['y'], 'b.png'), new File(['z'], 'c.png')], 'staff');
+    expect(store.preview).toBeNull();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(store.preview).toEqual({ page_no: 1, page_count: 3, musicxml: '<p1/>' });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls.filter((c) => c.endsWith('/preview'))).toHaveLength(1); // 같은 쪽이면 다시 받지 않는다
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(store.score?.musicxml).toBe('<all/>');
+    expect(store.preview).toBeNull();
+  });
+
   it('올리기 성공 → 상태를 받고 1초 폴링, 완료되면 악보를 받고 멈춘다', async () => {
     const calls: string[] = [];
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

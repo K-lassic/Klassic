@@ -174,6 +174,24 @@ def test_recognition_outcomes(contract, recognition_client, monkeypatch, kind, o
     assert response.json()["fallback"] == (outcome != "success")
 
 
+@pytest.mark.parametrize("ready", [False, True])
+def test_internal_omr_preview(contract, recognition_client, ready):
+    # 2026-11-04 #181 여러 쪽 인식 중 첫 쪽 미리보기 — 없을 때 null, 있을 때 쪽 정보와 MusicXML
+    from app.services import page_preview
+
+    api, _, _ = recognition_client
+    path = "/v1/internal/omr/preview/{request_no}"
+    if ready:
+        page_preview.begin(NO)
+        page_preview.page_done(NO, 1, 3, XML)
+    try:
+        body = check(contract, path, "get", api.get(f"/v1/internal/omr/preview/{NO}", headers=SERVICE), 200).json()
+        assert (body["preview"] is not None) == ready
+        check(contract, path, "get", api.get(f"/v1/internal/omr/preview/{NO}", headers={"X-API-Key": "external-secret"}), 403)
+    finally:
+        page_preview.end(NO)
+
+
 def test_internal_upload_check(contract, performance_client, monkeypatch):
     api, _, db, _ = performance_client
     fetch_all = db.fetch_all

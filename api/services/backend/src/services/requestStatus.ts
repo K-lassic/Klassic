@@ -7,7 +7,7 @@ import { one, query } from '../db/pool.js';
 import { fallbackCode, shared } from '../config/shared.js';
 import { currentSettings } from '../config/settings.js';
 import { firstUsable, modelStates } from './modelStatus.js';
-import { PAGE_COUNT_SQL, requestDeadlineMs } from './requestWorker.js';
+import { PAGE_COUNT_SQL, pagePreview, requestDeadlineMs } from './requestWorker.js';
 
 export async function buildRequestStatus(requestId: number) {
   const { errorCodes } = shared();
@@ -33,6 +33,7 @@ export async function buildRequestStatus(requestId: number) {
       WHERE r.request_id = ?`, [requestId]);
   if (!r) return null;
   const code = fallbackCode(r.fallback_reason, r.last_outcome);
+  const preview = pagePreview(requestId);
   const reasonDef = code ? errorCodes.fallback_reasons[code] : null;
   const receivedAt = new Date(r.received_at);
   const pageCount = Math.max(1, Number(r.page_count) || 1);
@@ -104,6 +105,8 @@ export async function buildRequestStatus(requestId: number) {
       };
     }),
     notice: pagesNotice(pageRows),
+    // 여러 쪽을 읽는 동안 먼저 변환된 쪽이 있으면(2026-11-04, #181) — 악보는 GET /requests/{id}/preview
+    preview: preview && !['completed', 'service_down'].includes(r.status) ? { page_no: preview.pageNo, page_count: preview.pageCount } : null,
   };
 }
 

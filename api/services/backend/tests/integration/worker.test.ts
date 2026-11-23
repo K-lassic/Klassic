@@ -83,6 +83,41 @@ describe.skipIf(!HAS_DB)('인식', () => {
     expect(fake.calls.find((c) => c.path === 'POST /v1/omr/staff')!.files).toEqual(['p1.png', 'p2.png', 'p3.png']);
   });
 
+  it('여러 쪽을 읽는 동안 먼저 변환된 쪽을 미리보기로 보이고, 끝나면 지운다 (2026-11-04, #181)', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    fake.on('post', '/v1/omr/staff', (_q, s) => { void held.then(() => s.json(recognized())); });
+    const u = await loggedInAgent(app, 'w2p');
+    const up = await u.post('/api/requests').field('score_type', 'staff')
+      .attach('file', makePng(1000, 900), 'p1.png').attach('file', makePng(1000, 900), 'p2.png');
+    const no = up.body.id as string;
+    try {
+      expect(up.body.preview).toBeNull();
+      fake.on('get', `/v1/internal/omr/preview/${no}`, (_q, s) => {
+        s.json({ api_version: 'v1', request_no: no, preview: { page_no: 1, page_count: 2, pages_done: 1, musicxml: SAMPLE_MUSICXML } });
+      });
+      const st = await h.waitFor(() => u.get(`/api/requests/${no}`).then((r) => r.body), (b) => b.preview !== null);
+      expect(st).toMatchObject({ status: 'converting', preview: { page_no: 1, page_count: 2 } });
+      const pv = await u.get(`/api/requests/${no}/preview`);
+      expect({ status: pv.status, body: pv.body }).toEqual({ status: 200, body: { page_no: 1, page_count: 2, musicxml: SAMPLE_MUSICXML } });
+      expect(fake.calls.find((c) => c.path === `GET /v1/internal/omr/preview/${no}`)?.apiKey).toBe('test-service-key');
+    } finally {
+      release(); // 실패해도 붙잡은 인식을 놓아 다음 시험이 줄에서 막히지 않게
+    }
+    const done = await finished(u, no);
+    expect(done.preview).toBeNull();
+    expect((await u.get(`/api/requests/${no}/preview`)).status).toBe(409);
+  });
+
+  it('한 쪽 요청은 미리보기를 묻지 않는다', async () => {
+    fake.calls.length = 0;
+    fake.on('post', '/v1/omr/staff', (_q, s) => { setTimeout(() => s.json(recognized()), 3500); });
+    const u = await loggedInAgent(app, 'w1p');
+    const no = await upload(u);
+    await finished(u, no);
+    expect(fake.calls.some((c) => c.path.startsWith('GET /v1/internal/omr/preview/'))).toBe(false);
+  });
+
   it('MIDI 변환에 실패한 결과는 MusicXML 만으로 완료', async () => {
     fake.on('post', '/v1/omr/staff', (_q, s) => { s.json(recognized({ midi_base64: null })); });
     const u = await loggedInAgent(app, 'w3');

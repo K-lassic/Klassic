@@ -35,7 +35,7 @@ from app.db import Database, utcnow
 from app.errors import fallback_catalog
 from app.jobs.limiter import Limiter, QueueTimeout
 from app.models.registry import ModelRegistry
-from app.services import engine_api, scoreio
+from app.services import engine_api, page_preview, scoreio
 from app.services.requests import DB_TO_CODE, stage
 from app.settings import Settings
 
@@ -301,6 +301,10 @@ async def run_recognition(db: Database, limiter: Limiter, registry: ModelRegistr
     out = RecognitionOutcome(request_no=inp.request_no, page_count=max(1, len(inp.pages)))
     channel = "web" if inp.is_web else "api"
     q_start = utcnow()
+    # 여러 쪽 웹 요청은 먼저 변환된 쪽을 backend 가 미리 가져갈 수 있게 한다(services/page_preview.py)
+    preview = inp.is_web and len(inp.pages) > 1
+    if preview:
+        page_preview.begin(inp.request_no)
     try:
         async with limiter.slot("recognize", channel, inp.deadline_mono):
             q_end = utcnow()
@@ -313,6 +317,9 @@ async def run_recognition(db: Database, limiter: Limiter, registry: ModelRegistr
         if not inp.is_web:
             await stage(db, inp.request_id, "queue", q_start, utcnow())
         out.fallback_reason = "timeout"
+    finally:
+        if preview:
+            page_preview.end(inp.request_no)
     return out
 
 
@@ -335,6 +342,7 @@ async def _recognize_pages(db: Database, registry: ModelRegistry, inp: Recognize
         else:
             await _recognize_page(db, registry, inp, page, po, page_deadline)
         await _finish_page(db, rid, po, p_start, utcnow())
+        page_preview.page_done(inp.request_no, po.page_no, len(inp.pages), po.musicxml if po.converted else None)
 
     await _combine(inp, out)
 

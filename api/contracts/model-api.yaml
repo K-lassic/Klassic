@@ -116,6 +116,42 @@ paths:
       security: []
       x-key-kinds: []
       x-exposure: gateway
+  /v1/internal/omr/preview/{request_no}:
+    get:
+      tags:
+      - 내부
+      summary: 여러 쪽 인식 중 먼저 변환된 쪽 미리보기
+      operationId: omr_preview_v1_internal_omr_preview__request_no__get
+      parameters:
+      - name: request_no
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request No
+      responses:
+        '200':
+          description: 미리보기. 아직 변환된 쪽이 없거나, 한 쪽 · 외부 호출 요청이거나, 인식이 끝났으면 preview=null
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OmrPreviewResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-key-kinds:
+      - service
+      x-required-use-case: UC12
+      x-exposure: internal
+      description: |-
+        서비스 키 전용(2026-11-04, #181). 웹 요청(request_no)을 2쪽 이상 인식하는 동안 가장 먼저 변환된 쪽 하나의 MusicXML을 메모리에서 돌려준다.
+        backend는 /v1/omr/* 응답을 기다리는 동안 이 경로를 주기적으로 읽어 화면에 첫 쪽을 먼저 보인다. 인식이 끝나면 지워지며 DB·파일에 남기지 않는다.
   /v1/internal/models/reload:
     post:
       tags:
@@ -1046,6 +1082,33 @@ components:
       - source
       - outcome
       title: PageSummary
+    OmrPreviewResponse:
+      type: object
+      required: [api_version, request_no, preview]
+      properties:
+        api_version:
+          type: string
+        request_no:
+          type: string
+        preview:
+          oneOf:
+          - type: 'null'
+          - type: object
+            required: [page_no, page_count, pages_done, musicxml]
+            properties:
+              page_no:
+                type: integer
+                minimum: 1
+                description: 미리보기로 둔 쪽(가장 먼저 변환된 쪽)
+              page_count:
+                type: integer
+                minimum: 2
+              pages_done:
+                type: integer
+                minimum: 1
+                description: 끝난 쪽 수(변환 · 실패 모두)
+              musicxml:
+                type: string
     RecognitionResult:
       properties:
         api_version:
