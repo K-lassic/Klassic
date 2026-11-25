@@ -112,7 +112,9 @@ export const MXL_MAX_UNCOMPRESSED_BYTES = 20 * 1024 * 1024;
 /**
  * .mxl(zip) 이면 META-INF/container.xml 의 rootfile 을 꺼낸다.
  * (#212) 풀기 전에 zip 목록에 적힌 항목 수 · 풀린 크기 합을 보고, 상한을 넘으면 풀지 않고 오류를 낸다.
- * fflate 는 목록에 적힌 크기만큼만 자리를 잡고 풀어서, 크기를 작게 속인 파일은 푸는 중에 오류가 난다.
+ * fflate(0.8.2) 는 목록에 적힌 크기만큼만 자리를 잡고 풀고, 그 자리를 늘리지 않는다.
+ * 그래서 크기를 작게 속인 파일도 메모리는 적힌 크기까지만 쓴다 — 오류는 나지 않고 내용이 잘린 채 돌아온다.
+ * 잘린 것이 악보 파일이면 뒤의 XML 해석에서 오류가 나고, 다른 항목이면 그대로 읽힌다.
  */
 function unpackMusicXml(input: string | Uint8Array): string {
   if (typeof input === 'string') return input;
