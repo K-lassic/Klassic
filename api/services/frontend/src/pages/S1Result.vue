@@ -237,7 +237,8 @@ const engineHelp = computed(() => {
             <span class="title">{{ preview.page_no }}쪽을 먼저 보여 드립니다</span>
             <p>나머지 쪽을 다 읽으면 {{ preview.page_count }}쪽 전체 악보로 바뀝니다. 지금 연주해 보고 악기를 바꿀 수 있으며, 바꾼 악기는 전체 악보에도 그대로 이어집니다.</p>
           </div>
-          <ScoreView :musicxml="preview.musicxml" :label="`${preview.page_no}쪽 미리 보기`" hide-label :part-names="false" />
+          <!-- (#210) 결과 악보와 같게 확대 · 축소를 둔다 — 고른 크기는 결과 악보에도 이어진다 -->
+          <ScoreView :musicxml="preview.musicxml" :label="`${preview.page_no}쪽 미리 보기`" hide-label :part-names="false" zoomable />
         </template>
 
         <div v-if="s.status === 'awaiting_type_answer' && s.detected_type" class="notice" data-test="type-question">

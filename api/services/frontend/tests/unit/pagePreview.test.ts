@@ -49,6 +49,8 @@ describe('먼저 변환된 쪽 — 연주 · 악기 바꾸기', () => {
     // 읽은 쪽 수는 처리 중 애니메이션(C10Working)의 label 로 나온다
     expect(w.get('[data-test="working"]').text()).toBe('3쪽 중 1쪽 읽음');
     expect(w.get('[data-test="page-preview"]').text()).toContain('1쪽을 먼저 보여 드립니다');
+    // (#210) 미리보기 악보도 결과 악보처럼 확대 · 축소가 된다
+    expect(w.findComponent({ name: 'ScoreView' }).props('zoomable')).toBe(true);
     expect(w.find('[data-test="step2-tracks"]').exists()).toBe(true);
     const bar = w.findComponent({ name: 'C5PlayerBar' });
     expect(bar.exists()).toBe(true);
