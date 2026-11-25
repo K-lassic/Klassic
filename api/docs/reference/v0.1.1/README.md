@@ -2,7 +2,7 @@
 
 재구성(`api/`)의 계약·오류 코드가 어디서 왔는지 `proto_type/` 없이도 볼 수 있게 옮겨 둔 복사본이다. 원본은 git 태그 `v0.1.1` 에 있다 (`git show v0.1.1:proto_type/...`). 이 폴더의 파일은 고치지 않는다.
 
-- **쪽 수 상한 (#168 · #211)**: `INTERFACES.md` 의 「최대 10장 · 10쪽 · 11장부터 반려」는 v0.1.1 당시 값이다. 재구성(`api/`)의 상한은 `shared/upload-rules.json` `max_pages` (지금 30)이다.
+- **쪽 수 상한 (#168 · #211)**: `INTERFACES.md` 의 「최대 10쪽」 · 「최대 10장」 · 「11쪽 이상 → 400 `UPLOAD_TOO_MANY_PAGES`」는 v0.1.1 당시 값이다. 재구성(`api/`)의 상한은 `shared/upload-rules.json` `max_pages` (지금 30)이다.
 - `error-codes.json` 은 `check_errors.py` 의 비교 기준이라, #169 에서 `UPLOAD_TOO_MANY_PAGES` 의 `message` · `fix` 만 30쪽으로 맞췄다 (그 밖은 태그 `v0.1.1` 원본과 같다).
 
 | 파일 | 원본 경로 (태그 `v0.1.1`) | 쓰는 곳 |
