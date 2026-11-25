@@ -560,14 +560,14 @@ docker run --rm --network none --read-only --tmpfs /tmp \
 ```text
 model-api  쪽마다 끝나면 먼저 변환된 쪽 하나를 메모리에 둠 (웹 요청 · 2쪽 이상만, 끝나면 지움)
            └ GET /v1/internal/omr/preview/{request_no}  서비스 키 전용 · 공개 gateway 는 막힘
-backend    /v1/omr/* 응답을 기다리는 동안 3초마다 위 경로를 읽어 받으면 멈춤 (메모리, 다시 켜지면 사라짐)
+backend    /v1/omr/* 응답을 기다리는 동안 위 경로를 읽어 받으면 멈춤 — 처음 30초는 3초마다, 그 뒤 10초마다 (#210 · 메모리, 다시 켜지면 사라짐)
            └ 상태 RequestStatus.preview · GET /api/requests/{no}/preview (없으면 409 no_preview)
 frontend   변환 중 화면에 "3쪽 중 1쪽 읽음" + 먼저 변환된 쪽 악보 · 연주 막대 · 악기 바꾸기 (2026-11-05, #181)
            └ 바꾼 악기는 같은 요청의 편집 기록(성부 번호)에 남아 전체 악보에 이어진다 · 3단계 이동 · 저장은 전체 결과 뒤
 ```
 
 - DB · 파일 · 마이그레이션은 없다. 미리보기를 못 받아도 전체 결과는 원래대로 나온다.
-- 미리보기를 물을 때마다 model-api `api_call_log` 에 한 줄 남는다 (3초 간격, 받으면 멈춤 — 2쪽 이상 요청 하나에 첫 쪽 시간 ÷ 3 줄 안팎).
+- 미리보기를 물을 때마다 model-api `api_call_log` 에 한 줄 남는다 (받으면 멈춤 — 2쪽 이상 요청 하나에 첫 쪽 시간 ÷ 3 줄 안팎). 30초가 지나도 미리보기가 없으면(대기열 · 느린 쪽) 간격을 10초로 늦춘다 (#210 — 5분 기다리면 100줄 → 37줄).
 
 **전체 흐름 확인** (같은 노트북, `klassic/model-api:0.2.4-preview` · `klassic/backend:preview` · `klassic/frontend:preview`, 컨테이너 이미지 ID 대조 일치)
 
