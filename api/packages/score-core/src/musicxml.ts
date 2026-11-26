@@ -102,12 +102,34 @@ const DEFAULT_VELOCITY = 90;
 
 // ───────────────────────── 읽기 ─────────────────────────
 
-/** .mxl(zip) 이면 META-INF/container.xml 의 rootfile 을 꺼낸다 */
+/**
+ * (#212) .mxl 압축을 풀 때의 상한 — model-api 업로드 검사(app/checks/upload.py _read_mxl)와 같은 값.
+ * 작은 파일이 풀면 수 GB 가 되는 압축 파일(zip 폭탄)을 메모리에 풀지 않으려는 것이다.
+ */
+export const MXL_MAX_ENTRIES = 100;
+export const MXL_MAX_UNCOMPRESSED_BYTES = 20 * 1024 * 1024;
+
+/**
+ * .mxl(zip) 이면 META-INF/container.xml 의 rootfile 을 꺼낸다.
+ * (#212) 풀기 전에 zip 목록에 적힌 항목 수 · 풀린 크기 합을 보고, 상한을 넘으면 풀지 않고 오류를 낸다.
+ * fflate(0.8.2) 는 목록에 적힌 크기만큼만 자리를 잡고 풀고, 그 자리를 늘리지 않는다.
+ * 그래서 크기를 작게 속인 파일도 메모리는 적힌 크기까지만 쓴다 — 오류는 나지 않고 내용이 잘린 채 돌아온다.
+ * 잘린 것이 악보 파일이면 뒤의 XML 해석에서 오류가 나고, 다른 항목이면 그대로 읽힌다.
+ */
 function unpackMusicXml(input: string | Uint8Array): string {
   if (typeof input === 'string') return input;
   const isZip = input.length > 4 && input[0] === 0x50 && input[1] === 0x4b && input[2] === 0x03 && input[3] === 0x04;
   if (!isZip) return utf8Decode(input).replace(/^\uFEFF/, '');
-  const files = unzipSync(input);
+  let entries = 0;
+  let total = 0;
+  const files = unzipSync(input, {
+    filter: (f) => {
+      entries += 1;
+      total += f.originalSize;
+      if (entries > MXL_MAX_ENTRIES || total > MXL_MAX_UNCOMPRESSED_BYTES) throw new Error('MXL 압축 파일이 너무 커서 열 수 없어요');
+      return true;
+    },
+  });
   let rootPath: string | undefined;
   const container = files['META-INF/container.xml'];
   if (container) {
