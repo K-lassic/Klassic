@@ -84,7 +84,7 @@ async def main():
             ("two_page_pdf", [("score.pdf", pdf(2))], raw, "staff", 200, None),
             ("unsupported", [("text.txt", b"text")], raw, "staff", 415, "UPLOAD_UNSUPPORTED_TYPE"),
             ("broken_pdf", [("broken.pdf", b"%PDF-broken")], raw, "staff", 422, "UPLOAD_CORRUPTED"),
-            ("eleven_page_pdf", [("eleven.pdf", pdf(11))], raw, "staff", 422, "UPLOAD_TOO_MANY_PAGES"),
+            ("over_page_pdf", [("over.pdf", pdf(31))], raw, "staff", 422, "UPLOAD_TOO_MANY_PAGES"),
             ("tiny_photo", [("tiny.png", image(250))], raw, "staff", 422, "UPLOAD_RESOLUTION_TOO_LOW"),
             ("missing_score_type", [("ok.png", valid)], raw, None, 422, "UPLOAD_SCORE_TYPE_REQUIRED"),
             ("large_photo", [("big.png", valid + b"\0" * (21 * 1024 * 1024))], raw, "staff", 413, "UPLOAD_TOO_LARGE"),

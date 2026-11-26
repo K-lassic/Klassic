@@ -1,6 +1,6 @@
 // @gugak/score-core 공개 API (app/docs/INTERFACES.md §3)
 export * from './scoredoc.js';
-export { parseMusicXml, toMusicXml, toMxl, type ToMusicXmlOptions } from './musicxml.js';
+export { parseMusicXml, toMusicXml, toMxl, MXL_MAX_ENTRIES, MXL_MAX_UNCOMPRESSED_BYTES, type ToMusicXmlOptions } from './musicxml.js';
 export { parseMidi, toMidi, isGugakSound, type ToMidiOptions } from './midi.js';
 export {
   applyOps, applyInstrumentMode, fitToRangeOps, rangeWarnings, summarizeOps, validateOps, transposeFifths,

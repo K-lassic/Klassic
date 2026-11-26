@@ -180,7 +180,7 @@ paths:
       tags: [requests]
       summary: 악보 올리기 (사진 여러 장 또는 PDF 1개)
       description: |
-        - 한 요청 = 악보 한 곡. **PDF 한 개(모든 쪽) 또는 PNG · JPG(JPEG) · WEBP 사진 여러 장(올린 순서 = 쪽 순서), 최대 10쪽**.
+        - 한 요청 = 악보 한 곡. **PDF 한 개(모든 쪽) 또는 PNG · JPG(JPEG) · WEBP 사진 여러 장(올린 순서 = 쪽 순서), 최대 30쪽**.
         - 검사 순서: 개수 → 형식 → 손상 → 용량 → 사진 짧은 변 (`shared/upload-rules.json`).
           PDF 의 열기 · 쪽 수 · 쪽마다 크기는 model-api `POST /v1/internal/upload-check` 에 맡긴다 — 닿지 않으면 503 `UPLOAD_CHECK_UNAVAILABLE`(접수 안 함).
         - MIDI · MusicXML 등은 415 `UPLOAD_UNSUPPORTED_TYPE`(details.allowed=['image','pdf']).
@@ -199,7 +199,7 @@ paths:
                 file:
                   description: 사진이면 여러 개(같은 이름 `file` 반복, 올린 순서), PDF 면 한 개
                   type: array
-                  maxItems: 10
+                  maxItems: 30
                   items: { type: string, format: binary }
                 score_type: { $ref: "#/components/schemas/ScoreType" }
       responses:
@@ -335,6 +335,32 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "410": { $ref: "#/components/responses/Error" }   # RESULT_EXPIRED
+
+  /api/requests/{no}/preview:
+    get:
+      tags: [requests]
+      summary: 여러 쪽을 읽는 동안 먼저 변환된 쪽 악보 (MusicXML)
+      description: |
+        (2026-11-04, #181) 상태의 `preview` 가 있을 때만 200. 전체 결과 전에 화면에 보이는 미리보기이며 편집 · 연주 · 받기에는 쓰지 않는다.
+        아직 없거나 인식이 끝났으면 409 `REQUEST_NOT_FOUND`(details.reason=no_preview).
+      x-priority: P2
+      x-uc: UC1
+      parameters: [{ $ref: "#/components/parameters/RequestNo" }]
+      responses:
+        "401": { $ref: "#/components/responses/LoginRequired" }
+        "200":
+          description: 먼저 변환된 쪽
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [page_no, page_count, musicxml]
+                properties:
+                  page_no: { type: integer, minimum: 1 }
+                  page_count: { type: integer, minimum: 2 }
+                  musicxml: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 
   /api/requests/{no}/fallback:
     post:
@@ -1310,6 +1336,17 @@ components:
                 pages: { type: integer }
                 converted: { type: integer }
                 failed_pages: { type: array, items: { type: integer } }
+        preview:
+          description: |
+            (2026-11-04, #181) 여러 쪽을 읽는 동안 먼저 변환된 쪽. 있으면 `GET /api/requests/{no}/preview` 로 그 쪽 악보를 받는다.
+            한 쪽 요청 · 아직 변환된 쪽이 없을 때 · 끝난 뒤에는 null. 서버가 다시 켜지면 사라진다(전체 결과는 그대로 나온다).
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [page_no, page_count]
+              properties:
+                page_no: { type: integer, minimum: 1 }
+                page_count: { type: integer, minimum: 2 }
 
     PageStatus:
       type: object

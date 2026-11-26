@@ -1,14 +1,15 @@
 <script setup lang="ts">
 // S1 올리기 (T067 · T081) — 악보 종류 고르기(늘 필수) · 사진 또는 PDF 1개 · G1/G12 반려는 C2 로
 // 2026-09-29 황송해 결정(SD_02 §4-3 · §4-4, 사진·PDF 입력): PNG · JPG(JPEG) · WEBP 사진 또는 PDF 한 개(웹·API 같음).
-// ~~여러 쪽 PDF 는 첫 쪽만 변환한다~~ (2026-09-29 여러 쪽 결정) PDF 는 모든 쪽(최대 10쪽)을 변환해 이어 붙인다 — 일부 쪽을
+// ~~여러 쪽 PDF 는 첫 쪽만 변환한다~~ (2026-09-29 여러 쪽 결정) PDF 는 모든 쪽(최대 30쪽)을 변환해 이어 붙인다 — 일부 쪽을
 // 못 읽으면 결과 화면에 안내. MIDI · MusicXML 은 바로 형식 반려(서버도 반려).
 // (2026-09-30 T188 여러 쪽, SD_02 S1 올리기 도면) 사진 여러 장을 한 번에 끌어 놓거나 나눠 더한다 — 쪽 목록(올린 순서 · 파일 ·
-// 사진 크기 · [빼기])에 보이고, 그 순서대로 한 곡으로 이어 붙인다. 최대 10쪽. PDF 는 한 개만, 사진과 섞으면 G1 UPLOAD_TOO_MANY_FILES.
+// 사진 크기 · [빼기])에 보이고, 그 순서대로 한 곡으로 이어 붙인다. 최대 30쪽(#168 10쪽에서 늘림). PDF 는 한 개만, 사진과 섞으면 G1 UPLOAD_TOO_MANY_FILES.
 // 악보 종류 옆 예시 그림에 마우스를 올리거나 초점·터치가 가면 설명 말풍선(JEONGGANBO_NOTE · STAFF_NOTE)이 뜨고, 그림을 누르면 그 종류가 골라진다.
 // (2026-09-30 황송해, SD_02 S1) 진행 레일(C1) · 오른쪽 숫자 칸(사진 용량 · 사진 크기 · 결과 보관) · 정간보 지원 범위 안내를 뺐다.
 // 마우스를 올리면 말풍선이 바로 뜨고 그림이 갈색(clay-brown)으로 바뀐다. 전에는 알약 안의 투명 radio(.segmented input,
 // position:absolute; inset:0)가 알약이 아니라 .type-opt 전체를 덮어 그림의 mouseenter 가 오지 않았다 — 알약을 기준 상자로 고쳤다.
+// (#203) [다음](변환 시작) 때 연주기 player.preload() 를 불러 연주 음원을 인식 대기 중에 미리 받는다 — 받은 음원은 연주기가 브라우저 저장소에 둔다.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import C2GateBlock from '@/components/C2GateBlock.vue';
 import C9StepBar from '@/components/C9StepBar.vue';
@@ -21,6 +22,7 @@ import { useAuthStore } from '@/stores/auth';
 import { gateMessage, statusText } from '@/i18n/gateMessages';
 import { ACCEPT, ACCEPT_LABEL, LIMITS, addFiles, formatSize, guessKind, kindLabel, readShortEdge } from '@/lib/uploadKind';
 import { api } from '@/api/client';
+import { player } from '@/player/player';
 import { listExamples, exampleThumbUrl, exampleDisplayTitle, groupExamples, type ExampleScore } from '@/lib/examples';
 import type { ModelStatusPublic, ScoreType } from '@/types/api';
 
@@ -183,6 +185,10 @@ async function start() {
     return;
   }
   retryOpen.value = false;
+  // (#203 · 구축 실험 E-5) 처음 접속 지연: 연주 음원(gugak.sf2 22MB)은 결과 화면이 열린 뒤에야 받기 시작해 인식 대기 뒤에 다시 기다리게 된다.
+  // 변환을 시작하는 이 클릭(사용자 동작)에서 먼저 받기 시작하면 인식하는 22~41초 동안 받아 둔다. 저장본이 있으면 요청이 없고,
+  // 데이터 절약 모드는 preload 가 건너뛴다. 이미 받는 중이면 결과 화면의 preload 가 같은 요청을 이어 쓴다.
+  player.preload(null);
   if (chosenExample.value) {
     await req.uploadExample(chosenExample.value.id, scoreType.value);
     return;

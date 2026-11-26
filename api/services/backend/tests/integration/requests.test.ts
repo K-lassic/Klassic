@@ -90,7 +90,7 @@ describe.skipIf(!HAS_DB)('악보 올리기', () => {
     expect(big.body.error).toMatchObject({ code: 'UPLOAD_TOO_LARGE', gate: 'G1' });
     expect(await lastGate('G1')).toBe('UPLOAD_TOO_LARGE');
     let many = u.post('/api/requests').field('score_type', 'staff');
-    for (let i = 0; i < 11; i++) many = many.attach('file', makePng(400, 400), `${i}.png`);
+    for (let i = 0; i < 31; i++) many = many.attach('file', makePng(400, 400), `${i}.png`);
     const r = await many;
     expect(r.status).toBe(400);
     expect(r.body.error.code).toBe('UPLOAD_TOO_MANY_PAGES');
@@ -135,6 +135,28 @@ describe.skipIf(!HAS_DB)('PDF 검사 위임 (#28 model-api)', () => {
     const f = await db.one<{ pdf_page_count: number; image_short_side_px: number; file_no: number }>(
       'SELECT u.pdf_page_count, u.image_short_side_px, u.file_no FROM upload_file u JOIN score_request r USING (request_id) WHERE r.request_no = ?', [up.body.id]);
     expect(f).toMatchObject({ pdf_page_count: 3, image_short_side_px: 2126, file_no: 1 });
+  });
+
+  // #168 상한(max_pages)만큼은 검사뿐 아니라 저장까지 된다 — DB CHECK 제약이 10 에 묶여 11쪽부터 500 이 났던 것
+  it('규칙의 max_pages 만큼(PDF 30쪽 · 사진 30장) 접수까지 되고, model-api 가 쓰는 쪽 행도 그 번호까지 들어간다', async () => {
+    const { shared } = await import('../../src/config/shared.js');
+    const max = shared().uploadRules.max_pages!;
+    fake.on('post', '/v1/internal/upload-check', (_q, s) => { s.json({ ok: true, kind: 'pdf', short_edge_px: 2126, pdf_page_count: max, page_count: max, pages: [] }); });
+    const u = await loggedInAgent(app, 'maxpdf');
+    const pdf = await u.post('/api/requests').field('score_type', 'staff').attach('file', PDF, 'score.pdf');
+    expect(pdf.status).toBe(202);
+    expect(pdf.body).toMatchObject({ pdf_page_count: max, page_count: max });
+    const id = await h.requestIdOf(pdf.body.id);
+    await db.exec(`INSERT INTO request_page (request_id, page_no, file_no, source, outcome) VALUES (?, ?, 1, 'pdf_page', 'pending')`, [id, max]);
+
+    const v = await loggedInAgent(app, 'maxphoto');
+    let photos = v.post('/api/requests').field('score_type', 'staff');
+    for (let i = 0; i < max; i++) photos = photos.attach('file', makePng(400, 400), `${i}.png`);
+    const r = await photos;
+    expect(r.status).toBe(202);
+    const f = await db.one<{ n: number; last: number }>(
+      'SELECT COUNT(*) AS n, MAX(u.file_no) AS last FROM upload_file u JOIN score_request r USING (request_id) WHERE r.request_no = ?', [r.body.id]);
+    expect(f).toMatchObject({ n: max, last: max });
   });
 
   it('쪽별 상태 · 일부 쪽 실패 안내 (model-api 가 적은 request_page 를 읽는다)', async () => {
@@ -361,5 +383,46 @@ describe.skipIf(!HAS_DB)('model-api 가 없을 때', () => {
     expect(await count()).toBe(before);
     expect(await lastGate('G1')).toBe('UPLOAD_CHECK_UNAVAILABLE');
     expect((await uploadPng(u)).status).toBe(202);
+  });
+});
+
+// 앞선 시험이 남긴 처리 중 요청(같은 주소 127.0.0.1)을 끝난 것으로 바꿔 이 시험의 시작점을 0 건으로 맞춘다
+const finishAllActive = () => db.exec(
+  "UPDATE score_request SET status = 'completed', completed_at = CURRENT_TIMESTAMP(3) WHERE status IN ('received', 'queued', 'converting', 'awaiting_type_answer')");
+
+describe.skipIf(!HAS_DB)('G12 동시 접수 (#197)', () => {
+  // 같은 계정 · 같은 주소로 한꺼번에 보낸 요청도 처리 중 한도를 넘지 않아야 한다 — 검사와 INSERT 가 따로면 모두 통과하던 경쟁
+  it('같은 계정이 N건을 동시에 보내면 처리 중 한도만큼만 접수하고 나머지는 429, 반려는 행 · 파일을 남기지 않는다', async () => {
+    await h.setSettings({ web_max_active_per_client: 1, web_hourly_request_cap: 100000 });
+    try {
+      await finishAllActive();
+      const u = await loggedInAgent(app, 'race');
+      const before = await count();
+      const res = await Promise.all(Array.from({ length: 5 }, () => uploadPng(u)));
+      const ok = res.filter((r) => r.status === 202);
+      const rejected = res.filter((r) => r.status === 429);
+      expect(ok).toHaveLength(1);
+      expect(rejected).toHaveLength(4);
+      for (const r of rejected) expect(r.body.error.code).toBe('WEB_ACTIVE_REQUEST_EXISTS');
+      expect(await count()).toBe(before + 1); // 반려된 요청은 행을 남기지 않는다
+      const files = await db.query<{ n: number }>('SELECT COUNT(*) AS n FROM upload_file u JOIN score_request r USING (request_id) WHERE r.request_no = ?', [ok[0].body.id]);
+      expect(Number(files[0].n)).toBe(1);
+    } finally {
+      await h.setSettings({ web_max_active_per_client: 100000, web_hourly_request_cap: 100000 });
+    }
+  });
+
+  it('시간당 상한도 동시에 보낸 요청이 넘지 못한다', async () => {
+    await finishAllActive();
+    const u = await loggedInAgent(app, 'racehour');
+    const used = Number((await db.one<{ n: number }>('SELECT COUNT(*) AS n FROM score_request WHERE received_at > NOW() - INTERVAL 1 HOUR'))!.n);
+    await h.setSettings({ web_max_active_per_client: 100000, web_hourly_request_cap: used + 2 });
+    try {
+      const res = await Promise.all(Array.from({ length: 5 }, () => uploadPng(u)));
+      expect(res.filter((r) => r.status === 202)).toHaveLength(2);
+      for (const r of res.filter((x) => x.status !== 202)) { expect(r.status).toBe(429); expect(r.body.error.code).toBe('WEB_HOURLY_LIMIT'); }
+    } finally {
+      await h.setSettings({ web_max_active_per_client: 100000, web_hourly_request_cap: 100000 });
+    }
   });
 });

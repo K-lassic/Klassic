@@ -17,6 +17,7 @@ import { monotonicNowMs } from '../lib/clock.js';
 import { blobOf, ModelApiDown, modelJson } from './modelApiClient.js';
 import { readStored, saveFile } from './storage.js';
 import { logger } from '../lib/logger.js';
+import { previewPollDelay } from '../lib/previewPoll.js';
 
 interface RecognitionResult {
   fallback: boolean;
@@ -40,6 +41,11 @@ export const DEADLINE_GRACE_MS = 15_000;
 
 /** 요청의 쪽 수(PDF 쪽수 또는 사진 장수) — 처리 시간 제한은 쪽마다라 전체 마감 = 쪽 수 × 제한 */
 export const PAGE_COUNT_SQL = `(SELECT GREATEST(1, COALESCE(MAX(u.pdf_page_count), COUNT(*))) FROM upload_file u WHERE u.request_id = r.request_id)`;
+
+/** 여러 쪽 요청에서 먼저 변환된 쪽 — 화면이 전체 결과 전에 보인다(2026-11-04, #181). 인식이 끝나면 지운다. 메모리라 다시 켜지면 사라진다 */
+export interface PagePreview { pageNo: number; pageCount: number; musicxml: string }
+const previews = new Map<number, PagePreview>();
+export function pagePreview(requestId: number): PagePreview | null { return previews.get(requestId) ?? null; }
 
 const queue: Job[] = [];
 const running = new Set<number>();
@@ -162,6 +168,45 @@ async function recognize(job: Job): Promise<void> {
     'SELECT original_name, storage_uri FROM upload_file WHERE request_id = ? ORDER BY file_no', [job.requestId]);
   if (ups.length === 0 || ups.some((u) => !u.storage_uri)) { await completeWithFallback(job.requestId, 'recognition_failed'); return; }
   const images = await Promise.all(ups.map(async (u) => ({ name: u.original_name, data: await readStored(u.storage_uri!) })));
+  const pc = await one<{ page_count: number }>(`SELECT ${PAGE_COUNT_SQL} AS page_count FROM score_request r WHERE r.request_id = ?`, [job.requestId]);
+  const stopPreview = watchPreview(job, Number(pc?.page_count) || 1);
+  try {
+    await recognizeOnce(job, images);
+  } finally {
+    stopPreview();
+  }
+}
+
+/**
+ * 4코어에서는 쪽을 동시에 읽으면 오히려 느려서(deploy README 「homr 작업자 2개 시험」) 쪽은 차례로 읽고,
+ * 그동안 model-api 가 먼저 변환한 쪽을 받아 둔다. 한 번 받으면 묻지 않는다. 실패해도 인식에는 영향이 없다.
+ * (#210) 묻는 간격은 처음 30초는 3초, 그 뒤에는 10초 — 묻는 때마다 model-api 호출 기록이 한 줄 남아서다 (lib/previewPoll.ts)
+ */
+function watchPreview(job: Job, pageCount: number): () => void {
+  if (pageCount < 2) return () => {};
+  let stopped = false;
+  let timer: NodeJS.Timeout | null = null;
+  let asked = 0;
+  const tick = async () => {
+    asked += 1;
+    try {
+      const r = await modelJson<{ preview: { page_no: number; page_count: number; musicxml: string } | null }>(
+        'GET', `/v1/internal/omr/preview/${encodeURIComponent(job.requestNo)}`, undefined, { timeoutMs: 5000 });
+      if (!stopped && r.preview) {
+        previews.set(job.requestId, { pageNo: r.preview.page_no, pageCount: r.preview.page_count, musicxml: r.preview.musicxml });
+        return;
+      }
+    } catch (e) {
+      logger.debug({ err: e, requestNo: job.requestNo }, '첫 쪽 미리보기를 읽지 못함');
+    }
+    if (!stopped) { timer = setTimeout(tick, previewPollDelay(asked)); timer.unref(); }
+  };
+  timer = setTimeout(tick, previewPollDelay(asked));
+  timer.unref();
+  return () => { stopped = true; if (timer) clearTimeout(timer); previews.delete(job.requestId); };
+}
+
+async function recognizeOnce(job: Job, images: { name: string; data: Buffer }[]): Promise<void> {
   let result: RecognitionResult;
   for (;;) {
     const form = new FormData();

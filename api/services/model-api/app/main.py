@@ -29,6 +29,7 @@ from app.models.registry import ModelRegistry
 from app.routers.models import router as models_router
 from app.routers.omr_staff import router as staff_router
 from app.routers.omr_jeongganbo import router as jeongganbo_router
+from app.routers.omr_preview import router as preview_router
 from app.routers.render import router as render_router
 from app.render.pool import RenderPool
 from app.services.catalog import INSTRUMENTS_DIR
@@ -113,7 +114,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
             await close_safe_midi()
             await app.state.db.close()
 
-    app = FastAPI(title="K-lassic model-api", version="0.2.2",
+    app = FastAPI(title="K-lassic model-api", version="0.2.3",
                   openapi_url="/v1/openapi.json", docs_url="/v1/docs", redoc_url=None,
                   dependencies=[Depends(reject_unknown_fields)], lifespan=lifespan)
     app.state.config = cfg
@@ -223,6 +224,7 @@ def create_app(cfg: Config | None = None, *, db_factory=Database.connect, resour
     app.include_router(models_router)
     app.include_router(staff_router)
     app.include_router(jeongganbo_router)
+    app.include_router(preview_router)
     app.include_router(render_router)
     app.include_router(performance_router)
     app.include_router(catalog_router)

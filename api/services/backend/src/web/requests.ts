@@ -1,4 +1,4 @@
-// #34 악보 요청 API — 올리기 → 상태 → 결과 악보 · 종류 확인 답 · 대체 결과 요청 (UC1 · UC2, web-api.yaml).
+// #34 악보 요청 API — 올리기 → 상태 → (여러 쪽이면 첫 쪽 미리보기) → 결과 악보 · 종류 확인 답 · 대체 결과 요청 (UC1 · UC2, web-api.yaml).
 //
 //   구조에서의 위치: 화면 → Nginx(/api/*) → web(이 파일, authz 다음 단계) → 볼륨 storage(원본 파일) · DB(score_request · upload_file)
 //     PDF 는 저장 전에 model-api 검사(uploadInspect.ts). 인식은 작업자(#35)가 대기열에서 꺼내 model-api 를 부른다.
@@ -14,13 +14,13 @@ import { currentSettings } from '../config/settings.js';
 import { fallbackCode, shared } from '../config/shared.js';
 import { ApiError, wrap } from './errors.js';
 import { checkUpload } from './uploadCheck.js';
-import { enforceWebLimit } from './webLimit.js';
+import { enforceWebLimit, withWebLimitLock } from './webLimit.js';
 import { loadOwnedRequest } from './ownership.js';
 import { receiveExample } from './examples.js';
 import { recordGate } from '../services/gateEvents.js';
 import { inspectPdf } from '../services/uploadInspect.js';
 import { readStored, removeRequestDir, saveFile } from '../services/storage.js';
-import { answerTypeQuestion, enqueueRecognition } from '../services/requestWorker.js';
+import { answerTypeQuestion, enqueueRecognition, pagePreview } from '../services/requestWorker.js';
 import { switchToUserFallback } from '../services/fallback.js';
 import { buildRequestStatus } from '../services/requestStatus.js';
 import { recordInitialSelection } from '../services/placedEnsemble.js';
@@ -29,11 +29,11 @@ import { logger } from '../lib/logger.js';
 
 function limits() {
   const r = shared().uploadRules;
-  return { maxPages: r.max_pages ?? 10, maxBytes: Math.max(...r.user_upload_kinds.map((k) => r.kinds[k].max_bytes)) };
+  return { maxPages: r.max_pages ?? 30, maxBytes: Math.max(...r.user_upload_kinds.map((k) => r.kinds[k].max_bytes)) };
 }
 
 let upload: multer.Multer | null = null;
-/** 파일은 메모리로 받아 검사한 뒤에만 저장한다. 메모리 상한 = 한 장 상한 × 장 수 → Nginx 본문 상한(210m) 안 */
+/** 파일은 메모리로 받아 검사한 뒤에만 저장한다. 메모리 상한 = 한 장 상한 × 장 수(30) — 실제 본문은 Nginx 본문 상한(210m)이 먼저 막는다 */
 function uploader(): multer.Multer {
   const { maxPages, maxBytes } = limits();
   upload ??= multer({ storage: multer.memoryStorage(), limits: { fileSize: maxBytes, files: maxPages }, defParamCharset: 'utf8' });
@@ -74,48 +74,50 @@ const createRequest = wrap(async (req, res) => {
     await recordGate('G1', 'web', 'session', req.sessionId ?? null, verdict.code!);
     throw new ApiError(verdict.code!, verdict.details);
   }
-  try {
-    await enforceWebLimit(req.accountId!, req.clientAddrHash!, s);
-  } catch (e) {
-    if (e instanceof ApiError) await recordGate('G12', 'web', 'client', req.clientAddrHash ?? null, e.code);
-    throw e;
-  }
-
   const requestNo = newRequestNo();
-  let requestId: number;
-  try {
-    // 파일마다 저장 — 한 개면 original.<ext>, 여러 장이면 올린 순서대로 original<n>.<ext>
-    const stored: { file: Express.Multer.File; uri: string; shortEdgePx: number | null }[] = [];
-    for (const [i, f] of files.entries()) {
-      const ext = (f.originalname.match(/\.[A-Za-z0-9]+$/)?.[0] ?? '').toLowerCase();
-      const uri = await saveFile(`${requestNo}/original${files.length > 1 ? i + 1 : ''}${ext}`, f.buffer);
-      stored.push({ file: f, uri, shortEdgePx: verdict.pages?.[i]?.shortEdgePx ?? verdict.shortEdgePx });
+  // #197 한도 검사 → 파일 저장 → 접수 INSERT 를 같은 계정 · 주소 잠금 안에서 한다 — 동시에 온 요청이 서로의 행을 못 보고 모두 통과하던 경쟁을 막는다.
+  //   반려(429)는 저장 전에 일어나 행 · 파일을 남기지 않는다.
+  const requestId = await withWebLimitLock(req.accountId!, req.clientAddrHash!, s, async () => {
+    try {
+      await enforceWebLimit(req.accountId!, req.clientAddrHash!, s);
+    } catch (e) {
+      if (e instanceof ApiError) await recordGate('G12', 'web', 'client', req.clientAddrHash ?? null, e.code);
+      throw e;
     }
-    requestId = await tx(async (conn) => {
-      // 받는 파일은 사진 · PDF 뿐이라 경로는 늘 recognize (PDF 는 model-api 가 쪽마다 사진으로 바꿔 인식)
-      const [ins] = await conn.query(
-        `INSERT INTO score_request (request_no, channel, session_id, account_id, file_kind, chosen_score_type, route, status,
-                                    setting_version_id, client_addr_hash, example_id)
-         VALUES (?, 'web', ?, ?, ?, ?, 'recognize', 'received', ?, ?, ?)`,
-        [requestNo, req.sessionId, req.accountId ?? null, verdict.kind, scoreType, s.setting_version_id, req.clientAddrHash,
-         typeof res.locals.exampleId === 'string' ? res.locals.exampleId : null]);
-      const id = (ins as { insertId: number }).insertId;
-      for (const [i, st] of stored.entries()) {
-        await conn.query(
-          `INSERT INTO upload_file (request_id, file_no, original_name, size_bytes, image_short_side_px, pdf_page_count, storage_uri)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, i + 1, st.file.originalname.slice(0, 255), st.file.size, st.shortEdgePx, pdfPageCount, st.uri]);
+    try {
+      // 파일마다 저장 — 한 개면 original.<ext>, 여러 장이면 올린 순서대로 original<n>.<ext>
+      const stored: { file: Express.Multer.File; uri: string; shortEdgePx: number | null }[] = [];
+      for (const [i, f] of files.entries()) {
+        const ext = (f.originalname.match(/\.[A-Za-z0-9]+$/)?.[0] ?? '').toLowerCase();
+        const uri = await saveFile(`${requestNo}/original${files.length > 1 ? i + 1 : ''}${ext}`, f.buffer);
+        stored.push({ file: f, uri, shortEdgePx: verdict.pages?.[i]?.shortEdgePx ?? verdict.shortEdgePx });
       }
-      await conn.query(
-        // 시작은 Node 시계 · 끝은 DB 시계라 어긋날 수 있다 — chk_stage_time 에 걸려 접수가 실패하지 않게 한다 (#105)
-        "INSERT INTO stage_timing (request_id, stage_code, started_at, ended_at) VALUES (?, 'check', ?, GREATEST(CURRENT_TIMESTAMP(3), ?))",
-        [id, checkStart, checkStart]);
-      return id;
-    });
-  } catch (e) {
-    await removeRequestDir(requestNo).catch((rm) => logger.error({ err: rm, requestNo }, '접수 실패한 파일을 지우지 못함'));
-    throw e;
-  }
+      return await tx(async (conn) => {
+        // 받는 파일은 사진 · PDF 뿐이라 경로는 늘 recognize (PDF 는 model-api 가 쪽마다 사진으로 바꿔 인식)
+        const [ins] = await conn.query(
+          `INSERT INTO score_request (request_no, channel, session_id, account_id, file_kind, chosen_score_type, route, status,
+                                      setting_version_id, client_addr_hash, example_id)
+           VALUES (?, 'web', ?, ?, ?, ?, 'recognize', 'received', ?, ?, ?)`,
+          [requestNo, req.sessionId, req.accountId ?? null, verdict.kind, scoreType, s.setting_version_id, req.clientAddrHash,
+           typeof res.locals.exampleId === 'string' ? res.locals.exampleId : null]);
+        const id = (ins as { insertId: number }).insertId;
+        for (const [i, st] of stored.entries()) {
+          await conn.query(
+            `INSERT INTO upload_file (request_id, file_no, original_name, size_bytes, image_short_side_px, pdf_page_count, storage_uri)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [id, i + 1, st.file.originalname.slice(0, 255), st.file.size, st.shortEdgePx, pdfPageCount, st.uri]);
+        }
+        await conn.query(
+          // 시작은 Node 시계 · 끝은 DB 시계라 어긋날 수 있다 — chk_stage_time 에 걸려 접수가 실패하지 않게 한다 (#105)
+          "INSERT INTO stage_timing (request_id, stage_code, started_at, ended_at) VALUES (?, 'check', ?, GREATEST(CURRENT_TIMESTAMP(3), ?))",
+          [id, checkStart, checkStart]);
+        return id;
+      });
+    } catch (e) {
+      await removeRequestDir(requestNo).catch((rm) => logger.error({ err: rm, requestNo }, '접수 실패한 파일을 지우지 못함'));
+      throw e;
+    }
+  });
 
   await enqueueRecognition(requestId);
   res.status(202).json(await buildRequestStatus(requestId));
@@ -176,6 +178,14 @@ requestsRouter.get('/requests/:no/score', wrap(async (req, res) => {
     fallback_message: reason?.message ?? null,
     retry_hint: reason?.retry_hint ?? null,
   });
+}));
+
+// 여러 쪽을 읽는 동안 먼저 변환된 쪽(2026-11-04, #181) — 상태의 preview 가 있을 때만. 끝났거나 아직 없으면 409
+requestsRouter.get('/requests/:no/preview', wrap(async (req, res) => {
+  const r = await loadOwnedRequest(req);
+  const p = pagePreview(r.request_id);
+  if (!p) throw new ApiError('REQUEST_NOT_FOUND', { reason: 'no_preview', status: r.status }, null, 409);
+  res.json({ page_no: p.pageNo, page_count: p.pageCount, musicxml: p.musicxml });
 }));
 
 requestsRouter.post('/requests/:no/fallback', wrap(async (req, res) => {

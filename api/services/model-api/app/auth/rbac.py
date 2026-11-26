@@ -18,6 +18,8 @@ _ROUTES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^(/api)?/v1/(instruments|shared-scores(/[^/]+/score)?)$"), "UC12"),
     (re.compile(r"^(/api)?/v1/performances(/[^/]+(/result)?)?$"), "UC13"),
     (re.compile(r"^(/api)?/v1/internal/upload-check$"), "UC3"),
+    # 2026-11-04 #181 여러 쪽 인식 중 첫 쪽 미리보기 — 인식(UC12)의 일부라 같은 권한
+    (re.compile(r"^(/api)?/v1/internal/omr/preview/[^/]+$"), "UC12"),
     (re.compile(r"^(/api)?/v1/internal/settings/reload$"), "UC10"),
     (re.compile(r"^(/api)?/v1/internal/(models/.+|ollama/available)$"), "UC14"),
 )
