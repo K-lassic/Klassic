@@ -117,7 +117,7 @@ def test_file_read_has_a_hard_limit():
             return b"x" * count
     file = File()
     with pytest.raises(Exception) as exc:
-        asyncio.run(read_files([file], max_bytes=10))
+        asyncio.run(read_files([file], max_bytes=10, max_files=1))
     assert exc.value.code == "UPLOAD_TOO_LARGE" and file.read_bytes == 11
 
 

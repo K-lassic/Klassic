@@ -95,8 +95,9 @@ def page_rows_notice(rows: list[dict]) -> dict | None:
     return pages_notice(len(rows), failed)
 
 
-async def read_files(files: list[UploadFile] | None, *, max_bytes=20 * 1024 * 1024, max_files=30) -> list[tuple[str, bytes]]:
+async def read_files(files: list[UploadFile] | None, *, max_bytes=20 * 1024 * 1024, max_files: int) -> list[tuple[str, bytes]]:
     # (2026-11-04 황송해 #168) 사용자 업로드는 부르는 쪽이 upload-rules.json max_pages 를 넘긴다(max_files_for) — 10 으로 박아 두면 11장째에서 막혔다
+    # (#211) max_files 에 기본값을 두지 않는다 — 부르는 쪽이 빠뜨리면 조용히 30 이 되던 것을 막는다
     if len(files or []) > max_files:
         raise ApiError("UPLOAD_TOO_MANY_FILES", details={"max_files": max_files})
     out = []
